@@ -154,6 +154,7 @@ def save_memo_txt(title, content, original_file_name=None):
 
         load_memo_list_cached.clear()
         load_single_memo_content.clear()
+        create_zip_of_memos.clear()
         return
 
     safe_name = slugify(title)
@@ -175,6 +176,7 @@ def save_memo_txt(title, content, original_file_name=None):
 
     load_memo_list_cached.clear()
     load_single_memo_content.clear()
+    create_zip_of_memos.clear()
 
 
 def delete_memo_txt(file_name):
@@ -187,6 +189,7 @@ def delete_memo_txt(file_name):
 
     load_memo_list_cached.clear()
     load_single_memo_content.clear()
+    create_zip_of_memos.clear()
 
 
 def clear_all_memos():
@@ -197,8 +200,10 @@ def clear_all_memos():
 
     load_memo_list_cached.clear()
     load_single_memo_content.clear()
+    create_zip_of_memos.clear()
 
 
+@st.cache_data(ttl=60)
 def create_zip_of_memos(memo_list):
     if not memo_list:
         return None

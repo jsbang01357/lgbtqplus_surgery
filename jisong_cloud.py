@@ -7,27 +7,22 @@ from core_utils import get_now, get_bucket
 from storage import render_file_manager
 from memo import render_memo_manager, MEMO_PREFIX
 from tools import render_tools
+from access_logger import log_access, get_access_logs
 
 # --- 설정 ---
-ACCESS_LOG_BLOB = "logs/access_log.json"
+# ACCESS_LOG_BLOB 정의는 access_logger.py로 이동됨
 
 def handle_access_log():
     if "last_access_display" not in st.session_state:
-        bucket = get_bucket()
-        blob = bucket.blob(ACCESS_LOG_BLOB)
-        
-        if blob.exists():
-            try:
-                data = json.loads(blob.download_as_text(encoding="utf-8"))
-                st.session_state.last_access_display = data.get("last_access", "기록 없음")
-            except Exception:
-                st.session_state.last_access_display = "기록 오류"
+        # 최초 로딩 시 최신 기록 하나 가져오기 (표시용)
+        logs = get_access_logs()
+        if logs:
+            st.session_state.last_access_display = logs[0].get("time", "기록 없음")
         else:
             st.session_state.last_access_display = "최초 접속"
             
-        # 새로운 로그 기록 (GCS에 업로드)
-        new_data = {"last_access": get_now().strftime("%Y-%m-%d %H:%M:%S")}
-        blob.upload_from_string(json.dumps(new_data), content_type="application/json")
+        # 새로운 로그 직접 기록
+        log_access()
 
 def check_for_updates():
     '''

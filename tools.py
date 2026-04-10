@@ -3,6 +3,7 @@ import os
 import json
 import random
 from text_cleaner import render_text_cleaner
+from access_logger import get_access_logs, clear_access_logs
 
 MENU_LIST_FILE = "menu_list.json"
 
@@ -20,7 +21,7 @@ def render_tools():
 
     selected_tool = st.selectbox(
         "사용할 도구를 선택하세요", 
-        ["🧹 텍스트 클리너", "📝 글자수 카운터", "🍴 오늘 뭐 먹지?"]
+        ["🧹 텍스트 클리너", "📝 글자수 카운터", "🍴 오늘 뭐 먹지?", "🔒 접속 기록 관리"]
     )
     st.markdown("---")
 
@@ -71,3 +72,39 @@ def render_tools():
                     st.error(f"메뉴를 불러오는 중 오류가 발생했습니다: {e}")
             else:
                 st.error("menu_list.json 파일이 없습니다.")
+
+    elif selected_tool == "🔒 접속 기록 관리":
+        st.subheader("🔒 접속 기록 관리")
+        st.info("최근 500개의 접속 기록(IP, 브라우저 정보)을 확인하고 관리할 수 있습니다.")
+        
+        logs = get_access_logs()
+        if not logs:
+            st.write("접속 기록이 없습니다.")
+        else:
+            # 데이터프레임 형식으로 표시 (가독성 향상)
+            import pandas as pd
+            df = pd.DataFrame(logs)
+            df.columns = ["접속 시간", "IP 주소", "브라우저 정보"]
+            st.dataframe(df, use_container_width=True, hide_index=True)
+            
+            st.markdown("---")
+            st.subheader("🧹 로그 초기화")
+            
+            col_pwd, col_del = st.columns([3, 1], vertical_alignment="bottom")
+            with col_pwd:
+                pwd_input = st.text_input("관리자 비밀번호를 입력하세요", type="password", key="admin_pwd_check")
+            
+            with col_del:
+                if st.button("🔥 전체 로그 삭제", type="primary", use_container_width=True):
+                    # secrets.toml에서 비밀번호 확인 (admin 섹션)
+                    try:
+                        correct_pwd = st.secrets["admin"].get("admin_password", "0098")
+                    except Exception:
+                        correct_pwd = st.secrets.get("admin_password", "0098")
+                    
+                    if pwd_input == correct_pwd:
+                        clear_access_logs()
+                        st.toast("✅ 모든 접속 기록이 삭제되었습니다.")
+                        st.rerun()
+                    else:
+                        st.error("❌ 비밀번호가 올바르지 않습니다.")

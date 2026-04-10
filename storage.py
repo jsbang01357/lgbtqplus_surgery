@@ -108,6 +108,7 @@ def save_uploaded_file(uploaded_file):
 
         # 저장 후 목록 캐시 비우기
         list_uploaded_files_cached.clear()
+        create_zip_of_files.clear()
         return True
     except Exception as e:
         st.error(f"업로드 오류: {e}")
@@ -121,6 +122,8 @@ def delete_uploaded_file(blob_name: str):
 
     # 삭제 후 목록 캐시 비우기
     list_uploaded_files_cached.clear()
+    download_file_bytes.clear()
+    create_zip_of_files.clear()
 
 
 def clear_all_uploaded_files():
@@ -131,14 +134,18 @@ def clear_all_uploaded_files():
 
     # 전체 삭제 후 목록 캐시 비우기
     list_uploaded_files_cached.clear()
+    download_file_bytes.clear()
+    create_zip_of_files.clear()
 
 
+@st.cache_data(ttl=300)
 def download_file_bytes(blob_name: str) -> bytes:
     bucket = get_bucket()
     blob = bucket.blob(blob_name)
     return blob.download_as_bytes()
 
 
+@st.cache_data(ttl=60)
 def create_zip_of_files():
     files = list_uploaded_files()
     if not files:
