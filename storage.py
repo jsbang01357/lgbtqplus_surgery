@@ -109,6 +109,8 @@ def save_uploaded_file(uploaded_file):
         # 저장 후 목록 캐시 비우기
         list_uploaded_files_cached.clear()
         create_zip_of_files.clear()
+        if "zip_data_files" in st.session_state:
+            st.session_state.zip_data_files = None
         return True
     except Exception as e:
         st.error(f"업로드 오류: {e}")
@@ -124,6 +126,8 @@ def delete_uploaded_file(blob_name: str):
     list_uploaded_files_cached.clear()
     download_file_bytes.clear()
     create_zip_of_files.clear()
+    if "zip_data_files" in st.session_state:
+        st.session_state.zip_data_files = None
 
 
 def clear_all_uploaded_files():
@@ -136,6 +140,8 @@ def clear_all_uploaded_files():
     list_uploaded_files_cached.clear()
     download_file_bytes.clear()
     create_zip_of_files.clear()
+    if "zip_data_files" in st.session_state:
+        st.session_state.zip_data_files = None
 
 
 @st.cache_data(ttl=300)
@@ -143,6 +149,17 @@ def download_file_bytes(blob_name: str) -> bytes:
     bucket = get_bucket()
     blob = bucket.blob(blob_name)
     return blob.download_as_bytes()
+
+
+def get_signed_url(blob_name: str) -> str:
+    """GCS 블롭에 대한 5분 유효한 임시 다운로드 링크를 생성합니다."""
+    bucket = get_bucket()
+    blob = bucket.blob(blob_name)
+    return blob.generate_signed_url(
+        version="v4",
+        expiration=datetime.timedelta(minutes=5),
+        method="GET",
+    )
 
 
 @st.cache_data(ttl=60)
@@ -201,14 +218,12 @@ def render_file_manager():
             col_d1, col_d2 = st.columns([4, 1])
 
             with col_d1:
-                data = download_file_bytes(file_info.blob_name)
-                st.download_button(
+                # 개별 파일은 서명된 URL로 즉각 링크 제공 (서버 부하 없음)
+                url = get_signed_url(file_info.blob_name)
+                st.link_button(
                     label=f"{file_info.name} ({file_time})",
-                    data=data,
-                    file_name=file_info.name,
-                    mime=file_info.content_type or "application/octet-stream",
+                    url=url,
                     use_container_width=True,
-                    key=f"dl_{file_info.blob_name}",
                 )
 
             with col_d2:
@@ -222,15 +237,28 @@ def render_file_manager():
 
         st.markdown("---")
         st.markdown("📦 일괄 처리")
-        zip_data = create_zip_of_files()
-        if zip_data:
-            st.download_button(
-                label="📥 모든 파일 ZIP으로 다운로드",
-                data=zip_data,
-                file_name=f"files_{get_now().strftime('%Y%m%d_%H%M')}.zip",
-                mime="application/zip",
-                use_container_width=True,
-            )
+        
+        if "zip_data_files" not in st.session_state:
+            st.session_state.zip_data_files = None
+
+        col_zip1, col_zip2 = st.columns([1, 1])
+        with col_zip1:
+            if st.button("📦 모든 파일 ZIP 준비하기", use_container_width=True):
+                with st.spinner("압축 중..."):
+                    st.session_state.zip_data_files = create_zip_of_files()
+                    st.toast("✅ ZIP 파일 준비 완료!")
+
+        with col_zip2:
+            if st.session_state.zip_data_files:
+                st.download_button(
+                    label="📥 준비된 ZIP 다운로드",
+                    data=st.session_state.zip_data_files,
+                    file_name=f"files_{get_now().strftime('%Y%m%d_%H%M')}.zip",
+                    mime="application/zip",
+                    use_container_width=True,
+                )
+            else:
+                st.button("📥 ZIP 다운로드 (준비 필요)", disabled=True, use_container_width=True)
 
         st.markdown("---")
         st.markdown("🧹 보안 관리")
