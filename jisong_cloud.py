@@ -3,27 +3,31 @@ import os
 import json
 import time
 
-from core_utils import get_now
+from core_utils import get_now, get_bucket
 from storage import render_file_manager
-from memo import render_memo_manager
+from memo import render_memo_manager, MEMO_PREFIX
 from tools import render_tools
 
 # --- 설정 ---
-ACCESS_LOG_FILE = "access_log.json"
+ACCESS_LOG_BLOB = "logs/access_log.json"
 
 def handle_access_log():
     if "last_access_display" not in st.session_state:
-        if os.path.exists(ACCESS_LOG_FILE):
-            with open(ACCESS_LOG_FILE, "r") as f:
-                try:
-                    data = json.load(f)
-                    st.session_state.last_access_display = data.get("last_access", "기록 없음")
-                except (json.JSONDecodeError, ValueError):
-                    st.session_state.last_access_display = "기록 오류"
+        bucket = get_bucket()
+        blob = bucket.blob(ACCESS_LOG_BLOB)
+        
+        if blob.exists():
+            try:
+                data = json.loads(blob.download_as_text(encoding="utf-8"))
+                st.session_state.last_access_display = data.get("last_access", "기록 없음")
+            except Exception:
+                st.session_state.last_access_display = "기록 오류"
         else:
             st.session_state.last_access_display = "최초 접속"
-        with open(ACCESS_LOG_FILE, "w") as f:
-            json.dump({"last_access": get_now().strftime("%Y-%m-%d %H:%M:%S")}, f)
+            
+        # 새로운 로그 기록 (GCS에 업로드)
+        new_data = {"last_access": get_now().strftime("%Y-%m-%d %H:%M:%S")}
+        blob.upload_from_string(json.dumps(new_data), content_type="application/json")
 
 def check_for_updates():
     '''
@@ -123,12 +127,11 @@ def main():
     st.sidebar.markdown(f"""
         <div class="sidebar-footer">
             <div class="status-box">
-                <p>🕒 현재 시간: {get_now().strftime('%H:%M')}</p>
-                <p>🔒 마지막 접속: {st.session_state.last_access_display}</p>
+                <p>현재 시간: {get_now().strftime('%H:%M')}</p>
+                <p>마지막 접속: {st.session_state.last_access_display}</p>
             </div>
-            <p style="text-align: center; opacity: 0.6; font-weight: bold;">
-                Ver 2.2 (Refactored)<br>
-                © Jisong Bang 2026
+            <p style="opacity: 0.6; font-weight: bold;">
+                @ Jisong Bang 2026 | Ver 2.3 (260410)
             </p>
         </div>
         """, unsafe_allow_html=True)

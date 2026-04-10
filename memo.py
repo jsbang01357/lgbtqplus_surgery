@@ -1,30 +1,15 @@
 import streamlit as st
+from pathlib import PurePosixPath
 import json
 import zipfile
 import io
 import random
-from pathlib import PurePosixPath
 
-from google.cloud import storage
-from google.oauth2 import service_account
-
-from core_utils import get_now, safe_filename, slugify
+from core_utils import get_now, safe_filename, slugify, get_bucket
 from custom_copy_btn import copy_to_clipboard
 
 MEMO_PREFIX = "memos"
 OLD_JSON_FILE = "memos.json"
-
-
-def get_gcs_client() -> storage.Client:
-    info = dict(st.secrets["gcp_service_account"])
-    credentials = service_account.Credentials.from_service_account_info(info)
-    return storage.Client(credentials=credentials, project=info["project_id"])
-
-
-def get_bucket():
-    client = get_gcs_client()
-    return client.bucket(st.secrets["gcs"]["bucket_name"])
-
 
 def init_memos():
     # 기존 local memos.json이 있으면 1회 마이그레이션
@@ -230,19 +215,38 @@ def render_memo_manager():
                 st.toast("✅ 수정되었습니다.")
                 st.rerun()
 
+        # 모바일 한 줄 유지 및 버튼 컴팩트화 CSS
+        st.markdown("""
+            <style>
+            /* 버튼들이 한 줄에 유지되도록 강제 */
+            div[data-testid="column"] {
+                min-width: 0px !important;
+                flex: 1 1 0% !important;
+            }
+            div[data-testid="stHorizontalBlock"] {
+                flex-wrap: nowrap !important;
+                gap: 8px !important;
+            }
+            /* 버튼 내부 텍스트 마진 제거 */
+            div[data-testid="stButton"] button p {
+                margin-bottom: 0px;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+
         col_copy, col_dl, col_del = st.columns([1, 1, 1])
 
         with col_copy:
             copy_to_clipboard(
                 text=cont,
-                before_copy_label="📋 복사",
-                after_copy_label="✅ 완료",
+                before_copy_label="📋",
+                after_copy_label="✅",
                 key=f"out_copy_{fname}",
             )
 
         with col_dl:
             st.download_button(
-                label="📥 다운",
+                label="📥",
                 data=cont,
                 file_name=f"{safe_filename(t) or 'memo'}.txt",
                 mime="text/plain",
@@ -251,12 +255,12 @@ def render_memo_manager():
             )
 
         with col_del:
-            if st.button("🗑️ 삭제", key=f"out_del_{fname}", type="secondary", use_container_width=True):
+            if st.button("🗑️", key=f"out_del_{fname}", type="secondary", use_container_width=True):
                 delete_memo_txt(fname)
                 st.toast("🗑️ 삭제되었습니다.")
                 st.rerun()
 
-        st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
 
     if memos_list:
         st.markdown("---")

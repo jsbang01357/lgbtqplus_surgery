@@ -10,7 +10,7 @@ from typing import Optional
 from google.cloud import storage
 from google.oauth2 import service_account
 
-from core_utils import get_now, KST
+from core_utils import get_now, KST, get_bucket
 
 UPLOAD_PREFIX = "uploads"
 
@@ -24,19 +24,8 @@ class GCSFileInfo:
     content_type: Optional[str]
 
 
-def get_gcs_client() -> storage.Client:
-    info = dict(st.secrets["gcp_service_account"])
-    credentials = service_account.Credentials.from_service_account_info(info)
-    return storage.Client(credentials=credentials, project=info["project_id"])
-
-
-def get_bucket():
-    client = get_gcs_client()
-    return client.bucket(st.secrets["gcs"]["bucket_name"])
-
-
 def init_storage():
-    # GCS는 폴더 초기화가 필요 없음
+    """GCS 기반 저장소에서는 별도 로컬 초기화가 필요 없습니다."""
     return
 
 
