@@ -10,7 +10,7 @@ from typing import Optional
 from google.cloud import storage
 from google.oauth2 import service_account
 
-from core_utils import get_now, KST, get_bucket
+from core_utils import get_now, KST
 
 UPLOAD_PREFIX = "uploads"
 
@@ -24,8 +24,24 @@ class GCSFileInfo:
     content_type: Optional[str]
 
 
+@st.cache_resource
+def get_gcs_client() -> storage.Client:
+    info = dict(st.secrets["gcp_service_account"])
+    credentials = service_account.Credentials.from_service_account_info(info)
+    return storage.Client(credentials=credentials, project=info["project_id"])
+
+
+@st.cache_resource
+def get_bucket_name():
+    return st.secrets["gcs"]["bucket_name"]
+
+
+def get_bucket():
+    client = get_gcs_client()
+    return client.bucket(get_bucket_name())
+
+
 def init_storage():
-    """GCS 기반 저장소에서는 별도 로컬 초기화가 필요 없습니다."""
     return
 
 
@@ -40,7 +56,7 @@ def normalize_blob_name(prefix: str, filename: str) -> str:
     return str(PurePosixPath(prefix) / safe_name)
 
 
-def list_uploaded_files():
+def _list_uploaded_files_from_gcs():
     bucket = get_bucket()
     blobs = bucket.list_blobs(prefix=f"{UPLOAD_PREFIX}/")
     items = []
@@ -65,6 +81,15 @@ def list_uploaded_files():
     return items
 
 
+@st.cache_data(ttl=30)
+def list_uploaded_files_cached():
+    return _list_uploaded_files_from_gcs()
+
+
+def list_uploaded_files():
+    return list_uploaded_files_cached()
+
+
 def save_uploaded_file(uploaded_file):
     try:
         bucket = get_bucket()
@@ -80,6 +105,9 @@ def save_uploaded_file(uploaded_file):
         content_type = uploaded_file.type or guess_content_type(uploaded_file.name)
 
         blob.upload_from_string(content, content_type=content_type)
+
+        # 저장 후 목록 캐시 비우기
+        list_uploaded_files_cached.clear()
         return True
     except Exception as e:
         st.error(f"업로드 오류: {e}")
@@ -91,12 +119,18 @@ def delete_uploaded_file(blob_name: str):
     blob = bucket.blob(blob_name)
     blob.delete()
 
+    # 삭제 후 목록 캐시 비우기
+    list_uploaded_files_cached.clear()
+
 
 def clear_all_uploaded_files():
     bucket = get_bucket()
     blobs = list(bucket.list_blobs(prefix=f"{UPLOAD_PREFIX}/"))
     for blob in blobs:
         blob.delete()
+
+    # 전체 삭제 후 목록 캐시 비우기
+    list_uploaded_files_cached.clear()
 
 
 def download_file_bytes(blob_name: str) -> bytes:

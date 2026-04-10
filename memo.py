@@ -1,18 +1,38 @@
 import streamlit as st
-from pathlib import PurePosixPath
 import json
 import zipfile
 import io
 import random
+from pathlib import PurePosixPath
 
-from core_utils import get_now, safe_filename, slugify, get_bucket
+from google.cloud import storage
+from google.oauth2 import service_account
+
+from core_utils import get_now, safe_filename, slugify
 from custom_copy_btn import copy_to_clipboard
 
 MEMO_PREFIX = "memos"
 OLD_JSON_FILE = "memos.json"
 
+
+@st.cache_resource
+def get_gcs_client() -> storage.Client:
+    info = dict(st.secrets["gcp_service_account"])
+    credentials = service_account.Credentials.from_service_account_info(info)
+    return storage.Client(credentials=credentials, project=info["project_id"])
+
+
+@st.cache_resource
+def get_bucket_name():
+    return st.secrets["gcs"]["bucket_name"]
+
+
+def get_bucket():
+    client = get_gcs_client()
+    return client.bucket(get_bucket_name())
+
+
 def init_memos():
-    # 기존 local memos.json이 있으면 1회 마이그레이션
     if OLD_JSON_FILE:
         try:
             import os
@@ -63,7 +83,17 @@ def parse_memo_text(raw_text: str, fallback_name: str):
     }
 
 
-def load_memos_from_txt():
+def _build_memo_payload(title: str, content: str, created_at: str, updated_at: str) -> str:
+    return (
+        f"TITLE: {title}\n"
+        f"CREATED_AT: {created_at}\n"
+        f"UPDATED_AT: {updated_at}\n\n"
+        f"{content}"
+    )
+
+
+@st.cache_data(ttl=30)
+def load_memo_list_cached():
     init_memos()
     bucket = get_bucket()
     blobs = bucket.list_blobs(prefix=f"{MEMO_PREFIX}/")
@@ -74,21 +104,30 @@ def load_memos_from_txt():
             continue
 
         file_name = PurePosixPath(blob.name).name
-        raw_text = blob.download_as_text(encoding="utf-8")
-        parsed = parse_memo_text(raw_text, fallback_name=file_name)
-        memos.append(parsed)
+        metadata = blob.metadata or {}
+
+        title = metadata.get("title", file_name.replace(".txt", ""))
+        created_at = metadata.get("created_at", "")
+        updated_at = metadata.get("updated_at", "")
+
+        memos.append({
+            "title": title,
+            "created_at": created_at,
+            "updated_at": updated_at,
+            "file_name": file_name,
+        })
 
     memos.sort(key=lambda x: x["updated_at"] or x["created_at"], reverse=True)
     return memos
 
 
-def _build_memo_payload(title: str, content: str, created_at: str, updated_at: str) -> str:
-    return (
-        f"TITLE: {title}\n"
-        f"CREATED_AT: {created_at}\n"
-        f"UPDATED_AT: {updated_at}\n\n"
-        f"{content}"
-    )
+@st.cache_data(ttl=60)
+def load_single_memo_content(file_name: str):
+    bucket = get_bucket()
+    blob = bucket.blob(f"{MEMO_PREFIX}/{file_name}")
+    raw_text = blob.download_as_text(encoding="utf-8")
+    parsed = parse_memo_text(raw_text, fallback_name=file_name)
+    return parsed
 
 
 def save_memo_txt(title, content, original_file_name=None):
@@ -102,12 +141,19 @@ def save_memo_txt(title, content, original_file_name=None):
 
         created_at = timestamp
         if blob.exists():
-            existing_text = blob.download_as_text(encoding="utf-8")
-            parsed = parse_memo_text(existing_text, fallback_name=original_file_name)
-            created_at = parsed["created_at"] or timestamp
+            old = load_single_memo_content(original_file_name)
+            created_at = old["created_at"] or timestamp
 
         payload = _build_memo_payload(title, content, created_at, timestamp)
+        blob.metadata = {
+            "title": title,
+            "created_at": created_at,
+            "updated_at": timestamp,
+        }
         blob.upload_from_string(payload.encode("utf-8"), content_type="text/plain; charset=utf-8")
+
+        load_memo_list_cached.clear()
+        load_single_memo_content.clear()
         return
 
     safe_name = slugify(title)
@@ -120,7 +166,15 @@ def save_memo_txt(title, content, original_file_name=None):
     blob = bucket.blob(blob_name)
 
     payload = _build_memo_payload(title, content, timestamp, timestamp)
+    blob.metadata = {
+        "title": title,
+        "created_at": timestamp,
+        "updated_at": timestamp,
+    }
     blob.upload_from_string(payload.encode("utf-8"), content_type="text/plain; charset=utf-8")
+
+    load_memo_list_cached.clear()
+    load_single_memo_content.clear()
 
 
 def delete_memo_txt(file_name):
@@ -131,12 +185,18 @@ def delete_memo_txt(file_name):
     if blob.exists():
         blob.delete()
 
+    load_memo_list_cached.clear()
+    load_single_memo_content.clear()
+
 
 def clear_all_memos():
     bucket = get_bucket()
     blobs = list(bucket.list_blobs(prefix=f"{MEMO_PREFIX}/"))
     for blob in blobs:
         blob.delete()
+
+    load_memo_list_cached.clear()
+    load_single_memo_content.clear()
 
 
 def create_zip_of_memos(memo_list):
@@ -146,9 +206,10 @@ def create_zip_of_memos(memo_list):
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         for m in memo_list:
-            safe_name = safe_filename(m["title"]) or "memo"
+            memo_full = load_single_memo_content(m["file_name"])
+            safe_name = safe_filename(memo_full["title"]) or "memo"
             file_name = f"{safe_name}.txt"
-            zf.writestr(file_name, m["content"].encode("utf-8"))
+            zf.writestr(file_name, memo_full["content"].encode("utf-8"))
 
     zip_buffer.seek(0)
     return zip_buffer
@@ -156,7 +217,7 @@ def create_zip_of_memos(memo_list):
 
 def render_memo_manager():
     st.title("📝 메모장")
-    memos_list = load_memos_from_txt()
+    memos_list = load_memo_list_cached()
 
     if "new_memo_key" not in st.session_state:
         st.session_state.new_memo_key = 0
@@ -193,12 +254,14 @@ def render_memo_manager():
 
     for idx, m in enumerate(memos_list):
         t = m["title"]
-        cont = m["content"]
         ts = m["updated_at"] or m["created_at"]
         fname = m["file_name"]
 
         with st.expander(f"📖 {t} ({ts})"):
-            edit_title = st.text_input("제목 수정", value=t, key=f"edit_title_{idx}_{fname}")
+            memo_full = load_single_memo_content(fname)
+            cont = memo_full["content"]
+
+            edit_title = st.text_input("제목 수정", value=memo_full["title"], key=f"edit_title_{idx}_{fname}")
 
             line_count = cont.count("\n") + 1
             dynamic_height = min(40 + (line_count * 25), 400)
@@ -209,60 +272,40 @@ def render_memo_manager():
                 height=dynamic_height,
                 key=f"edit_content_{idx}_{fname}",
             )
+
             if st.button("📝 수정 내용 저장", key=f"save_{idx}_{fname}", use_container_width=True):
-                new_t = edit_title.strip() or t
+                new_t = edit_title.strip() or memo_full["title"]
                 save_memo_txt(new_t, edit_content, original_file_name=fname)
                 st.toast("✅ 수정되었습니다.")
                 st.rerun()
 
-        # 모바일 한 줄 유지 최적화 CSS (버튼 크기는 원본 유지)
-        st.markdown("""
-            <style>
-            /* 버튼 컨테이너를 এক 줄로 강제 */
-            div[data-testid="stHorizontalBlock"] {
-                flex-wrap: nowrap !important;
-                gap: 5px !important;
-            }
-            /* 컬럼이 모바일에서 아래로 떨어지지 않게 강제 배분 */
-            div[data-testid="column"] {
-                min-width: 0px !important;
-                flex: 1 1 0% !important;
-            }
-            /* 기본 버튼 텍스트 줄바꿈 방지 */
-            div[data-testid="stButton"] button p, 
-            div[data-testid="stDownloadButton"] button p {
-                white-space: nowrap !important;
-            }
-            </style>
-            """, unsafe_allow_html=True)
+            col_copy, col_dl, col_del = st.columns([1, 1, 1])
 
-        col_copy, col_dl, col_del = st.columns([1, 1, 1])
+            with col_copy:
+                copy_to_clipboard(
+                    text=cont,
+                    before_copy_label="📋 복사",
+                    after_copy_label="✅ 완료",
+                    key=f"out_copy_{fname}",
+                )
 
-        with col_copy:
-            copy_to_clipboard(
-                text=cont,
-                before_copy_label="📋 복사",
-                after_copy_label="✅ 완료",
-                key=f"out_copy_{fname}",
-            )
+            with col_dl:
+                st.download_button(
+                    label="📥 다운",
+                    data=cont,
+                    file_name=f"{safe_filename(memo_full['title']) or 'memo'}.txt",
+                    mime="text/plain",
+                    use_container_width=True,
+                    key=f"out_dl_{fname}",
+                )
 
-        with col_dl:
-            st.download_button(
-                label="📥 다운",
-                data=cont,
-                file_name=f"{safe_filename(t) or 'memo'}.txt",
-                mime="text/plain",
-                use_container_width=True,
-                key=f"out_dl_{fname}",
-            )
+            with col_del:
+                if st.button("🗑️ 삭제", key=f"out_del_{fname}", type="secondary", use_container_width=True):
+                    delete_memo_txt(fname)
+                    st.toast("🗑️ 삭제되었습니다.")
+                    st.rerun()
 
-        with col_del:
-            if st.button("🗑️ 삭제", key=f"out_del_{fname}", type="secondary", use_container_width=True):
-                delete_memo_txt(fname)
-                st.toast("🗑️ 삭제되었습니다.")
-                st.rerun()
-
-        st.markdown("<div style='margin-bottom: 10px;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
 
     if memos_list:
         st.markdown("---")
