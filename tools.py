@@ -73,8 +73,8 @@ def render_tools():
             else:
                 st.error("menu_list.json 파일이 없습니다.")
 
-    elif selected_tool == "🔒 접속 기록 관리":
-        st.subheader("🔒 접속 기록 관리")
+    elif selected_tool == "🔐 접속 기록 관리":
+        st.subheader("🔐 접속 기록 관리")
         st.info("최근 500개의 접속 기록(IP, 브라우저 정보)을 확인하고 관리할 수 있습니다.")
         
         logs = get_access_logs()

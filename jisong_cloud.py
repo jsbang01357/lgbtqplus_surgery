@@ -57,7 +57,7 @@ def main():
     handle_access_log()
     check_for_updates()
 
-    st.sidebar.title("Jisong Cloud")
+    st.sidebar.title("☁️ Jisong Cloud")
     
     if "menu" not in st.session_state:
         if "tab" in st.query_params:
