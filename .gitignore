@@ -19,6 +19,9 @@ files/
 *.swp
 *.swo
 
+# Secrets
+.streamlit/
+
 # OS
 .DS_Store
 Thumbs.db

@@ -3,9 +3,9 @@ import os
 import json
 import time
 
-from utils import get_now
-from storage import render_file_manager, UPLOAD_DIR
-from memo import render_memo_manager, MEMO_DIR
+from core_utils import get_now
+from storage import render_file_manager
+from memo import render_memo_manager
 from tools import render_tools
 
 # --- 설정 ---
@@ -26,6 +26,7 @@ def handle_access_log():
             json.dump({"last_access": get_now().strftime("%Y-%m-%d %H:%M:%S")}, f)
 
 def check_for_updates():
+    '''
     if "last_memo_mtime" not in st.session_state:
         st.session_state.last_memo_mtime = os.path.getmtime(MEMO_DIR) if os.path.exists(MEMO_DIR) else 0
     if "last_file_mtime" not in st.session_state:
@@ -44,6 +45,8 @@ def check_for_updates():
     
     if updated:
         st.toast("🔄 외부에서 파일/데이터가 업데이트되었습니다!", icon="🔄")
+    '''
+    return
 
 def set_menu(menu_name):
     st.session_state.menu = menu_name
