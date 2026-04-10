@@ -215,21 +215,23 @@ def render_memo_manager():
                 st.toast("✅ 수정되었습니다.")
                 st.rerun()
 
-        # 모바일 한 줄 유지 및 버튼 컴팩트화 CSS
+        # 모바일 한 줄 유지 최적화 CSS (버튼 크기는 원본 유지)
         st.markdown("""
             <style>
-            /* 버튼들이 한 줄에 유지되도록 강제 */
+            /* 버튼 컨테이너를 এক 줄로 강제 */
+            div[data-testid="stHorizontalBlock"] {
+                flex-wrap: nowrap !important;
+                gap: 5px !important;
+            }
+            /* 컬럼이 모바일에서 아래로 떨어지지 않게 강제 배분 */
             div[data-testid="column"] {
                 min-width: 0px !important;
                 flex: 1 1 0% !important;
             }
-            div[data-testid="stHorizontalBlock"] {
-                flex-wrap: nowrap !important;
-                gap: 8px !important;
-            }
-            /* 버튼 내부 텍스트 마진 제거 */
-            div[data-testid="stButton"] button p {
-                margin-bottom: 0px;
+            /* 기본 버튼 텍스트 줄바꿈 방지 */
+            div[data-testid="stButton"] button p, 
+            div[data-testid="stDownloadButton"] button p {
+                white-space: nowrap !important;
             }
             </style>
             """, unsafe_allow_html=True)
@@ -239,14 +241,14 @@ def render_memo_manager():
         with col_copy:
             copy_to_clipboard(
                 text=cont,
-                before_copy_label="📋",
-                after_copy_label="✅",
+                before_copy_label="📋 복사",
+                after_copy_label="✅ 완료",
                 key=f"out_copy_{fname}",
             )
 
         with col_dl:
             st.download_button(
-                label="📥",
+                label="📥 다운",
                 data=cont,
                 file_name=f"{safe_filename(t) or 'memo'}.txt",
                 mime="text/plain",
@@ -255,7 +257,7 @@ def render_memo_manager():
             )
 
         with col_del:
-            if st.button("🗑️", key=f"out_del_{fname}", type="secondary", use_container_width=True):
+            if st.button("🗑️ 삭제", key=f"out_del_{fname}", type="secondary", use_container_width=True):
                 delete_memo_txt(fname)
                 st.toast("🗑️ 삭제되었습니다.")
                 st.rerun()

@@ -86,38 +86,36 @@ def render_text_cleaner():
     st.markdown("**정리 옵션**")
 
     ai_mode = st.checkbox(
-        "AI mode (불릿을 '- '로 통일, 구분선 제거, AI 복붙 텍스트 정리)",
-        value=False,
+        "AI mode (불릿 정리, 구분선 제거, 불필요한 공백 최적화)",
+        value=True,
     )
 
     if ai_mode:
-        st.caption("• / · / ○ / ◦ / ▪ / * / - 등을 '- '로 통일하고, --- / ⸻ 같은 구분선을 제거합니다.")
+        st.caption("• AI 답변이나 복붙 텍스트의 특수 불릿과 구분선을 깔끔하게 정리합니다.")
 
-    col_opt1, col_opt2 = st.columns(2)
-    with col_opt1:
-        opt_tab = st.checkbox("탭 문자 제거", value=True)
-        opt_multi_space = st.checkbox("연속 공백 → 단일 공백", value=True)
-        opt_empty_lines = st.checkbox("연속 빈 줄 → 한 줄로", value=True)
-        opt_trim_lines = st.checkbox("각 줄 앞뒤 공백 제거", value=True)
-    with col_opt2:
-        opt_line_numbers = st.checkbox("줄번호 제거 (예: 1. 또는 1) )", value=False)
-        opt_urls = st.checkbox("URL 제거", value=False)
-        opt_special_chars = st.checkbox("특수문자 제거 (글자/숫자/공백만 남김)", value=False)
-        opt_merge_lines = st.checkbox("모든 줄바꿈 제거 (한 문단으로)", value=False)
+    # 세부 옵션들을 익스팬더로 숨김
+    with st.expander("🛠️ 상세 옵션 설정"):
+        col_opt1, col_opt2 = st.columns(2)
+        with col_opt1:
+            opt_tab = st.checkbox("탭 문자 제거", value=True)
+            opt_multi_space = st.checkbox("연속 공백 → 단일 공백", value=True)
+            opt_empty_lines = st.checkbox("연속 빈 줄 → 한 줄로", value=True)
+            opt_trim_lines = st.checkbox("각 줄 앞뒤 공백 제거", value=True)
+        with col_opt2:
+            opt_line_numbers = st.checkbox("줄번호 제거 (예: 1. 또는 1) )", value=False)
+            opt_urls = st.checkbox("URL 제거", value=False)
+            opt_special_chars = st.checkbox("특수문자 제거 (글자/숫자/공백만 남김)", value=False)
+            opt_merge_lines = st.checkbox("모든 줄바꿈 제거 (한 문단으로)", value=False)
 
-    # AI mode 세부 옵션
-    if ai_mode:
-        st.markdown("**AI mode 세부 옵션**")
-        ai_col1, ai_col2 = st.columns(2)
-        with ai_col1:
+        st.markdown("---")
+        # AI mode용 세부 옵션도 상세 설정 안으로 이동
+        if ai_mode:
             opt_ai_numbered_to_dash = st.checkbox(
-                "번호 리스트도 '- '로 변환",
+                "AI mode: 번호 리스트도 '- '로 변환 (예: 1. 제목 → - 제목)",
                 value=False,
             )
-        with ai_col2:
-            st.caption("예: 1. 제목 → - 제목")
-    else:
-        opt_ai_numbered_to_dash = False
+        else:
+            opt_ai_numbered_to_dash = False
 
     st.markdown("---")
     clean_input = st.text_area(
