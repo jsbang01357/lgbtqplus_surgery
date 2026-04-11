@@ -1,0 +1,11 @@
+.git
+.gitignore
+.vscode
+.venv
+__pycache__
+*.pyc
+.streamlit/secrets.toml
+Procfile
+Procfile.bak
+README.md
+tasks

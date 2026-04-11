@@ -1,18 +1,17 @@
 steps:
-  - name: gcr.io/k8s-skaffold/pack
-    entrypoint: pack
-    env:
-      - GOOGLE_ENTRYPOINT=$_ENTRYPOINT
+  - name: gcr.io/cloud-builders/docker
     args:
       - build
-      - >-
-        $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
-      - '--builder=gcr.io/buildpacks/builder:google-22'
-      - '--network=cloudbuild'
-      - '--publish'
-      - '--path=.'
-      - '--env=GOOGLE_ENTRYPOINT'
-    id: Buildpack
+      - '-t'
+      - 'asia-northeast1-docker.pkg.dev/jisong-cloud-492111/cloud-run-source-deploy/jisong-cloud-tokyo:$COMMIT_SHA'
+      - '.'
+    id: Build
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - 'asia-northeast1-docker.pkg.dev/jisong-cloud-492111/cloud-run-source-deploy/jisong-cloud-tokyo:$COMMIT_SHA'
+    id: Push
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
     entrypoint: gcloud
@@ -20,32 +19,18 @@ steps:
       - run
       - services
       - update
-      - $_SERVICE_NAME
+      - 'jisong-cloud-tokyo'
+      - '--region=asia-northeast1'
       - '--platform=managed'
-      - '--region=$_DEPLOY_REGION'
-      - >-
-        --image=$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
-      - >-
-        --service-account=jisong-cloud-run@jisong-cloud-492111.iam.gserviceaccount.com
-      - '--update-env-vars=GCS_BUCKET_NAME=$_GCS_BUCKET_NAME'
+      - '--image=asia-northeast1-docker.pkg.dev/jisong-cloud-492111/cloud-run-source-deploy/jisong-cloud-tokyo:$COMMIT_SHA'
+      - '--service-account=jisong-cloud-run@jisong-cloud-492111.iam.gserviceaccount.com'
+      - '--update-env-vars=GCS_BUCKET_NAME=jisong-cloud-storage'
       - '--update-secrets=ADMIN_PASSWORD=admin-password:1'
       - '--quiet'
     id: Deploy
 
 images:
-  - >-
-    $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
+  - 'asia-northeast1-docker.pkg.dev/jisong-cloud-492111/cloud-run-source-deploy/jisong-cloud-tokyo:$COMMIT_SHA'
 
 options:
   logging: CLOUD_LOGGING_ONLY
-  substitutionOption: ALLOW_LOOSE
-
-substitutions:
-  _SERVICE_NAME: jisong-cloud-tokyo
-  _DEPLOY_REGION: asia-northeast1
-  _AR_HOSTNAME: asia-northeast1-docker.pkg.dev
-  _AR_REPOSITORY: cloud-run-source-deploy
-  _AR_PROJECT_ID: jisong-cloud-492111
-  _GCS_BUCKET_NAME: jisong-cloud-storage
-  _ENTRYPOINT: >-
-    streamlit run jisong_cloud.py --server.address 0.0.0.0 --server.port 8080
