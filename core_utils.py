@@ -24,7 +24,6 @@ def slugify(text: str) -> str:
     text = re.sub(r"-+", "-", text)
     return text.strip("-")
 
-
 @st.cache_resource
 def get_gcs_client() -> storage.Client:
     # 1) 환경변수에 서비스계정 JSON 문자열이 있으면 그걸 사용
