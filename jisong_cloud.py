@@ -123,7 +123,7 @@ def main():
                 <p>마지막 접속: {st.session_state.last_access_display}</p>
             </div>
             <p style="opacity: 0.6; font-weight: bold;">
-                @ Jisong Bang 2026 | Ver 2.3 (260410)
+                @ Jisong Bang 2026 | Ver 2.4 (260411)
             </p>
         </div>
         """, unsafe_allow_html=True)
