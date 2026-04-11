@@ -7,26 +7,12 @@ steps:
       - build
       - >-
         $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
-      - '--builder=gcr.io/buildpacks/builder:universal_builder_20260202_RC02'
+      - '--builder=gcr.io/buildpacks/builder:google-22'
       - '--network=cloudbuild'
       - '--publish'
       - '--path=.'
       - '--env=GOOGLE_ENTRYPOINT'
     id: Buildpack
-
-  - name: gcr.io/cloud-builders/docker
-    args:
-      - pull
-      - >-
-        $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
-    id: Pull
-
-  - name: gcr.io/cloud-builders/docker
-    args:
-      - push
-      - >-
-        $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
-    id: Push
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
     entrypoint: gcloud
@@ -36,11 +22,9 @@ steps:
       - update
       - $_SERVICE_NAME
       - '--platform=managed'
+      - '--region=$_DEPLOY_REGION'
       - >-
         --image=$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
-      - >-
-        --labels=managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID
-      - '--region=$_DEPLOY_REGION'
       - >-
         --service-account=jisong-cloud-run@jisong-cloud-492111.iam.gserviceaccount.com
       - '--update-env-vars=GCS_BUCKET_NAME=$_GCS_BUCKET_NAME'
@@ -53,22 +37,15 @@ images:
     $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
 
 options:
-  substitutionOption: ALLOW_LOOSE
   logging: CLOUD_LOGGING_ONLY
+  substitutionOption: ALLOW_LOOSE
 
 substitutions:
-  _PLATFORM: managed
   _SERVICE_NAME: jisong-cloud-tokyo
-  _ENTRYPOINT: >-
-    streamlit run jisong_cloud.py --server.address 0.0.0.0 --server.port 8080
-  _TRIGGER_ID: 5aafb059-da56-422d-a34e-e10bbb709fa7
   _DEPLOY_REGION: asia-northeast1
   _AR_HOSTNAME: asia-northeast1-docker.pkg.dev
   _AR_REPOSITORY: cloud-run-source-deploy
   _AR_PROJECT_ID: jisong-cloud-492111
   _GCS_BUCKET_NAME: jisong-cloud-storage
-
-tags:
-  - gcp-cloud-build-deploy-cloud-run
-  - gcp-cloud-build-deploy-cloud-run-managed
-  - jisong-cloud-tokyo
+  _ENTRYPOINT: >-
+    streamlit run jisong_cloud.py --server.address 0.0.0.0 --server.port 8080
