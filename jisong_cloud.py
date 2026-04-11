@@ -1,13 +1,10 @@
 import streamlit as st
-import os
-import json
-import time
 
-from core_utils import get_now, get_bucket
-from storage import render_file_manager
-from memo import render_memo_manager, MEMO_PREFIX
-from tools import render_tools
-from access_logger import log_access, get_access_logs
+from app.core_utils import get_now
+from app.storage import render_file_manager
+from app.memo import render_memo_manager, MEMO_PREFIX
+from app.tools import render_tools
+from app.access_logger import log_access, get_access_logs
 
 # --- 설정 ---
 # ACCESS_LOG_BLOB 정의는 access_logger.py로 이동됨

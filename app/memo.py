@@ -6,9 +6,9 @@ import io
 import random
 from pathlib import PurePosixPath
 
-from core_utils import get_now, safe_filename, slugify
-from custom_copy_btn import copy_to_clipboard
-from gcs_helper import get_bucket
+from app.core_utils import get_now, safe_filename, slugify
+from components.custom_copy_btn import copy_to_clipboard
+from app.gcs_helper import get_bucket
 
 MEMO_PREFIX = "memos"
 OLD_JSON_FILE = "memos.json"

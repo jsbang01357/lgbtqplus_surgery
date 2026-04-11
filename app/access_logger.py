@@ -1,7 +1,7 @@
 import streamlit as st
 import json
-from core_utils import get_now
-from gcs_helper import get_bucket, get_logs_blob_name
+from app.core_utils import get_now
+from app.gcs_helper import get_bucket, get_logs_blob_name
 
 ACCESS_LOG_BLOB = "logs/access_log.json"
 MAX_LOGS = 500

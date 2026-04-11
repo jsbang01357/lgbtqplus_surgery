@@ -1,6 +1,6 @@
 import streamlit as st
 import re
-from custom_copy_btn import copy_to_clipboard
+from components.custom_copy_btn import copy_to_clipboard
 
 
 def _render_result(clean_input, cleaned):

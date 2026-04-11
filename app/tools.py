@@ -2,8 +2,8 @@ import streamlit as st
 import os
 import json
 import random
-from text_cleaner import render_text_cleaner
-from access_logger import get_access_logs, clear_access_logs
+from app.text_cleaner import render_text_cleaner
+from app.access_logger import get_access_logs, clear_access_logs
 
 MENU_LIST_FILE = "menu_list.json"
 
