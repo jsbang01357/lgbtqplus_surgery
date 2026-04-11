@@ -1,35 +1,18 @@
 import streamlit as st
+import os
 import json
 import zipfile
 import io
 import random
 from pathlib import PurePosixPath
 
-from google.cloud import storage
-from google.oauth2 import service_account
-
 from core_utils import get_now, safe_filename, slugify
 from custom_copy_btn import copy_to_clipboard
+from gcs_helper import get_bucket
 
 MEMO_PREFIX = "memos"
 OLD_JSON_FILE = "memos.json"
 
-
-@st.cache_resource
-def get_gcs_client() -> storage.Client:
-    info = dict(st.secrets["gcp_service_account"])
-    credentials = service_account.Credentials.from_service_account_info(info)
-    return storage.Client(credentials=credentials, project=info["project_id"])
-
-
-@st.cache_resource
-def get_bucket_name():
-    return st.secrets["gcs"]["bucket_name"]
-
-
-def get_bucket():
-    client = get_gcs_client()
-    return client.bucket(get_bucket_name())
 
 
 def init_memos():

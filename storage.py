@@ -1,3 +1,5 @@
+import os
+import json 
 import streamlit as st
 import datetime
 import zipfile
@@ -7,10 +9,8 @@ from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import Optional
 
-from google.cloud import storage
-from google.oauth2 import service_account
-
 from core_utils import get_now, KST
+from gcs_helper import get_bucket
 
 UPLOAD_PREFIX = "uploads"
 
@@ -22,23 +22,6 @@ class GCSFileInfo:
     size: int
     updated: Optional[datetime.datetime]
     content_type: Optional[str]
-
-
-@st.cache_resource
-def get_gcs_client() -> storage.Client:
-    info = dict(st.secrets["gcp_service_account"])
-    credentials = service_account.Credentials.from_service_account_info(info)
-    return storage.Client(credentials=credentials, project=info["project_id"])
-
-
-@st.cache_resource
-def get_bucket_name():
-    return st.secrets["gcs"]["bucket_name"]
-
-
-def get_bucket():
-    client = get_gcs_client()
-    return client.bucket(get_bucket_name())
 
 
 def init_storage():
@@ -151,17 +134,6 @@ def download_file_bytes(blob_name: str) -> bytes:
     return blob.download_as_bytes()
 
 
-def get_signed_url(blob_name: str) -> str:
-    """GCS 블롭에 대한 5분 유효한 임시 다운로드 링크를 생성합니다."""
-    bucket = get_bucket()
-    blob = bucket.blob(blob_name)
-    return blob.generate_signed_url(
-        version="v4",
-        expiration=datetime.timedelta(minutes=5),
-        method="GET",
-    )
-
-
 @st.cache_data(ttl=60)
 def create_zip_of_files():
     files = list_uploaded_files()
@@ -218,12 +190,14 @@ def render_file_manager():
             col_d1, col_d2 = st.columns([4, 1])
 
             with col_d1:
-                # 개별 파일은 서명된 URL로 즉각 링크 제공 (서버 부하 없음)
-                url = get_signed_url(file_info.blob_name)
-                st.link_button(
+                data = download_file_bytes(file_info.blob_name)
+                st.download_button(
                     label=f"{file_info.name} ({file_time})",
-                    url=url,
+                    data=data,
+                    file_name=file_info.name,
+                    mime=file_info.content_type or "application/octet-stream",
                     use_container_width=True,
+                    key=f"dl_{file_info.blob_name}",
                 )
 
             with col_d2:

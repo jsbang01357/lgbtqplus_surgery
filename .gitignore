@@ -20,7 +20,7 @@ files/
 *.swo
 
 # Secrets
-.streamlit/
+.streamlit/secrets.toml
 
 # OS
 .DS_Store

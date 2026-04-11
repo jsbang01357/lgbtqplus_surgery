@@ -1,6 +1,7 @@
 import streamlit as st
 import json
-from core_utils import get_now, get_bucket
+from core_utils import get_now
+from gcs_helper import get_bucket, get_logs_blob_name
 
 ACCESS_LOG_BLOB = "logs/access_log.json"
 MAX_LOGS = 500
@@ -70,21 +71,30 @@ def log_access():
     except Exception as e:
         print(f"Logging error: {e}")
 
+
+
+
 def get_access_logs():
-    """GCS에서 전체 접속 기록을 가져옵니다."""
     bucket = get_bucket()
-    blob = bucket.blob(ACCESS_LOG_BLOB)
-    
-    if blob.exists():
-        try:
-            data = json.loads(blob.download_as_text(encoding="utf-8"))
-            if isinstance(data, list):
-                return data
-            elif isinstance(data, dict):
-                return [{"time": data.get("last_access", "Unknown"), "ip": "Unknown", "ua": "Old Record"}]
-        except Exception:
-            return []
-    return []
+    blob = bucket.blob(get_logs_blob_name())
+
+    if not blob.exists():
+        return []
+
+    raw = blob.download_as_text(encoding="utf-8")
+    try:
+        return json.loads(raw)
+    except Exception:
+        return []
+
+
+def save_access_logs(logs):
+    bucket = get_bucket()
+    blob = bucket.blob(get_logs_blob_name())
+    blob.upload_from_string(
+        json.dumps(logs, ensure_ascii=False, indent=2),
+        content_type="application/json; charset=utf-8",
+    )
 
 def clear_access_logs():
     """접속 기록을 모두 삭제합니다."""
