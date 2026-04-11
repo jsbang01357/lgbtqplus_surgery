@@ -2,19 +2,43 @@ import streamlit as st
 import os
 import json
 import random
+from pathlib import Path
 from app.text_cleaner import render_text_cleaner
 from app.access_logger import get_access_logs, clear_access_logs
 
-MENU_LIST_FILE = "menu_list.json"
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+MENU_JSON_PATH = BASE_DIR / "data" / "menu_list.json"
 
 def get_admin_password() -> str:
-    return os.getenv("ADMIN_PASSWORD", "")
+    # 1) Cloud Run / 환경변수 우선
+    env_pwd = os.getenv("ADMIN_PASSWORD")
+    if env_pwd:
+        return env_pwd
+
+    # 2) 로컬 Streamlit secrets fallback
+    try:
+        admin_section = st.secrets["admin"]
+        if "admin_password" in admin_section and admin_section["admin_password"]:
+            return admin_section["admin_password"]
+    except Exception:
+        pass
+
+    try:
+        root_pwd = st.secrets["admin_password"]
+        if root_pwd:
+            return root_pwd
+    except Exception:
+        pass
+
+    # 3) 아무것도 없으면 빈 문자열
+    return ""
 
 def init_tools():
     """도구 모음 초기화 로직"""
-    if not os.path.exists(MENU_LIST_FILE):
+    if not os.path.exists(MENU_JSON_PATH):
         default_menu = ["김치찌개", "제육볶음", "돈가스", "초밥", "짜장면", "삼겹살", "치킨", "햄버거", "파스타", "샌드위치"]
-        with open(MENU_LIST_FILE, "w", encoding="utf-8") as f:
+        with open(MENU_JSON_PATH, "w", encoding="utf-8") as f:
             json.dump(default_menu, f, ensure_ascii=False, indent=4)
 
 def render_tools():
@@ -64,9 +88,9 @@ def render_tools():
         st.info("결정하기 힘들 때, 랜덤으로 메뉴를 추천해 드립니다!")
         
         if st.button("🎲 메뉴 추천받기", use_container_width=True):
-            if os.path.exists(MENU_LIST_FILE):
+            if os.path.exists(MENU_JSON_PATH):
                 try:
-                    with open(MENU_LIST_FILE, "r", encoding="utf-8") as f:
+                    with open(MENU_JSON_PATH, "r", encoding="utf-8") as f:
                         menu_list = json.load(f)
                     selected_menu = random.choice(menu_list)
                     st.balloons()
@@ -99,13 +123,11 @@ def render_tools():
             
             with col_del:
                 if st.button("🔥 전체 로그 삭제", type="primary", use_container_width=True):
-                    # secrets.toml에서 비밀번호 확인 (admin 섹션)
-                    try:
-                        correct_pwd = get_admin_password()
-                    except Exception:
-                        correct_pwd = st.secrets.get("admin_password")
-                    
-                    if pwd_input == correct_pwd:
+                    correct_pwd = get_admin_password()
+
+                    if not correct_pwd:
+                        st.error("관리자 비밀번호가 설정되지 않았습니다.")
+                    elif pwd_input == correct_pwd:
                         clear_access_logs()
                         st.toast("✅ 모든 접속 기록이 삭제되었습니다.")
                         st.rerun()
