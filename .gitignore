@@ -10,7 +10,6 @@ ENV/
 # Data Files (Local storage)
 memos.json
 access_log.json
-menu_list.json
 files/
 
 # IDEs
