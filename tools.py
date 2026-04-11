@@ -7,6 +7,9 @@ from access_logger import get_access_logs, clear_access_logs
 
 MENU_LIST_FILE = "menu_list.json"
 
+def get_admin_password() -> str:
+    return os.getenv("ADMIN_PASSWORD", "")
+
 def init_tools():
     """도구 모음 초기화 로직"""
     if not os.path.exists(MENU_LIST_FILE):
@@ -98,9 +101,9 @@ def render_tools():
                 if st.button("🔥 전체 로그 삭제", type="primary", use_container_width=True):
                     # secrets.toml에서 비밀번호 확인 (admin 섹션)
                     try:
-                        correct_pwd = st.secrets["admin"].get("admin_password", "0098")
+                        correct_pwd = get_admin_password()
                     except Exception:
-                        correct_pwd = st.secrets.get("admin_password", "0098")
+                        correct_pwd = st.secrets.get("admin_password")
                     
                     if pwd_input == correct_pwd:
                         clear_access_logs()
