@@ -66,8 +66,6 @@ def log_access():
             content_type="application/json"
         )
         st.session_state.access_logged = True
-        # 화면 표시용 최신 기록 저장
-        st.session_state.last_access_display = new_entry["time"]
     except Exception as e:
         print(f"Logging error: {e}")
 

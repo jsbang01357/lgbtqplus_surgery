@@ -1,4 +1,5 @@
 import os
+import time
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -50,33 +51,32 @@ def login_screen():
             else:
                 st.error("❌ 비밀번호가 올바르지 않습니다.")
                 
-    # 자동 포커싱을 위한 자바스크립트 주입 (로딩 지연 문제 해결을 위해 Polling 방식 적용)
+    # 로딩 지연 문제 해결 및 메뉴 전환 시 매번 실행되도록 고유 키(time.time) 부여
     components.html(
-        """
+        f"""
         <script>
-        function focusInput() {
+        // unique execution: {time.time()}
+        function focusInput() {{
             var doc = window.parent.document;
             var input = doc.querySelector('input[type="password"]');
-            if (input) {
+            if (input) {{
                 input.focus();
                 return true;
-            }
+            }}
             return false;
-        }
+        }}
 
-        // DOM이 완전히 렌더링될 때까지 100ms 간격으로 여러 번 시도
-        if (!focusInput()) {
-            var interval = setInterval(function() {
-                if (focusInput()) {
+        if (!focusInput()) {{
+            var interval = setInterval(function() {{
+                if (focusInput()) {{
                     clearInterval(interval);
-                }
-            }, 100);
+                }}
+            }}, 100);
             
-            // 3초 후에는 시도 중단
-            setTimeout(function() {
+            setTimeout(function() {{
                 clearInterval(interval);
-            }, 3000);
-        }
+            }}, 2000);
+        }}
         </script>
         """,
         height=0,

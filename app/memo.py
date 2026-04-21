@@ -3,7 +3,9 @@ import os
 import json
 import zipfile
 import io
+import time
 import random
+import streamlit.components.v1 as components
 from pathlib import PurePosixPath
 
 from app.core_utils import get_now, safe_filename, slugify
@@ -241,6 +243,36 @@ def render_memo_manager():
             st.toast(f"✅ '{saved_title}' 이름으로 메모 저장 완료!")
             st.session_state.new_memo_key += 1
             st.rerun()
+            
+        components.html(
+            f"""
+            <script>
+            // unique execution: {time.time()}
+            function focusMemoTitle() {{
+                var doc = window.parent.document;
+                var inputs = doc.querySelectorAll('input');
+                for (var i=0; i<inputs.length; i++) {{
+                    if (inputs[i].getAttribute('aria-label') === '제목' || inputs[i].placeholder === '제목을 입력하세요') {{
+                        inputs[i].focus();
+                        return true;
+                    }}
+                }}
+                return false;
+            }}
+
+            if (!focusMemoTitle()) {{
+                var interval = setInterval(function() {{
+                    if (focusMemoTitle()) {{
+                        clearInterval(interval);
+                    }}
+                }}, 100);
+                setTimeout(function() {{ clearInterval(interval); }}, 2000);
+            }}
+            </script>
+            """,
+            height=0,
+            width=0,
+        )
 
     st.markdown("---")
     st.subheader("💾 저장된 메모")
