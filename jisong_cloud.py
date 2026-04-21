@@ -5,6 +5,7 @@ from app.storage import render_file_manager
 from app.memo import render_memo_manager, MEMO_PREFIX
 from app.tools import render_tools
 from app.access_logger import log_access, get_access_logs
+from app.auth import is_authenticated, login_screen
 
 # --- 설정 ---
 # ACCESS_LOG_BLOB 정의는 access_logger.py로 이동됨
@@ -123,16 +124,22 @@ def main():
                 <p>마지막 접속: {st.session_state.last_access_display}</p>
             </div>
             <p style="opacity: 0.6; font-weight: bold;">
-                @ Jisong Bang 2026 | Ver 2.4 (260411)
+                @ Jisong Bang 2026 | Ver 2.5 (260421)
             </p>
         </div>
         """, unsafe_allow_html=True)
 
     # --- 라우팅 ---
     if st.session_state.menu == "files":
-        render_file_manager()
+        if not is_authenticated():
+            login_screen()
+        else:
+            render_file_manager()
     elif st.session_state.menu == "memos":
-        render_memo_manager()
+        if not is_authenticated():
+            login_screen()
+        else:
+            render_memo_manager()
     elif st.session_state.menu == "tools":
         render_tools()
 

@@ -278,8 +278,14 @@ def render_memo_manager():
             col_copy, col_dl, col_del = st.columns([1, 1, 1])
 
             with col_copy:
+                copy_text = (
+                    f"제목: {memo_full['title']}\n"
+                    f"생성시간: {memo_full['created_at']}\n"
+                    f"수정시간: {memo_full['updated_at']}\n\n"
+                    f"{cont}"
+                )
                 copy_to_clipboard(
-                    text=cont,
+                    text=copy_text,
                     before_copy_label="📋 복사",
                     after_copy_label="✅ 완료",
                     key=f"out_copy_{fname}",

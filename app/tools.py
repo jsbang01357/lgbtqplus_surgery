@@ -5,34 +5,11 @@ import random
 from pathlib import Path
 from app.text_cleaner import render_text_cleaner
 from app.access_logger import get_access_logs, clear_access_logs
-
+from app.auth import get_admin_password, is_authenticated, login_screen
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 MENU_JSON_PATH = BASE_DIR / "data" / "menu_list.json"
 
-def get_admin_password() -> str:
-    # 1) Cloud Run / 환경변수 우선
-    env_pwd = os.getenv("ADMIN_PASSWORD")
-    if env_pwd:
-        return env_pwd
-
-    # 2) 로컬 Streamlit secrets fallback
-    try:
-        admin_section = st.secrets["admin"]
-        if "admin_password" in admin_section and admin_section["admin_password"]:
-            return admin_section["admin_password"]
-    except Exception:
-        pass
-
-    try:
-        root_pwd = st.secrets["admin_password"]
-        if root_pwd:
-            return root_pwd
-    except Exception:
-        pass
-
-    # 3) 아무것도 없으면 빈 문자열
-    return ""
 
 def init_tools():
     """도구 모음 초기화 로직"""
@@ -101,35 +78,38 @@ def render_tools():
                 st.error("menu_list.json 파일이 없습니다.")
 
     elif selected_tool == "🔐 접속 기록 관리":
-        st.subheader("🔐 접속 기록 관리")
-        st.info("최근 500개의 접속 기록(IP, 브라우저 정보)을 확인하고 관리할 수 있습니다.")
-        
-        logs = get_access_logs()
-        if not logs:
-            st.write("접속 기록이 없습니다.")
+        if not is_authenticated():
+            login_screen()
         else:
-            # 데이터프레임 형식으로 표시 (가독성 향상)
-            import pandas as pd
-            df = pd.DataFrame(logs)
-            df.columns = ["접속 시간", "IP 주소", "브라우저 정보"]
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.subheader("🔐 접속 기록 관리")
+            st.info("최근 500개의 접속 기록(IP, 브라우저 정보)을 확인하고 관리할 수 있습니다.")
             
-            st.markdown("---")
-            st.subheader("🧹 로그 초기화")
-            
-            col_pwd, col_del = st.columns([3, 1], vertical_alignment="bottom")
-            with col_pwd:
-                pwd_input = st.text_input("관리자 비밀번호를 입력하세요", type="password", key="admin_pwd_check")
-            
-            with col_del:
-                if st.button("🔥 전체 로그 삭제", type="primary", use_container_width=True):
-                    correct_pwd = get_admin_password()
-
-                    if not correct_pwd:
-                        st.error("관리자 비밀번호가 설정되지 않았습니다.")
-                    elif pwd_input == correct_pwd:
-                        clear_access_logs()
-                        st.toast("✅ 모든 접속 기록이 삭제되었습니다.")
-                        st.rerun()
-                    else:
-                        st.error("❌ 비밀번호가 올바르지 않습니다.")
+            logs = get_access_logs()
+            if not logs:
+                st.write("접속 기록이 없습니다.")
+            else:
+                # 데이터프레임 형식으로 표시 (가독성 향상)
+                import pandas as pd
+                df = pd.DataFrame(logs)
+                df.columns = ["접속 시간", "IP 주소", "브라우저 정보"]
+                st.dataframe(df, use_container_width=True, hide_index=True)
+                
+                st.markdown("---")
+                st.subheader("🧹 로그 초기화")
+                
+                col_pwd, col_del = st.columns([3, 1], vertical_alignment="bottom")
+                with col_pwd:
+                    pwd_input = st.text_input("관리자 비밀번호를 다시 입력하세요", type="password", key="admin_pwd_check")
+                
+                with col_del:
+                    if st.button("🔥 전체 로그 삭제", type="primary", use_container_width=True):
+                        correct_pwd = get_admin_password()
+    
+                        if not correct_pwd:
+                            st.error("관리자 비밀번호가 설정되지 않았습니다.")
+                        elif pwd_input == correct_pwd:
+                            clear_access_logs()
+                            st.toast("✅ 모든 접속 기록이 삭제되었습니다.")
+                            st.rerun()
+                        else:
+                            st.error("❌ 비밀번호가 올바르지 않습니다.")
