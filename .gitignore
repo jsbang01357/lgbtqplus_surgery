@@ -6,11 +6,10 @@ __pycache__/
 env/
 venv/
 ENV/
-
-# Data Files (Local storage)
-memos.json
-access_log.json
-files/
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # IDEs
 .vscode/
@@ -18,10 +17,9 @@ files/
 *.swp
 *.swo
 
-# Secrets
-.streamlit/secrets.toml
+# Streamlit / secrets
+.streamlit/
 
 # OS
 .DS_Store
 Thumbs.db
-

@@ -2,10 +2,22 @@
 
 개인용 Streamlit 기반 미니 클라우드 앱입니다.
 
-파일 업로드/다운로드, 간단한 메모 관리, 텍스트 정리 도구를 한곳에 모아 둔 개인 생산성 앱입니다.  
-UI를 화려하게 만드는 것보다, 실제로 자주 쓰는 기능을 빠르게 처리하는 데 초점을 맞췄습니다.
+파일 보관, 메모 관리, 텍스트 정리, 간단한 유틸리티를 한곳에 모아 둔 실사용 중심 프로젝트입니다.  
+UI보다 빠른 사용성과 단순한 운영을 우선하며, 데이터 저장소는 Google Cloud Storage(GCS)를 사용합니다.
 
-현재 버전: 2.4
+현재 코드 기준 버전 표기는 앱 푸터에 표시되는 `Ver 2.5 (260421)`를 따릅니다.
+
+---
+
+## 프로젝트 개요
+
+이 프로젝트는 하나의 Streamlit 앱에서 아래 세 가지 영역을 제공합니다.
+
+1. 웹하드
+2. 메모장
+3. 도구모음
+
+메인 진입점은 `jisong_cloud.py`이며, 사이드바 메뉴를 기준으로 각 기능 화면을 라우팅합니다.
 
 ---
 
@@ -14,28 +26,115 @@ UI를 화려하게 만드는 것보다, 실제로 자주 쓰는 기능을 빠르
 ### 1. 웹하드
 - 파일 업로드
 - 저장된 파일 목록 조회
-- **Lazy Download 적용**: 서버 메모리를 절약하기 위해, 다운로드 시 GCS 직접 링크(Signed URL) 이용
-- 개별 다운로드 및 삭제
-- 예약형 전체 ZIP 생성 및 다운로드
+- 개별 다운로드
+- 개별 삭제
+- 전체 ZIP 생성 후 다운로드
 - 전체 삭제
 
-저장소는 Google Cloud Storage(GCS)를 사용합니다.
+업로드된 파일은 GCS의 `uploads/` prefix 아래에 저장됩니다.
+
+파일명은 업로드 시각이 붙은 형태로 저장되어, 같은 이름의 파일이 올라와도 덮어쓰지 않도록 구성되어 있습니다.
 
 ### 2. 메모장
-- 메모 작성 / 수정 / 삭제
+- 새 메모 작성
+- 저장된 메모 목록 조회
+- 메모 내용 수정
+- 개별 복사
 - 개별 다운로드
-- 예약형 전체 ZIP 생성 및 다운로드
+- 개별 삭제
+- 전체 ZIP 생성 후 다운로드
 - 전체 삭제
 
 메모는 GCS의 `memos/` prefix 아래 `.txt` 파일로 저장됩니다.  
-본문은 lazy loading 방식으로 불러와서, 메모 수가 많아져도 목록 로딩이 과하게 느려지지 않도록 구성했습니다.
+메모 제목, 생성 시간, 수정 시간은 파일 본문 헤더와 blob metadata 양쪽에 반영됩니다.
 
 ### 3. 도구모음
-현재 포함된 도구:
-- 텍스트 클리너 (기본 정리, AI mode Markdown 정리)
+현재 포함된 도구는 아래와 같습니다.
+
+- 텍스트 클리너
 - 글자수 카운터
 - 오늘 뭐 먹지?
-- **접속 기록 관리**: 누적 접속자 로그(IP, 브라우저 정보, 500건 한도) 관리 및 보안 삭제 기능(비밀번호 필요)
+- 접속 기록 관리
+
+#### 텍스트 클리너
+- AI 답변/복붙 텍스트 정리용 기본 모드
+- 불릿 기호 정리
+- 구분선 제거
+- 줄바꿈/공백 정리
+- URL 제거, 특수문자 제거, 번호 제거 등 상세 옵션 제공
+
+#### 글자수 카운터
+- 단어 수
+- 공백 포함 글자 수
+- 공백 제외 글자 수
+- 예상 A4 분량
+
+#### 오늘 뭐 먹지?
+- `data/menu_list.json`에 있는 메뉴 중 하나를 랜덤 추천
+
+#### 접속 기록 관리
+- 최근 최대 500건의 접속 기록 조회
+- 접속 시간, IP 주소, 브라우저 정보 표시
+- 관리자 비밀번호 재입력 후 전체 로그 삭제 가능
+
+---
+
+## 인증 정책
+
+현재 구현 기준으로 인증은 관리자 비밀번호 하나를 기준으로 동작합니다.
+
+- `웹하드` 접근 시 인증 필요
+- `메모장` 접근 시 인증 필요
+- `도구모음` 자체는 열람 가능
+- 단, `접속 기록 관리`는 도구모음 내부에서도 인증 필요
+
+인증 상태는 Streamlit `session_state`에 저장되는 단순 세션 기반 방식입니다.
+
+---
+
+## 저장 구조
+
+하나의 GCS 버킷 안에서 prefix를 나눠 데이터를 관리합니다.
+
+```text
+bucket/
+├── uploads/
+│   └── ...
+├── memos/
+│   └── *.txt
+└── logs/
+    └── access_log.json
+```
+
+### 파일 저장
+- 업로드 파일은 `uploads/파일명_타임스탬프.확장자` 형태로 저장됩니다.
+
+### 메모 저장
+- 메모는 텍스트 파일 하나당 메모 하나 구조입니다.
+- 파일 본문은 아래와 같은 헤더를 포함합니다.
+
+```text
+TITLE: 메모 제목
+CREATED_AT: 2026-04-24 12:34:56
+UPDATED_AT: 2026-04-24 12:34:56
+
+메모 본문...
+```
+
+### 접속 로그 저장
+- 접속 로그는 `logs/access_log.json`에 JSON 배열 형태로 저장됩니다.
+- 새 기록이 앞에 추가되며, 최대 500건까지만 유지합니다.
+
+---
+
+## 현재 구현 기준 동작 메모
+
+README를 코드 기준으로 맞춘 현재 시점에서, 아래 사항은 실제 동작을 이해할 때 중요합니다.
+
+- 파일 다운로드는 현재 Signed URL 직접 다운로드 방식이 아니라, Streamlit `download_button`에 데이터를 실어 내려주는 방식입니다.
+- ZIP 파일은 사용자가 버튼을 눌렀을 때만 메모리에서 생성됩니다.
+- 파일 목록과 메모 목록, 일부 다운로드/ZIP 생성은 Streamlit 캐시를 사용합니다.
+- 접속 로그는 앱 진입 시 세션당 한 번 기록되도록 되어 있습니다.
 
 ---
 
@@ -43,69 +142,76 @@ UI를 화려하게 만드는 것보다, 실제로 자주 쓰는 기능을 빠르
 
 ```text
 .
-├── jisong_cloud.py        # 메인 진입점 / 사이드바 구성 및 라우팅
-├── app/                   # 핵심 기능 모듈
-│   ├── gcs_helper.py      # GCS 클라이언트 인증 및 환경 변수 우선 적용
-│   ├── storage.py         # 파일 업로드/조회/삭제 및 Signed URL 다운로드 처리
-│   ├── memo.py            # 메모 CRUD 기능
-│   ├── tools.py           # 도구모음 및 접속 기록 관리 UI
-│   ├── text_cleaner.py    # 텍스트 클리너 및 AI 정리 프리셋
-│   ├── access_logger.py   # IP, 접속 브라우저 기록 로깅 및 조회 모듈
-│   └── core_utils.py      # 공통 유틸 / 시간 / 텍스트 클리닝 처리
-├── components/            # UI 확장 컴포넌트 모음
-│   └── custom_copy_btn/   # 자체 제작 클립보드 복사 버튼
+├── jisong_cloud.py
+├── app/
+│   ├── __init__.py
+│   ├── access_logger.py
+│   ├── auth.py
+│   ├── core_utils.py
+│   ├── gcs_helper.py
+│   ├── memo.py
+│   ├── storage.py
+│   ├── text_cleaner.py
+│   └── tools.py
+├── components/
+│   ├── __init__.py
+│   └── custom_copy_btn/
+│       ├── __init__.py
+│       └── frontend/
+│           ├── index.html
+│           └── streamlit-component-lib.js
 ├── data/
-│   └── menu_list.json     # 메뉴 랜덤 선택을 위한 로컬 JSON
-├── .streamlit/            # 로컬 배포 테스트용 비밀 설정 (secrets.toml)
-├── Dockerfile             # 컨테이너화 정보 (Debian-based python 이미지)
-├── cloudbuild.yaml        # GCP Cloud Build/Cloud Run CI/CD 파이프라인
-└── requirements.txt       # 프로젝트 구동 의존성
+│   └── menu_list.json
+├── tasks/
+│   ├── lessons.md
+│   └── todo.md
+├── AGENTS.md
+├── cloudbuild.yaml
+├── Dockerfile
+├── jisong_cloud.code-workspace
+└── requirements.txt
 ```
+
+### 파일별 역할
+
+- `jisong_cloud.py`: 앱 진입점, 사이드바 메뉴, 인증 분기, 화면 라우팅
+- `app/gcs_helper.py`: GCS 클라이언트 생성 및 버킷 이름 확인
+- `app/storage.py`: 웹하드 업로드/목록/다운로드/삭제/ZIP 처리
+- `app/memo.py`: 메모 CRUD 및 메모 ZIP 처리
+- `app/tools.py`: 도구모음 화면 구성
+- `app/text_cleaner.py`: 텍스트 정리 로직 및 UI
+- `app/access_logger.py`: 접속 로그 기록, 조회, 삭제
+- `app/auth.py`: 관리자 비밀번호 확인 및 로그인 화면
+- `app/core_utils.py`: 시간대, 파일명 정리, slug 변환 유틸
+- `components/custom_copy_btn/`: 클립보드 복사용 커스텀 Streamlit 컴포넌트
 
 ---
 
 ## 기술 스택
+
 - Python
 - Streamlit
-- Google Cloud Storage (google-cloud-storage)
-- Google Auth (google-auth)
-- Docker & Cloud Run
+- Google Cloud Storage
+- Google Auth
+- Docker
+- Google Cloud Build
+- Google Cloud Run
 
 ---
 
-## 저장 및 캐시 다운로드 구조
+## 실행 방법
 
-GCS 버킷 1개를 사용하고, 내부 prefix만 나눠서 관리합니다.
-
-```text
-bucket/
-├── uploads/
-│   └── ...
-├── memos/
-│   └── ...
-└── logs/
-    └── access_log.json
-```
-
-### logs/access_log.json
-IP 주소와 User-Agent가 포함된 최근 500건의 상세 접속 기록이 누적되어 리스트 형태로 관리됩니다.
-
-### 다운로드 (Lazy Download) 로직
-파일 목록을 불러올 때는 메타데이터만 쿼리하고, Streamlit 서버로 파일 전체를 불러와 버튼에 싣지 않습니다. 파일별 **GCS 다운로드용 임시 링크(Signed URL)**를 생성해서 버튼을 제공하며, 파일이 크더라도 Streamlit 서버의 부하 없이 빠르게 화면이 뜨고 브라우저에서 GCS로부터 다이렉트로 안전하게 다운로드합니다. 일괄 압축 파일의 경우, 사용자가 "ZIP 준비하기"를 눌렀을 때만 압축을 수행합니다.
-
----
-
-## 실행 및 배포 방법
-
-### 1. 패키지 설치 (로컬 개발 시)
+### 1. 의존성 설치
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Streamlit secrets 설정 (로컬 환경)
+### 2. 로컬 설정
 
-로컬 폴더 내 `.streamlit/secrets.toml` 파일에 기록하여 사용합니다:
+로컬에서는 `.streamlit/secrets.toml` 또는 환경변수를 사용해 설정할 수 있습니다.
+
+예시:
 
 ```toml
 admin_password = "YOUR_ADMIN_PASSWORD"
@@ -119,46 +225,114 @@ project_id = "YOUR_PROJECT_ID"
 private_key_id = "YOUR_PRIVATE_KEY_ID"
 private_key = "-----BEGIN PRIVATE KEY-----\nYOUR_PRIVATE_KEY\n-----END PRIVATE KEY-----\n"
 client_email = "YOUR_SERVICE_ACCOUNT_EMAIL"
-...
+client_id = "YOUR_CLIENT_ID"
+token_uri = "https://oauth2.googleapis.com/token"
 ```
 
-### 3. Cloud Run 배포 (운영 환경)
+### 3. 앱 실행
 
-이 프로젝트는 Dockerfile과 Google Cloud Build를 통해 **Cloud Run**으로 완전 자동 배포되도록 구성되어 있습니다 (`cloudbuild.yaml`).
+```bash
+streamlit run jisong_cloud.py
+```
 
-서비스 구동에 필요한 인증키나 권한 정보는 다음 중 유리한 방식을 자동으로 택해 호환됩니다:
-- **Cloud Run Application Default Credentials (ADC)**
-- `GCP_SERVICE_ACCOUNT_JSON` 환경 변수 문자열
-- 로컬 `st.secrets` 에 있는 서비스 계정 데이터
+---
 
-또한 `GCS_BUCKET_NAME` 및 로그 삭제 비밀번호 `ADMIN_PASSWORD` 환경 변수를 Cloud Run에 주입하여 동작 환경을 안전하게 분리할 수 있습니다.
+## 환경 변수 및 설정 우선순위
+
+### GCS 인증
+`app/gcs_helper.py` 기준 우선순위:
+
+1. `GCP_SERVICE_ACCOUNT_JSON`
+2. `st.secrets["gcp_service_account"]`
+3. Cloud Run ADC
+
+### 버킷 이름
+우선순위:
+
+1. `GCS_BUCKET_NAME`
+2. `st.secrets["gcs"]["bucket_name"]`
+
+### 관리자 비밀번호
+`app/auth.py` 기준 우선순위:
+
+1. `ADMIN_PASSWORD`
+2. `st.secrets["admin"]["admin_password"]`
+3. `st.secrets["admin_password"]`
+
+---
+
+## Docker 실행
+
+이 프로젝트는 `python:3.12-slim-bookworm` 기반 이미지를 사용합니다.
+
+컨테이너 실행 시 Streamlit은 `0.0.0.0:8080`으로 열리도록 설정되어 있습니다.
+
+```bash
+docker build -t jisong-cloud .
+docker run -p 8080:8080 jisong-cloud
+```
+
+---
+
+## Cloud Run 배포
+
+`cloudbuild.yaml` 기준으로 아래 흐름을 사용합니다.
+
+1. Docker 이미지 빌드
+2. Artifact Registry 푸시
+3. Cloud Run 서비스 업데이트
+
+현재 배포 설정에는 아래 항목이 포함되어 있습니다.
+
+- 리전: `asia-northeast1`
+- 서비스명: `jisong-cloud-tokyo`
+- 환경변수: `GCS_BUCKET_NAME=jisong-cloud-storage`
+- 시크릿: `ADMIN_PASSWORD=admin-password:1`
+- 서비스 계정 지정 사용
+
+---
+
+## 의존성
+
+현재 `requirements.txt` 기준:
+
+- `streamlit`
+- `google-cloud-storage`
+- `google-auth`
+- `pandas`
 
 ---
 
 ## 설계 방향
 
-이 프로젝트는 다음 원칙을 따릅니다.
+이 프로젝트는 아래 방향에 가깝습니다.
 
 - 개인용 실사용 도구
-- 과한 아키텍처 분리 지양
-- 유지보수 부담 최소화
-- UI보다 기능 우선, 리소스 최적화 구조 도입 
-- 로컬 개발 + Dockerized 배포(Cloud Run)에 적합한 구조
-- GCS를 영구 저장소로 사용하되, 메모리 이슈를 일으키지 않는 (메타데이터 조회/Signed URL 활용) 캐싱 전략 도입
+- 단순한 구조 우선
+- 기능 중심 개발
+- GCS를 단일 영구 저장소로 활용
+- Cloud Run 배포에 맞는 운영 방식
+- 과도한 분리보다 빠른 유지보수 우선
 
 ---
 
-## 버전 메모
+## 한계 및 주의사항
 
-### v2.4 (최신)
-- 구조 분리 및 패키지화 (`app/`, `components/`, `data/`) 전면 적용
-- Docker 컨테이너 및 GCP Cloud Build, Cloud Run(`cloudbuild.yaml`) 연동 설정
-- **Lazy Download** 전략 도입:
-    - 다운로드 시 임시 보안 링크(Signed URL) 다이렉트 제공
-    - 일괄 압축 기능의 분리 (수동 준비 시스템)
-- 도구모음에 관리자 검증(`ADMIN_PASSWORD`) 기반의 '접속 기록 관리' UI 탑재
-- 누적형 고도화 로깅 추가 (최대 500건, IP 및 브라우저 정보 수집)
+- 현재 인증은 단일 관리자 비밀번호 기반입니다.
+- 접속 로그는 JSON 파일 전체를 읽고 다시 쓰는 방식이라 동시성에 강한 구조는 아닙니다.
+- 파일 다운로드는 현재 서버 메모리를 일부 사용하는 방식입니다.
+- 테스트 코드가 별도로 포함되어 있지 않습니다.
+- 일부 구버전 호환 로직(`memos.json` 마이그레이션)이 남아 있습니다.
+- `.streamlit/` 같은 로컬 설정 디렉터리는 Git에 포함하지 않도록 관리합니다.
 
-### v2.3
-- GCS 저장 구조 도입
-- 파일 목록/메모 목록 캐시 추가 및 본문 lazy loading 적용
+---
+
+## 빠른 시작 체크리스트
+
+1. GCS 버킷 준비
+2. 관리자 비밀번호 설정
+3. 서비스 계정 또는 ADC 구성
+4. `pip install -r requirements.txt`
+5. `streamlit run jisong_cloud.py`
+
+이후 `웹하드`, `메모장`, `도구모음` 메뉴를 통해 기능을 사용할 수 있습니다.
