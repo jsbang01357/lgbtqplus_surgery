@@ -1,5 +1,4 @@
 import streamlit as st
-import os
 import json
 import zipfile
 import io
@@ -16,11 +15,11 @@ MEMO_PREFIX = "memos"
 OLD_JSON_FILE = "memos.json"
 
 
-
 def init_memos():
     if OLD_JSON_FILE:
         try:
             import os
+
             if os.path.exists(OLD_JSON_FILE):
                 with open(OLD_JSON_FILE, "r", encoding="utf-8") as f:
                     old_memos = json.load(f)
@@ -68,7 +67,9 @@ def parse_memo_text(raw_text: str, fallback_name: str):
     }
 
 
-def _build_memo_payload(title: str, content: str, created_at: str, updated_at: str) -> str:
+def _build_memo_payload(
+    title: str, content: str, created_at: str, updated_at: str
+) -> str:
     return (
         f"TITLE: {title}\n"
         f"CREATED_AT: {created_at}\n"
@@ -95,12 +96,14 @@ def load_memo_list_cached():
         created_at = metadata.get("created_at", "")
         updated_at = metadata.get("updated_at", "")
 
-        memos.append({
-            "title": title,
-            "created_at": created_at,
-            "updated_at": updated_at,
-            "file_name": file_name,
-        })
+        memos.append(
+            {
+                "title": title,
+                "created_at": created_at,
+                "updated_at": updated_at,
+                "file_name": file_name,
+            }
+        )
 
     memos.sort(key=lambda x: x["updated_at"] or x["created_at"], reverse=True)
     return memos
@@ -135,7 +138,9 @@ def save_memo_txt(title, content, original_file_name=None):
             "created_at": created_at,
             "updated_at": timestamp,
         }
-        blob.upload_from_string(payload.encode("utf-8"), content_type="text/plain; charset=utf-8")
+        blob.upload_from_string(
+            payload.encode("utf-8"), content_type="text/plain; charset=utf-8"
+        )
 
         load_memo_list_cached.clear()
         load_single_memo_content.clear()
@@ -146,7 +151,7 @@ def save_memo_txt(title, content, original_file_name=None):
 
     safe_name = slugify(title)
     if not safe_name:
-        safe_name = f"memo-{random.randint(1000,9999)}"
+        safe_name = f"memo-{random.randint(1000, 9999)}"
 
     ts = get_now().strftime("%Y%m%d_%H%M%S")
     file_name = f"{ts}_{safe_name}.txt"
@@ -159,7 +164,9 @@ def save_memo_txt(title, content, original_file_name=None):
         "created_at": timestamp,
         "updated_at": timestamp,
     }
-    blob.upload_from_string(payload.encode("utf-8"), content_type="text/plain; charset=utf-8")
+    blob.upload_from_string(
+        payload.encode("utf-8"), content_type="text/plain; charset=utf-8"
+    )
 
     load_memo_list_cached.clear()
     load_single_memo_content.clear()
@@ -227,23 +234,38 @@ def render_memo_manager():
 
         col_new1, col_new2 = st.columns([3, 1], vertical_alignment="bottom")
         with col_new1:
-            new_title = st.text_input("제목", placeholder="제목을 입력하세요", key=title_key)
+            new_title = st.text_input(
+                "제목", placeholder="제목을 입력하세요", key=title_key
+            )
         with col_new2:
             save_btn = st.button("저장하기", type="primary", use_container_width=True)
 
-        new_content = st.text_area("내용", height=150, placeholder="여기에 내용을 입력하세요", key=content_key)
+        new_content = st.text_area(
+            "내용", height=150, placeholder="여기에 내용을 입력하세요", key=content_key
+        )
 
         if save_btn:
             saved_title = new_title.strip()
             if not saved_title:
-                birds = ["까치", "참새", "비둘기", "까마귀", "제비", "기러기", "독수리", "부엉이", "딱따구리", "황새"]
+                birds = [
+                    "까치",
+                    "참새",
+                    "비둘기",
+                    "까마귀",
+                    "제비",
+                    "기러기",
+                    "독수리",
+                    "부엉이",
+                    "딱따구리",
+                    "황새",
+                ]
                 saved_title = f"{random.choice(birds)}_{random.randint(100, 999)}"
 
             save_memo_txt(saved_title, new_content)
             st.toast(f"✅ '{saved_title}' 이름으로 메모 저장 완료!")
             st.session_state.new_memo_key += 1
             st.rerun()
-            
+
         components.html(
             f"""
             <script>
@@ -289,7 +311,9 @@ def render_memo_manager():
             memo_full = load_single_memo_content(fname)
             cont = memo_full["content"]
 
-            edit_title = st.text_input("제목 수정", value=memo_full["title"], key=f"edit_title_{idx}_{fname}")
+            edit_title = st.text_input(
+                "제목 수정", value=memo_full["title"], key=f"edit_title_{idx}_{fname}"
+            )
 
             line_count = cont.count("\n") + 1
             dynamic_height = min(40 + (line_count * 25), 400)
@@ -301,7 +325,9 @@ def render_memo_manager():
                 key=f"edit_content_{idx}_{fname}",
             )
 
-            if st.button("📝 수정 내용 저장", key=f"save_{idx}_{fname}", use_container_width=True):
+            if st.button(
+                "📝 수정 내용 저장", key=f"save_{idx}_{fname}", use_container_width=True
+            ):
                 new_t = edit_title.strip() or memo_full["title"]
                 save_memo_txt(new_t, edit_content, original_file_name=fname)
                 st.toast("✅ 수정되었습니다.")
@@ -334,7 +360,12 @@ def render_memo_manager():
                 )
 
             with col_del:
-                if st.button("🗑️ 삭제", key=f"out_del_{fname}", type="secondary", use_container_width=True):
+                if st.button(
+                    "🗑️ 삭제",
+                    key=f"out_del_{fname}",
+                    type="secondary",
+                    use_container_width=True,
+                ):
                     delete_memo_txt(fname)
                     st.toast("🗑️ 삭제되었습니다.")
                     st.rerun()
@@ -344,7 +375,7 @@ def render_memo_manager():
     if memos_list:
         st.markdown("---")
         st.markdown("📦 일괄 처리")
-        
+
         if "zip_data_memos" not in st.session_state:
             st.session_state.zip_data_memos = None
 
@@ -365,7 +396,11 @@ def render_memo_manager():
                     use_container_width=True,
                 )
             else:
-                st.button("📥 ZIP 다운로드 (준비 필요)", disabled=True, use_container_width=True)
+                st.button(
+                    "📥 ZIP 다운로드 (준비 필요)",
+                    disabled=True,
+                    use_container_width=True,
+                )
 
         st.markdown("---")
         st.markdown("🧹 보안 관리")

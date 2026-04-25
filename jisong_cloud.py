@@ -1,14 +1,14 @@
 import streamlit as st
-
 from app.core_utils import get_now
 from app.storage import render_file_manager
-from app.memo import render_memo_manager, MEMO_PREFIX
+from app.memo import render_memo_manager
 from app.tools import render_tools
 from app.access_logger import log_access, get_access_logs
 from app.auth import is_authenticated, login_screen
 
 # --- 설정 ---
 # ACCESS_LOG_BLOB 정의는 access_logger.py로 이동됨
+
 
 def handle_access_log():
     if "last_access_display" not in st.session_state:
@@ -18,12 +18,13 @@ def handle_access_log():
             st.session_state.last_access_display = logs[0].get("time", "기록 없음")
         else:
             st.session_state.last_access_display = "최초 접속"
-            
+
         # 새로운 로그 직접 기록
         log_access()
 
+
 def check_for_updates():
-    '''
+    """
     if "last_memo_mtime" not in st.session_state:
         st.session_state.last_memo_mtime = os.path.getmtime(MEMO_DIR) if os.path.exists(MEMO_DIR) else 0
     if "last_file_mtime" not in st.session_state:
@@ -39,24 +40,26 @@ def check_for_updates():
     if cur_file_mtime > st.session_state.last_file_mtime:
         st.session_state.last_file_mtime = cur_file_mtime
         updated = True
-    
+
     if updated:
         st.toast("🔄 외부에서 파일/데이터가 업데이트되었습니다!", icon="🔄")
-    '''
+    """
     return
+
 
 def set_menu(menu_name):
     st.session_state.menu = menu_name
     st.query_params["tab"] = menu_name
 
+
 def main():
     st.set_page_config(page_title="Jisong Cloud", layout="wide")
-    
+
     handle_access_log()
     check_for_updates()
 
     st.sidebar.title("☁️ Jisong Cloud")
-    
+
     if "menu" not in st.session_state:
         if "tab" in st.query_params:
             st.session_state.menu = st.query_params["tab"]
@@ -70,7 +73,7 @@ def main():
     if st.sidebar.button("📂 웹하드", type=btn_files_type, use_container_width=True):
         set_menu("files")
         st.rerun()
-        
+
     if st.sidebar.button("📝 메모장", type=btn_memos_type, use_container_width=True):
         set_menu("memos")
         st.rerun()
@@ -80,7 +83,8 @@ def main():
         st.rerun()
 
     # --- [사이드바 하단 푸터 (CSS 및 HTML 주입)] ---
-    st.markdown("""
+    st.markdown(
+        """
         <style>
         .sidebar-footer {
             position: fixed;
@@ -115,19 +119,24 @@ def main():
             height: 120px;
         }
         </style>
-        """, unsafe_allow_html=True)
+        """,
+        unsafe_allow_html=True,
+    )
 
-    st.sidebar.markdown(f"""
+    st.sidebar.markdown(
+        f"""
         <div class="sidebar-footer">
             <div class="status-box">
-                <p>현재 시간: {get_now().strftime('%H:%M')}</p>
+                <p>현재 시간: {get_now().strftime("%H:%M")}</p>
                 <p>마지막 접속: {st.session_state.last_access_display}</p>
             </div>
             <p style="opacity: 0.6; font-weight: bold;">
                 @ Jisong Bang 2026 | Ver 2.5 (260421)
             </p>
         </div>
-        """, unsafe_allow_html=True)
+        """,
+        unsafe_allow_html=True,
+    )
 
     # --- 라우팅 ---
     if st.session_state.menu == "files":
@@ -142,6 +151,7 @@ def main():
             render_memo_manager()
     elif st.session_state.menu == "tools":
         render_tools()
+
 
 if __name__ == "__main__":
     main()
