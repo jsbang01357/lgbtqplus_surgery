@@ -23,3 +23,7 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db
+
+# Agent
+tasks/
+AGENTS.md
