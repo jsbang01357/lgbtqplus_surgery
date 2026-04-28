@@ -206,6 +206,8 @@ def render_file_manager():
 
     if "file_uploader_key" not in st.session_state:
         st.session_state["file_uploader_key"] = 0
+    if "confirm_clear_files" not in st.session_state:
+        st.session_state.confirm_clear_files = False
 
     def process_uploaded_files():
         current_key = f"uploader_{st.session_state['file_uploader_key']}"
@@ -368,14 +370,26 @@ def render_file_manager():
             """,
             unsafe_allow_html=True,
         )
+        if st.session_state.confirm_clear_files:
+            st.warning("한 번 더 누르면 전체 파일이 삭제됩니다.")
+
+        clear_files_label = (
+            "🔥 한 번 더 누르면 전체 파일 삭제"
+            if st.session_state.confirm_clear_files
+            else "🔥 모든 파일 삭제"
+        )
         if st.button(
-            "🔥 모든 파일 삭제",
+            clear_files_label,
             type="primary",
             use_container_width=True,
             key="danger_clear_files",
         ):
+            if not st.session_state.confirm_clear_files:
+                st.session_state.confirm_clear_files = True
+                st.rerun()
             try:
                 clear_all_uploaded_files()
+                st.session_state.confirm_clear_files = False
                 st.toast("✅ 모든 파일이 삭제되었습니다.")
                 st.rerun()
             except Exception as e:

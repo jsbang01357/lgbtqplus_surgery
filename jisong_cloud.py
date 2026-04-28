@@ -154,6 +154,10 @@ def inject_global_styles():
             margin-bottom: 1rem;
         }
 
+        .content-hero--auth {
+            margin-top: 1.45rem;
+        }
+
         .content-hero__eyebrow {
             margin: 0 0 0.45rem 0;
             font-size: 0.75rem;
@@ -365,6 +369,10 @@ def inject_global_styles():
         .stButton > button {
             border-radius: 12px;
             font-weight: 600;
+            white-space: normal;
+            line-height: 1.4;
+            height: auto;
+            min-height: 2.9rem;
         }
 
         [data-testid="metric-container"] {
@@ -373,6 +381,19 @@ def inject_global_styles():
             background: rgba(255, 255, 255, 0.9);
             box-shadow: 0 14px 28px rgba(15, 23, 42, 0.05);
             padding: 0.85rem 1rem;
+        }
+
+        [data-testid="metric-container"] [data-testid="stMetricLabel"],
+        [data-testid="metric-container"] [data-testid="stMetricValue"] {
+            overflow-wrap: anywhere;
+        }
+
+        [data-testid="stForm"] {
+            border: 1px solid var(--panel-border);
+            background: rgba(255, 255, 255, 0.92);
+            border-radius: 18px;
+            padding: 1rem 1rem 0.2rem 1rem;
+            box-shadow: var(--panel-shadow);
         }
 
         .sidebar-footer {
@@ -558,7 +579,7 @@ def main():
                     <span class="status-box__value">{format_last_access_display(st.session_state.last_access_display)}</span>
                 </div>
             </div>
-            <p class="sidebar-footer__meta">@ Jisong Bang / Ver 3.0 (260428)</p>
+            <p class="sidebar-footer__meta">Jisong Bang 2026<br>Ver 3.0 (260429)</p>
         </div>
         """,
         unsafe_allow_html=True,

@@ -35,7 +35,7 @@ def is_authenticated() -> bool:
 def login_screen():
     st.markdown(
         """
-        <div class="content-hero">
+        <div class="content-hero content-hero--auth">
             <p class="content-hero__eyebrow">Protected Area</p>
             <h1 class="content-hero__title">인증이 필요한 작업 공간입니다.</h1>
             <p class="content-hero__body">
@@ -45,7 +45,6 @@ def login_screen():
         """,
         unsafe_allow_html=True,
     )
-
 
     with st.form("login_form", clear_on_submit=False):
         pwd_input = st.text_input("비밀번호", type="password", key="login_pwd_input")

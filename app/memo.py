@@ -232,6 +232,8 @@ def render_memo_manager():
 
     if "new_memo_key" not in st.session_state:
         st.session_state.new_memo_key = 0
+    if "confirm_clear_memos" not in st.session_state:
+        st.session_state.confirm_clear_memos = False
 
     with st.container():
         st.markdown(
@@ -287,26 +289,25 @@ def render_memo_manager():
             f"""
             <script>
             // unique execution: {time.time()}
-            function focusMemoTitle() {{
+            function focusMemoTitleOnce() {{
                 var doc = window.parent.document;
+                var active = doc.activeElement;
+                if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {{
+                    return;
+                }}
+
                 var inputs = doc.querySelectorAll('input');
                 for (var i=0; i<inputs.length; i++) {{
                     if (inputs[i].getAttribute('aria-label') === '제목' || inputs[i].placeholder === '제목을 입력하세요') {{
-                        inputs[i].focus();
-                        return true;
+                        if (!inputs[i].value) {{
+                            inputs[i].focus();
+                        }}
+                        return;
                     }}
                 }}
-                return false;
             }}
 
-            if (!focusMemoTitle()) {{
-                var interval = setInterval(function() {{
-                    if (focusMemoTitle()) {{
-                        clearInterval(interval);
-                    }}
-                }}, 100);
-                setTimeout(function() {{ clearInterval(interval); }}, 2000);
-            }}
+            setTimeout(focusMemoTitleOnce, 120);
             </script>
             """,
             height=0,
@@ -495,14 +496,26 @@ def render_memo_manager():
             """,
             unsafe_allow_html=True,
         )
+        if st.session_state.confirm_clear_memos:
+            st.warning("한 번 더 누르면 전체 메모가 삭제됩니다.")
+
+        clear_memos_label = (
+            "🔥 한 번 더 누르면 전체 메모 삭제"
+            if st.session_state.confirm_clear_memos
+            else "🔥 모든 메모 삭제"
+        )
         if st.button(
-            "🔥 모든 메모 삭제",
+            clear_memos_label,
             type="primary",
             use_container_width=True,
             key="danger_clear_memos",
         ):
+            if not st.session_state.confirm_clear_memos:
+                st.session_state.confirm_clear_memos = True
+                st.rerun()
             try:
                 clear_all_memos()
+                st.session_state.confirm_clear_memos = False
                 st.toast("✅ 모든 메모가 삭제되었습니다.")
                 st.rerun()
             except Exception as e:

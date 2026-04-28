@@ -87,20 +87,22 @@ def _render_tool_picker():
         unsafe_allow_html=True,
     )
 
-    columns = st.columns(len(TOOLS))
-    for column, tool in zip(columns, TOOLS):
-        button_type = (
-            "primary" if st.session_state.selected_tool_id == tool["id"] else "secondary"
-        )
-        with column:
-            if st.button(
-                f"{tool['icon']} {tool['label']}",
-                key=f"tool_pick_{tool['id']}",
-                type=button_type,
-                use_container_width=True,
-            ):
-                _select_tool(tool["id"])
-        column.caption(tool["summary"])
+    for row_start in range(0, len(TOOLS), 2):
+        row_tools = TOOLS[row_start : row_start + 2]
+        row_columns = st.columns(len(row_tools))
+        for column, tool in zip(row_columns, row_tools):
+            button_type = (
+                "primary" if st.session_state.selected_tool_id == tool["id"] else "secondary"
+            )
+            with column:
+                if st.button(
+                    f"{tool['icon']} {tool['label']}",
+                    key=f"tool_pick_{tool['id']}",
+                    type=button_type,
+                    use_container_width=True,
+                ):
+                    _select_tool(tool["id"])
+                st.caption(tool["summary"])
 
     return TOOL_INDEX[st.session_state.selected_tool_id]
 
@@ -137,14 +139,16 @@ def _render_counter_tool():
             word_count = len(input_text.split())
             a4_pages = char_count_with_spaces / 1500
 
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
+            row1_col1, row1_col2 = st.columns(2)
+            with row1_col1:
                 st.metric("단어 수", f"{word_count}개")
-            with col2:
+            with row1_col2:
                 st.metric("글자 수 (공백 포함)", f"{char_count_with_spaces}자")
-            with col3:
+
+            row2_col1, row2_col2 = st.columns(2)
+            with row2_col1:
                 st.metric("글자 수 (공백 제외)", f"{char_count_without_spaces}자")
-            with col4:
+            with row2_col2:
                 st.metric("예상 A4 분량", f"{a4_pages:.2f}쪽")
 
             st.caption("공백 포함 1,500자를 A4 1쪽으로 계산했습니다.")

@@ -265,8 +265,7 @@ def _apply_basic_cleaning_options(
 
 def render_text_cleaner():
     """텍스트 클리너 메인 UI"""
-    st.subheader("🧹 텍스트 클리너")
-    st.info("마크다운이나 복붙 텍스트를 복사하기 좋은 형태로 정리합니다.")
+
 
     st.markdown("**출력 형식**")
 
@@ -274,7 +273,7 @@ def render_text_cleaner():
         "출력 형식",
         ["기본 정리", "Markdown → Plain Text", "Markdown → Word용 텍스트"],
         index=2,
-        horizontal=True,
+        horizontal=False,
         label_visibility="collapsed",
     )
 

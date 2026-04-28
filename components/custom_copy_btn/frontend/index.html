@@ -9,45 +9,47 @@
       body { margin: 0; padding: 0; }
       .copy-btn {
         display: inline-flex;
-        -webkit-box-align: center;
         align-items: center;
-        -webkit-box-pack: center;
         justify-content: center;
-        font-weight: 400;
-        padding: 0.25rem 0.75rem;
-        border-radius: 0.5rem;
-        min-height: 2.5rem;
+        gap: 0.35rem;
+        font-weight: 600;
+        padding: 0.35rem 0.75rem;
+        border-radius: 0.75rem;
+        min-height: 2.9rem;
         margin: 0;
-        line-height: 1.6;
-        color: inherit;
+        line-height: 1.4;
+        color: #18212b;
         width: 100%;
         user-select: none;
-        background-color: #ffffff;
-        border: 1px solid rgba(49, 51, 63, 0.2);
+        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid rgba(15, 23, 42, 0.12);
         cursor: pointer;
         font-size: 14px;
         font-family: "Source Sans Pro", sans-serif;
         box-sizing: border-box;
-        transition: border-color 0.2s, color 0.2s, background-color 0.2s;
+        box-shadow: none;
+        transition: border-color 0.18s ease, color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
       }
       .copy-btn:hover {
-        border-color: rgb(255, 75, 75);
-        color: rgb(255, 75, 75);
+        border-color: rgba(39, 76, 154, 0.28);
+        background: rgba(245, 248, 255, 0.96);
+        color: #1a2f63;
       }
       .copy-btn:active {
-        border-color: rgb(255, 75, 75);
-        background-color: rgb(255, 75, 75);
-        color: rgb(255, 255, 255);
+        transform: translateY(1px);
+        border-color: rgba(39, 76, 154, 0.34);
+        background: rgba(233, 239, 252, 0.92);
+        color: #1a2f63;
       }
       @media (prefers-color-scheme: dark) {
         .copy-btn {
-          background-color: transparent;
-          color: #fafafa;
-          border-color: rgba(250, 250, 250, 0.2);
+          background: rgba(255, 255, 255, 0.92);
+          color: #18212b;
+          border-color: rgba(15, 23, 42, 0.12);
         }
         .copy-btn:hover {
-          border-color: rgb(255, 75, 75);
-          color: rgb(255, 75, 75);
+          border-color: rgba(39, 76, 154, 0.28);
+          color: #1a2f63;
         }
       }
     </style>
