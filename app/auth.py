@@ -3,6 +3,7 @@ import time
 import streamlit as st
 import streamlit.components.v1 as components
 
+
 def get_admin_password() -> str:
     # 1) Cloud Run / 환경변수 우선
     env_pwd = os.getenv("ADMIN_PASSWORD")
@@ -30,18 +31,33 @@ def get_admin_password() -> str:
 def is_authenticated() -> bool:
     return st.session_state.get("authenticated", False)
 
+
 def login_screen():
-    st.title("🔒 인증 필요")
-    st.info("이 기능에 접근하려면 관리자 비밀번호를 입력해주세요.")
-    
-    # st.form을 사용하여 엔터 키 입력 시 자동 제출되도록 함
+    st.markdown(
+        """
+        <div class="content-hero">
+            <p class="content-hero__eyebrow">Protected Area</p>
+            <h1 class="content-hero__title">인증이 필요한 작업 공간입니다.</h1>
+            <p class="content-hero__body">
+                웹하드와 메모장은 개인 작업 데이터를 다루기 때문에 관리자 비밀번호 확인 후 접근할 수 있습니다.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
     with st.form("login_form", clear_on_submit=False):
         pwd_input = st.text_input("비밀번호", type="password", key="login_pwd_input")
-        submit_button = st.form_submit_button("로그인", type="primary", use_container_width=True)
-        
+        submit_button = st.form_submit_button(
+            "로그인",
+            type="primary",
+            use_container_width=True,
+        )
+
         if submit_button:
             correct_pwd = get_admin_password()
-            
+
             if not correct_pwd:
                 st.error("관리자 비밀번호가 설정되지 않았습니다.")
             elif pwd_input == correct_pwd:
@@ -50,8 +66,7 @@ def login_screen():
                 st.rerun()
             else:
                 st.error("❌ 비밀번호가 올바르지 않습니다.")
-                
-    # 로딩 지연 문제 해결 및 메뉴 전환 시 매번 실행되도록 고유 키(time.time) 부여
+
     components.html(
         f"""
         <script>

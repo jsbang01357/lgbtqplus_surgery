@@ -220,15 +220,32 @@ def create_zip_of_memos(memo_list):
     return zip_buffer
 
 
+def _memo_preview(content: str, limit: int = 120) -> str:
+    preview = " ".join(content.split())
+    if len(preview) <= limit:
+        return preview or "내용 미리보기가 없습니다."
+    return f"{preview[:limit].rstrip()}..."
+
+
 def render_memo_manager():
-    st.title("📝 메모장")
     memos_list = load_memo_list_cached()
 
     if "new_memo_key" not in st.session_state:
         st.session_state.new_memo_key = 0
 
     with st.container():
-        st.subheader("새 메모 작성")
+        st.markdown(
+            """
+            <div class="section-block">
+                <p class="section-block__eyebrow">Write</p>
+                <h2 class="section-block__title">새 메모 작성</h2>
+                <p class="section-block__body">
+                    제목과 내용을 입력하면 시간 정보와 함께 텍스트 메모로 저장됩니다.
+                </p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         title_key = f"new_title_{st.session_state.new_memo_key}"
         content_key = f"new_content_{st.session_state.new_memo_key}"
 
@@ -296,85 +313,149 @@ def render_memo_manager():
             width=0,
         )
 
-    st.markdown("---")
-    st.subheader("💾 저장된 메모")
+    st.markdown(
+        """
+        <div class="section-block section-block--spacious">
+            <p class="section-block__eyebrow">Library</p>
+            <h2 class="section-block__title">저장된 메모</h2>
+            <p class="section-block__body">
+                최근 수정된 메모부터 펼쳐보고 바로 수정, 복사, 다운로드할 수 있습니다.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     if not memos_list:
         st.info("저장된 메모가 없습니다.")
 
-    for idx, m in enumerate(memos_list):
-        t = m["title"]
-        ts = m["updated_at"] or m["created_at"]
-        fname = m["file_name"]
+    memo_query = st.text_input(
+        "메모 검색",
+        placeholder="제목이나 내용으로 찾기",
+        key="memo_search_query",
+    ).strip().lower()
 
-        with st.expander(f"📖 {t} ({ts})"):
+    filtered_memos = []
+    for memo in memos_list:
+        if not memo_query:
+            filtered_memos.append(memo)
+            continue
+
+        title_match = memo_query in memo["title"].lower()
+        content_match = False
+        if not title_match:
+            memo_full = load_single_memo_content(memo["file_name"])
+            content_match = memo_query in memo_full["content"].lower()
+
+        if title_match or content_match:
+            filtered_memos.append(memo)
+
+    col_stat1, col_stat2 = st.columns(2)
+    with col_stat1:
+        st.metric("전체 메모 수", f"{len(memos_list)}개")
+    with col_stat2:
+        st.metric("표시 중", f"{len(filtered_memos)}개")
+
+    if filtered_memos:
+        for idx, m in enumerate(filtered_memos):
+            t = m["title"]
+            ts = m["updated_at"] or m["created_at"]
+            fname = m["file_name"]
             memo_full = load_single_memo_content(fname)
+            preview = _memo_preview(memo_full["content"])
             cont = memo_full["content"]
 
-            edit_title = st.text_input(
-                "제목 수정", value=memo_full["title"], key=f"edit_title_{idx}_{fname}"
+            st.markdown(
+                f"""
+                <div class="surface-card surface-card--compact">
+                    <div class="tool-chip">Memo</div>
+                    <h3 class="surface-card__title">{t}</h3>
+                    <p class="surface-card__body">수정 시각 {ts}</p>
+                    <p class="surface-card__body">{preview}</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
             )
 
-            line_count = cont.count("\n") + 1
-            dynamic_height = min(40 + (line_count * 25), 400)
-
-            edit_content = st.text_area(
-                label="내용 수정",
-                value=cont,
-                height=dynamic_height,
-                key=f"edit_content_{idx}_{fname}",
-            )
-
-            if st.button(
-                "📝 수정 내용 저장", key=f"save_{idx}_{fname}", use_container_width=True
-            ):
-                new_t = edit_title.strip() or memo_full["title"]
-                save_memo_txt(new_t, edit_content, original_file_name=fname)
-                st.toast("✅ 수정되었습니다.")
-                st.rerun()
-
-            col_copy, col_dl, col_del = st.columns([1, 1, 1])
-
-            with col_copy:
-                copy_text = (
-                    f"제목: {memo_full['title']}\n"
-                    f"생성시간: {memo_full['created_at']}\n"
-                    f"수정시간: {memo_full['updated_at']}\n\n"
-                    f"{cont}"
-                )
-                copy_to_clipboard(
-                    text=copy_text,
-                    before_copy_label="📋 복사",
-                    after_copy_label="✅ 완료",
-                    key=f"out_copy_{fname}",
+            with st.expander("메모 열기 / 수정"):
+                st.caption(
+                    f"생성 {memo_full['created_at']} · 마지막 수정 {memo_full['updated_at']}"
                 )
 
-            with col_dl:
-                st.download_button(
-                    label="📥 다운",
-                    data=cont,
-                    file_name=f"{safe_filename(memo_full['title']) or 'memo'}.txt",
-                    mime="text/plain",
-                    use_container_width=True,
-                    key=f"out_dl_{fname}",
+                edit_title = st.text_input(
+                    "제목 수정", value=memo_full["title"], key=f"edit_title_{idx}_{fname}"
                 )
 
-            with col_del:
+                line_count = cont.count("\n") + 1
+                dynamic_height = min(40 + (line_count * 25), 400)
+
+                edit_content = st.text_area(
+                    label="내용 수정",
+                    value=cont,
+                    height=dynamic_height,
+                    key=f"edit_content_{idx}_{fname}",
+                )
+
                 if st.button(
-                    "🗑️ 삭제",
-                    key=f"out_del_{fname}",
-                    type="secondary",
-                    use_container_width=True,
+                    "저장", key=f"save_{idx}_{fname}", use_container_width=True
                 ):
-                    delete_memo_txt(fname)
-                    st.toast("🗑️ 삭제되었습니다.")
+                    new_t = edit_title.strip() or memo_full["title"]
+                    save_memo_txt(new_t, edit_content, original_file_name=fname)
+                    st.toast("✅ 수정되었습니다.")
                     st.rerun()
 
-        st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
+                col_copy, col_dl, col_del = st.columns([1, 1, 1])
+
+                with col_copy:
+                    copy_text = (
+                        f"제목: {memo_full['title']}\n"
+                        f"생성시간: {memo_full['created_at']}\n"
+                        f"수정시간: {memo_full['updated_at']}\n\n"
+                        f"{cont}"
+                    )
+                    copy_to_clipboard(
+                        text=copy_text,
+                        before_copy_label="복사",
+                        after_copy_label="✅ 완료",
+                        key=f"out_copy_{fname}",
+                    )
+
+                with col_dl:
+                    st.download_button(
+                        label="다운",
+                        data=cont,
+                        file_name=f"{safe_filename(memo_full['title']) or 'memo'}.txt",
+                        mime="text/plain",
+                        use_container_width=True,
+                        key=f"out_dl_{fname}",
+                    )
+
+                with col_del:
+                    if st.button(
+                        "삭제",
+                        key=f"out_del_{fname}",
+                        type="secondary",
+                        use_container_width=True,
+                    ):
+                        delete_memo_txt(fname)
+                        st.toast("🗑️ 삭제되었습니다.")
+                        st.rerun()
+    elif memos_list and memo_query:
+        st.info("검색 조건에 맞는 메모가 없습니다.")
 
     if memos_list:
-        st.markdown("---")
-        st.markdown("📦 일괄 처리")
+        st.markdown(
+            """
+            <div class="section-block section-block--spacious">
+                <p class="section-block__eyebrow">Batch</p>
+                <h3 class="section-block__title">일괄 처리</h3>
+                <p class="section-block__body">
+                    메모를 한 번에 묶어 ZIP으로 받아 둘 수 있습니다.
+                </p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
         if "zip_data_memos" not in st.session_state:
             st.session_state.zip_data_memos = None
@@ -402,9 +483,24 @@ def render_memo_manager():
                     use_container_width=True,
                 )
 
-        st.markdown("---")
-        st.markdown("🧹 보안 관리")
-        if st.button("🔥 모든 메모 삭제", type="primary", use_container_width=True):
+        st.markdown(
+            """
+            <div class="section-block section-block--spacious section-block--danger">
+                <p class="section-block__eyebrow">Danger Zone</p>
+                <h3 class="section-block__title">보안 관리</h3>
+                <p class="section-block__body">
+                    전체 메모 삭제는 복구할 수 없으니, 정리 목적이 분명할 때만 실행하세요.
+                </p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        if st.button(
+            "🔥 모든 메모 삭제",
+            type="primary",
+            use_container_width=True,
+            key="danger_clear_memos",
+        ):
             try:
                 clear_all_memos()
                 st.toast("✅ 모든 메모가 삭제되었습니다.")

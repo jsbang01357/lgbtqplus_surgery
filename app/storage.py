@@ -3,14 +3,16 @@ import datetime
 import zipfile
 import io
 import mimetypes
+import html
 from dataclasses import dataclass
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Optional
 
 from app.core_utils import get_now, KST
 from app.gcs_helper import get_bucket
 
 UPLOAD_PREFIX = "uploads"
+FILE_ICON_DIR = Path(__file__).resolve().parent.parent / "assets" / "icons" / "filetypes"
 
 
 @dataclass
@@ -148,9 +150,59 @@ def create_zip_of_files():
     return zip_buffer
 
 
+def _format_file_size(size: int) -> str:
+    units = ["B", "KB", "MB", "GB", "TB"]
+    value = float(size)
+    for unit in units:
+        if value < 1024 or unit == units[-1]:
+            if unit == "B":
+                return f"{int(value)} {unit}"
+            return f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{size} B"
+
+
+def _file_icon_key(filename: str) -> str:
+    ext = PurePosixPath(filename).suffix.lower()
+    if ext == ".pdf":
+        return "pdf"
+    if ext in {".doc", ".docx"}:
+        return "word"
+    if ext in {".ppt", ".pptx", ".key"}:
+        return "powerpoint"
+    if ext in {".xls", ".xlsx", ".csv"}:
+        return "excel"
+    if ext in {".txt", ".rtf"}:
+        return "text"
+    if ext in {".md", ".markdown"}:
+        return "markdown"
+    if ext in {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".bmp"}:
+        return "image"
+    if ext in {".zip", ".7z", ".rar", ".tar", ".gz"}:
+        return "archive"
+    if ext in {".mp4", ".mov", ".avi", ".mkv", ".mp3", ".wav", ".m4a"}:
+        return "media"
+    return "generic"
+
+
+def _file_type_label(filename: str) -> str:
+    ext = PurePosixPath(filename).suffix.lower().lstrip(".")
+    if not ext:
+        return "FILE"
+    return ext.upper()
+
+
+@st.cache_data(show_spinner=False)
+def _load_file_icon_svg(icon_key: str) -> str:
+    icon_path = FILE_ICON_DIR / f"{icon_key}.svg"
+    if not icon_path.exists():
+        icon_path = FILE_ICON_DIR / "generic.svg"
+    return icon_path.read_text(encoding="utf-8")
+
+
 def render_file_manager():
-    st.title("📂 웹하드")
     init_storage()
+
 
     if "file_uploader_key" not in st.session_state:
         st.session_state["file_uploader_key"] = 0
@@ -167,6 +219,18 @@ def render_file_manager():
                 st.toast(f"✅ {success_count}개 파일 업로드 완료!")
                 st.session_state["file_uploader_key"] += 1
 
+    st.markdown(
+        """
+        <div class="section-block">
+            <p class="section-block__eyebrow">Upload</p>
+            <h2 class="section-block__title">새 파일 추가</h2>
+            <p class="section-block__body">
+                여러 파일을 한 번에 올리면 업로드 시각이 자동으로 붙어서 덮어쓰지 않고 저장됩니다.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     st.file_uploader(
         "파일 선택 (PPT, PDF 등)",
         accept_multiple_files=True,
@@ -174,23 +238,73 @@ def render_file_manager():
         on_change=process_uploaded_files,
     )
 
-    st.markdown("---")
-    st.subheader("💾 저장된 파일")
+    st.markdown(
+        """
+        <div class="section-block section-block--spacious">
+            <p class="section-block__eyebrow">Library</p>
+            <h2 class="section-block__title">저장된 파일</h2>
+            <p class="section-block__body">
+                최근 업로드된 파일부터 정렬되어 보이며, 바로 다운로드하거나 삭제할 수 있습니다.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     files = list_uploaded_files()
+    file_query = st.text_input(
+        "파일 검색",
+        placeholder="파일명으로 찾기",
+        key="file_search_query",
+    ).strip().lower()
 
-    if files:
-        for file_info in files:
+    filtered_files = [
+        file_info for file_info in files if file_query in file_info.name.lower()
+    ]
+
+    total_size = sum(file_info.size for file_info in files)
+    col_stat1, col_stat2, col_stat3 = st.columns(3)
+    with col_stat1:
+        st.metric("전체 파일 수", f"{len(files)}개")
+    with col_stat2:
+        st.metric("표시 중", f"{len(filtered_files)}개")
+    with col_stat3:
+        st.metric("전체 용량", _format_file_size(total_size))
+
+    if filtered_files:
+        for file_info in filtered_files:
             file_time = "-"
             if file_info.updated:
                 file_time = file_info.updated.astimezone(KST).strftime("%Y-%m-%d %H:%M")
+            icon_key = _file_icon_key(file_info.name)
+            icon_svg = _load_file_icon_svg(icon_key)
+            file_name = html.escape(file_info.name)
+            file_type = html.escape(_file_type_label(file_info.name))
+            st.markdown(
+                f"""
+                <div class="surface-card surface-card--compact">
+                    <div class="file-card__header">
+                        <div class="file-card__icon" aria-hidden="true">{icon_svg}</div>
+                        <div class="file-card__meta">
+                            <div class="file-card__meta-row">
+                                <span class="file-card__type">{file_type}</span>
+                            </div>
+                            <h3 class="surface-card__title">{file_name}</h3>
+                            <p class="surface-card__body">수정 시각 {file_time}</p>
+                            <p class="surface-card__body">용량 {_format_file_size(file_info.size)}</p>
+                        </div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-            col_d1, col_d2 = st.columns([4, 1])
+            col_download, col_delete = st.columns([1, 1])
 
-            with col_d1:
+            with col_download:
                 data = download_file_bytes(file_info.blob_name)
                 st.download_button(
-                    label=f"{file_info.name} ({file_time})",
+                    label="다운로드",
                     data=data,
                     file_name=file_info.name,
                     mime=file_info.content_type or "application/octet-stream",
@@ -198,8 +312,8 @@ def render_file_manager():
                     key=f"dl_{file_info.blob_name}",
                 )
 
-            with col_d2:
-                if st.button("🗑️", key=f"del_{file_info.blob_name}", use_container_width=True):
+            with col_delete:
+                if st.button("삭제", key=f"del_{file_info.blob_name}", use_container_width=True):
                     try:
                         delete_uploaded_file(file_info.blob_name)
                         st.toast(f"🗑️ '{file_info.name}' 삭제됨")
@@ -207,9 +321,19 @@ def render_file_manager():
                     except Exception as e:
                         st.error(f"삭제 오류: {e}")
 
-        st.markdown("---")
-        st.markdown("📦 일괄 처리")
-        
+        st.markdown(
+            """
+            <div class="section-block section-block--spacious">
+                <p class="section-block__eyebrow">Batch</p>
+                <h3 class="section-block__title">일괄 처리</h3>
+                <p class="section-block__body">
+                    파일을 한 번에 ZIP으로 묶어서 다운로드할 수 있습니다.
+                </p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
         if "zip_data_files" not in st.session_state:
             st.session_state.zip_data_files = None
 
@@ -232,14 +356,31 @@ def render_file_manager():
             else:
                 st.button("📥 ZIP 다운로드 (준비 필요)", disabled=True, use_container_width=True)
 
-        st.markdown("---")
-        st.markdown("🧹 보안 관리")
-        if st.button("🔥 모든 파일 삭제", type="primary", use_container_width=True):
+        st.markdown(
+            """
+            <div class="section-block section-block--spacious section-block--danger">
+                <p class="section-block__eyebrow">Danger Zone</p>
+                <h3 class="section-block__title">보안 관리</h3>
+                <p class="section-block__body">
+                    전체 파일 삭제는 되돌릴 수 없으니 저장소를 비울 때만 사용하세요.
+                </p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        if st.button(
+            "🔥 모든 파일 삭제",
+            type="primary",
+            use_container_width=True,
+            key="danger_clear_files",
+        ):
             try:
                 clear_all_uploaded_files()
                 st.toast("✅ 모든 파일이 삭제되었습니다.")
                 st.rerun()
             except Exception as e:
                 st.error(f"삭제 중 오류 발생: {e}")
+    elif files and file_query:
+        st.info("검색 조건에 맞는 파일이 없습니다.")
     else:
-        st.write("📂 현재 저장된 파일이 없습니다.")
+        st.info("현재 저장된 파일이 없습니다.")
