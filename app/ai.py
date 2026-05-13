@@ -1,10 +1,13 @@
 import io
 import json
 import os
+import zipfile
 from datetime import datetime
 from pathlib import PurePosixPath
+from xml.etree import ElementTree
 
 import streamlit as st
+from google.api_core.exceptions import PreconditionFailed
 
 from app.core_utils import get_now
 from app.gcs_helper import get_bucket
@@ -25,20 +28,43 @@ SUPPORTED_EXTENSIONS = {
     ".md",
     ".markdown",
     ".csv",
-    ".doc",
     ".docx",
-    ".xls",
     ".xlsx",
-    ".ppt",
     ".pptx",
 }
+GEMINI_UPLOAD_EXTENSIONS = SUPPORTED_EXTENSIONS - {".docx", ".xlsx", ".pptx"}
+OFFICE_TEXT_EXTENSIONS = {".docx", ".xlsx", ".pptx"}
 
-GEMINI_MODEL = "gemini-3-flash-preview"
 GEMINI_USAGE_LOG_BLOB = "logs/gemini_usage.json"
-GEMINI_INPUT_PRICE_PER_1M = 0.50
-GEMINI_OUTPUT_PRICE_PER_1M = 3.00
-USD_TO_KRW_RATE = 1478
 MAX_USAGE_LOGS = 1000
+
+
+def _get_config_value(env_name: str, secret_name: str, default):
+    env_value = os.getenv(env_name)
+    if env_value not in (None, ""):
+        return env_value
+
+    try:
+        value = st.secrets["gemini"].get(secret_name)
+        if value not in (None, ""):
+            return value
+    except Exception:
+        pass
+
+    return default
+
+
+def _get_float_config(env_name: str, secret_name: str, default: float) -> float:
+    try:
+        return float(_get_config_value(env_name, secret_name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+GEMINI_MODEL = str(_get_config_value("GEMINI_MODEL", "model", "gemini-3-flash-preview"))
+GEMINI_INPUT_PRICE_PER_1M = _get_float_config("GEMINI_INPUT_PRICE_PER_1M", "input_price_per_1m", 0.50)
+GEMINI_OUTPUT_PRICE_PER_1M = _get_float_config("GEMINI_OUTPUT_PRICE_PER_1M", "output_price_per_1m", 3.00)
+USD_TO_KRW_RATE = _get_float_config("USD_TO_KRW_RATE", "usd_to_krw_rate", 1478)
 
 
 PROMPT_PRESETS = [
@@ -68,17 +94,16 @@ PROMPT_PRESETS = [
             [
                 "선택한 자료의 특정 환자에 대해 교수님께 물어보면 좋은 질문을 뽑아줘.",
                 "단순 확인 질문보다 임상 판단, 치료 방향, 놓치기 쉬운 risk, 다음 decision point에 관한 질문을 우선해줘.",
-                "각 질문마다 왜 좋은 질문인지 한 줄로 설명해줘.",
+                "각 질문마다 교수님의 답변도 적어줘.",
             ]
         ),
     },
     {
-        "label": "문제목록/계획",
+        "label": "자료 요약",
         "prompt": "\n".join(
             [
-                "선택한 자료를 바탕으로 이 환자의 active problem list를 우선순위대로 정리해줘.",
-                "각 problem마다 근거, 현재 상태, 오늘 확인할 것, plan을 간결하게 써줘.",
-                "불확실하거나 자료가 부족한 부분은 추정하지 말고 추가 확인 필요로 표시해줘.",
+                "선택한 자료의 내용을 한글로 요약해줘.",
+                "자료의 핵심 주제, 주요 내용, 중요한 수치나 결론을 3~5문장으로 간결하게 정리해줘.",
             ]
         ),
     },
@@ -102,6 +127,10 @@ def _get_gemini_api_key() -> str:
 
 def _is_supported_file(filename: str) -> bool:
     return PurePosixPath(filename).suffix.lower() in SUPPORTED_EXTENSIONS
+
+
+def _is_office_text_file(filename: str) -> bool:
+    return PurePosixPath(filename).suffix.lower() in OFFICE_TEXT_EXTENSIONS
 
 
 def _file_label(file_info) -> str:
@@ -133,6 +162,55 @@ def _format_memo_context(selected_memos: list[dict]) -> str:
             )
         )
     return "\n\n---\n\n".join(memo_parts)
+
+
+def _extract_xml_text(zip_file: zipfile.ZipFile, path: str) -> str:
+    try:
+        root = ElementTree.fromstring(zip_file.read(path))
+    except Exception:
+        return ""
+    return "\n".join(part.strip() for part in root.itertext() if part.strip())
+
+
+def _extract_office_text(filename: str, data: bytes) -> str:
+    ext = PurePosixPath(filename).suffix.lower()
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            names = zf.namelist()
+            if ext == ".docx":
+                targets = [name for name in names if name.startswith("word/") and name.endswith(".xml")]
+            elif ext == ".pptx":
+                targets = sorted(
+                    name for name in names
+                    if name.startswith("ppt/slides/slide") and name.endswith(".xml")
+                )
+            elif ext == ".xlsx":
+                targets = [
+                    name for name in names
+                    if name == "xl/sharedStrings.xml"
+                    or (name.startswith("xl/worksheets/") and name.endswith(".xml"))
+                ]
+            else:
+                return ""
+
+            text_parts = [_extract_xml_text(zf, target) for target in targets]
+    except zipfile.BadZipFile:
+        return ""
+    return "\n\n".join(part for part in text_parts if part).strip()
+
+
+def _format_office_context(selected_files) -> str:
+    file_parts = []
+    for file_info in selected_files:
+        if not _is_office_text_file(file_info.name):
+            continue
+        data = download_file_bytes(file_info.blob_name)
+        text = _extract_office_text(file_info.name, data)
+        if not text:
+            file_parts.append(f"파일명: {file_info.name}\n내용: 텍스트를 추출하지 못했습니다.")
+            continue
+        file_parts.append(f"파일명: {file_info.name}\n내용:\n{text}")
+    return "\n\n---\n\n".join(file_parts)
 
 
 def _append_question_preset(prompt: str):
@@ -175,25 +253,35 @@ def _get_ai_result_pdf_bytes(result: str) -> bytes | None:
     return st.session_state.get("ai_result_pdf_bytes")
 
 
-@st.cache_data(ttl=30)
-def _load_gemini_usage_logs() -> list[dict]:
+def _read_gemini_usage_blob() -> tuple[list[dict], int | None]:
     bucket = get_bucket()
     blob = bucket.blob(GEMINI_USAGE_LOG_BLOB)
     if not blob.exists():
-        return []
+        return [], None
+
+    blob.reload()
+    generation = int(blob.generation) if blob.generation is not None else None
     try:
         data = json.loads(blob.download_as_text(encoding="utf-8"))
     except Exception:
-        return []
-    return data if isinstance(data, list) else []
+        return [], generation
+    return data if isinstance(data, list) else [], generation
 
 
-def _save_gemini_usage_logs(logs: list[dict]):
+@st.cache_data(ttl=30)
+def _load_gemini_usage_logs() -> list[dict]:
+    logs, _ = _read_gemini_usage_blob()
+    return logs
+
+
+def _save_gemini_usage_logs(logs: list[dict], generation: int | None):
     bucket = get_bucket()
     blob = bucket.blob(GEMINI_USAGE_LOG_BLOB)
+    match_generation = generation if generation is not None else 0
     blob.upload_from_string(
         json.dumps(logs[:MAX_USAGE_LOGS], ensure_ascii=False, indent=2),
         content_type="application/json; charset=utf-8",
+        if_generation_match=match_generation,
     )
 
 
@@ -239,10 +327,16 @@ def _extract_usage_record(response) -> dict:
 def _record_gemini_usage(usage_record: dict):
     if not usage_record.get("input_tokens") and not usage_record.get("output_tokens"):
         return
-    logs = _load_gemini_usage_logs()
-    logs.insert(0, usage_record)
-    _save_gemini_usage_logs(logs)
-    _load_gemini_usage_logs.clear()
+    for _ in range(3):
+        logs, generation = _read_gemini_usage_blob()
+        logs.insert(0, usage_record)
+        try:
+            _save_gemini_usage_logs(logs, generation)
+            _load_gemini_usage_logs.clear()
+            return
+        except PreconditionFailed:
+            continue
+    raise RuntimeError("Gemini 사용량 로그가 동시에 수정되어 저장하지 못했습니다.")
 
 
 def _parse_usage_time(value: str) -> datetime | None:
@@ -339,9 +433,14 @@ def _run_gemini_analysis(
     memo_context = _format_memo_context(selected_memos)
     if memo_context:
         prompt_parts.append(f"선택한 메모:\n{memo_context}")
+    office_context = _format_office_context(selected_files)
+    if office_context:
+        prompt_parts.append(f"선택한 Office 파일에서 추출한 텍스트:\n{office_context}")
 
     try:
         for file_info in selected_files:
+            if _is_office_text_file(file_info.name):
+                continue
             data = download_file_bytes(file_info.blob_name)
             file_io = io.BytesIO(data)
             file_io.name = file_info.name
@@ -394,7 +493,7 @@ def render_ai():
 
     if unsupported_count:
         st.caption(
-            "PDF, 이미지, TXT, MD, CSV, Word, Excel, PPT 파일만 분석 대상으로 표시합니다. "
+            "PDF, 이미지, TXT, MD, CSV, DOCX, XLSX, PPTX 파일만 분석 대상으로 표시합니다. "
             f"제외된 파일: {unsupported_count}개"
         )
 
@@ -540,14 +639,23 @@ def render_ai():
             use_container_width=True,
         )
     with col_pdf:
-        pdf_bytes = _get_ai_result_pdf_bytes(result)
-        st.download_button(
-            "PDF 다운로드",
-            data=pdf_bytes or b"",
-            file_name=_result_download_filename("pdf"),
-            mime="application/pdf",
-            use_container_width=True,
-            disabled=not pdf_bytes,
-        )
+        if st.session_state.get("ai_result_pdf_source") != result:
+            st.session_state.ai_result_pdf_source = result
+            st.session_state.ai_result_pdf_bytes = None
+            st.session_state.ai_result_pdf_error = ""
+        if st.session_state.get("ai_result_pdf_bytes"):
+            st.download_button(
+                "PDF 다운로드",
+                data=st.session_state.ai_result_pdf_bytes,
+                file_name=_result_download_filename("pdf"),
+                mime="application/pdf",
+                use_container_width=True,
+            )
+        elif st.button("PDF 준비하기", use_container_width=True, key="ai_prepare_pdf"):
+            with st.spinner("PDF를 만드는 중입니다..."):
+                _get_ai_result_pdf_bytes(result)
+            st.rerun()
+        else:
+            st.button("PDF 다운로드", disabled=True, use_container_width=True)
     if st.session_state.get("ai_result_pdf_error"):
         st.warning(f"PDF 생성 준비 중 오류가 발생했습니다: {st.session_state.ai_result_pdf_error}")

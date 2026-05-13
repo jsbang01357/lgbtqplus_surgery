@@ -1,4 +1,5 @@
 import streamlit as st
+import html
 import json
 import zipfile
 import io
@@ -365,14 +366,17 @@ def render_memo_manager():
             memo_full = load_single_memo_content(fname)
             preview = _memo_preview(memo_full["content"])
             cont = memo_full["content"]
+            escaped_title = html.escape(t)
+            escaped_ts = html.escape(ts)
+            escaped_preview = html.escape(preview)
 
             st.markdown(
                 f"""
                 <div class="surface-card surface-card--compact">
                     <div class="tool-chip">Memo</div>
-                    <h3 class="surface-card__title">{t}</h3>
-                    <p class="surface-card__body">수정 시각 {ts}</p>
-                    <p class="surface-card__body">{preview}</p>
+                    <h3 class="surface-card__title">{escaped_title}</h3>
+                    <p class="surface-card__body">수정 시각 {escaped_ts}</p>
+                    <p class="surface-card__body">{escaped_preview}</p>
                 </div>
                 """,
                 unsafe_allow_html=True,

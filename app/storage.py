@@ -208,6 +208,8 @@ def render_file_manager():
         st.session_state["file_uploader_key"] = 0
     if "confirm_clear_files" not in st.session_state:
         st.session_state.confirm_clear_files = False
+    if "prepared_file_downloads" not in st.session_state:
+        st.session_state.prepared_file_downloads = {}
 
     def process_uploaded_files():
         current_key = f"uploader_{st.session_state['file_uploader_key']}"
@@ -304,20 +306,32 @@ def render_file_manager():
             col_download, col_delete = st.columns([1, 1])
 
             with col_download:
-                data = download_file_bytes(file_info.blob_name)
-                st.download_button(
-                    label="다운로드",
-                    data=data,
-                    file_name=file_info.name,
-                    mime=file_info.content_type or "application/octet-stream",
+                prepared = st.session_state.prepared_file_downloads.get(file_info.blob_name)
+                if prepared:
+                    st.download_button(
+                        label="다운로드",
+                        data=prepared,
+                        file_name=file_info.name,
+                        mime=file_info.content_type or "application/octet-stream",
+                        use_container_width=True,
+                        key=f"dl_{file_info.blob_name}",
+                    )
+                elif st.button(
+                    "다운로드 준비",
+                    key=f"prep_dl_{file_info.blob_name}",
                     use_container_width=True,
-                    key=f"dl_{file_info.blob_name}",
-                )
+                ):
+                    with st.spinner("파일을 준비하는 중..."):
+                        st.session_state.prepared_file_downloads[file_info.blob_name] = download_file_bytes(
+                            file_info.blob_name
+                        )
+                    st.rerun()
 
             with col_delete:
                 if st.button("삭제", key=f"del_{file_info.blob_name}", use_container_width=True):
                     try:
                         delete_uploaded_file(file_info.blob_name)
+                        st.session_state.prepared_file_downloads.pop(file_info.blob_name, None)
                         st.toast(f"🗑️ '{file_info.name}' 삭제됨")
                         st.rerun()
                     except Exception as e:

@@ -1,3 +1,35 @@
+## 운영 안정성 개선
+
+- [x] PPTX/DOCX/XLSX AI 분석을 텍스트 추출 방식으로 변경
+- [x] Gemini 비용 로그 동시 쓰기 충돌 완화
+- [x] 파일 다운로드와 AI PDF 생성의 즉시 로딩 제거
+- [x] 메모 카드 HTML escaping 적용
+- [x] Gemini 모델/가격/환율 설정 override 추가
+- [x] 테스트와 문서 업데이트
+
+## 요약
+- PPTX/DOCX/XLSX는 Gemini에 원본 업로드하지 않고 앱에서 OOXML 텍스트를 추출해 프롬프트에 포함하도록 변경했다.
+- Gemini 사용량 로그는 GCS generation 조건부 업로드와 재시도로 동시 쓰기 충돌을 줄였다.
+- 파일 다운로드와 AI PDF는 준비 버튼을 누른 뒤에만 bytes를 생성하도록 바꿨다.
+- 메모 카드의 제목/시간/미리보기 HTML escaping을 적용했다.
+- Gemini 모델, 단가, USD/KRW 환산값은 환경변수나 `st.secrets["gemini"]`로 override 가능하게 했다.
+
+---
+
+## 프로젝트 전반 개선점 점검
+
+- [x] 현재 작업트리와 주요 파일 구조 확인
+- [x] AI, 저장소, 메모, 도구, 배포 설정 점검
+- [x] 테스트/문법 검증 실행
+- [x] 우선순위별 개선점 요약
+
+## 요약
+- 현재 작업트리는 `app/ai.py`와 `tasks/todo.md` 변경만 남아 있다.
+- 기본 테스트와 문법 검증은 통과했다.
+- 우선 개선점은 GCS JSON 로그 동시 쓰기, ZIP 메모리 사용, HTML escaping, 비용 설정값 분리, 테스트 커버리지 확장이다.
+
+---
+
 # 📝 Todo
 
 Use this file to write short checklists for non-trivial work.

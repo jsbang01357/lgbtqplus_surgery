@@ -39,7 +39,7 @@ def login_screen():
             <p class="content-hero__eyebrow">Protected Area</p>
             <h1 class="content-hero__title">인증이 필요한 작업 공간입니다.</h1>
             <p class="content-hero__body">
-                웹하드와 메모장은 개인 작업 데이터를 다루기 때문에 관리자 비밀번호 확인 후 접근할 수 있습니다.
+                개인 작업 데이터를 다루는 기능이기 때문에 관리자 비밀번호 확인 후 접근할 수 있습니다.
             </p>
         </div>
         """,
