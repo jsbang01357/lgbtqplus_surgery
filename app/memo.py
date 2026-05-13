@@ -378,6 +378,43 @@ def render_memo_manager():
                 unsafe_allow_html=True,
             )
 
+            col_copy, col_dl, col_del = st.columns([1, 1, 1])
+
+            with col_copy:
+                copy_text = (
+                    f"제목: {memo_full['title']}\n"
+                    f"생성시간: {memo_full['created_at']}\n"
+                    f"수정시간: {memo_full['updated_at']}\n\n"
+                    f"{cont}"
+                )
+                copy_to_clipboard(
+                    text=copy_text,
+                    before_copy_label="복사",
+                    after_copy_label="✅ 완료",
+                    key=f"out_copy_{fname}",
+                )
+
+            with col_dl:
+                st.download_button(
+                    label="다운",
+                    data=cont,
+                    file_name=f"{safe_filename(memo_full['title']) or 'memo'}.txt",
+                    mime="text/plain",
+                    use_container_width=True,
+                    key=f"out_dl_{fname}",
+                )
+
+            with col_del:
+                if st.button(
+                    "삭제",
+                    key=f"out_del_{fname}",
+                    type="secondary",
+                    use_container_width=True,
+                ):
+                    delete_memo_txt(fname)
+                    st.toast("🗑️ 삭제되었습니다.")
+                    st.rerun()
+
             with st.expander("메모 열기 / 수정"):
                 st.caption(
                     f"생성 {memo_full['created_at']} · 마지막 수정 {memo_full['updated_at']}"
@@ -404,43 +441,6 @@ def render_memo_manager():
                     save_memo_txt(new_t, edit_content, original_file_name=fname)
                     st.toast("✅ 수정되었습니다.")
                     st.rerun()
-
-                col_copy, col_dl, col_del = st.columns([1, 1, 1])
-
-                with col_copy:
-                    copy_text = (
-                        f"제목: {memo_full['title']}\n"
-                        f"생성시간: {memo_full['created_at']}\n"
-                        f"수정시간: {memo_full['updated_at']}\n\n"
-                        f"{cont}"
-                    )
-                    copy_to_clipboard(
-                        text=copy_text,
-                        before_copy_label="복사",
-                        after_copy_label="✅ 완료",
-                        key=f"out_copy_{fname}",
-                    )
-
-                with col_dl:
-                    st.download_button(
-                        label="다운",
-                        data=cont,
-                        file_name=f"{safe_filename(memo_full['title']) or 'memo'}.txt",
-                        mime="text/plain",
-                        use_container_width=True,
-                        key=f"out_dl_{fname}",
-                    )
-
-                with col_del:
-                    if st.button(
-                        "삭제",
-                        key=f"out_del_{fname}",
-                        type="secondary",
-                        use_container_width=True,
-                    ):
-                        delete_memo_txt(fname)
-                        st.toast("🗑️ 삭제되었습니다.")
-                        st.rerun()
     elif memos_list and memo_query:
         st.info("검색 조건에 맞는 메모가 없습니다.")
 

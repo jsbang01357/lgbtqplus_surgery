@@ -7,6 +7,8 @@ import streamlit as st
 
 from app.access_logger import clear_access_logs, get_access_logs
 from app.auth import get_admin_password, is_authenticated, login_screen
+from app.md_pdf import render_md_pdf_tool
+from app.settlement import render_settlement_tool
 from app.text_cleaner import render_text_cleaner
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -24,6 +26,18 @@ TOOLS = [
         "label": "글자수 카운터",
         "icon": "📝",
         "summary": "글자 수, 단어 수, 예상 문서 분량을 빠르게 계산합니다.",
+    },
+    {
+        "id": "md_pdf",
+        "label": "MD to PDF",
+        "icon": "📄",
+        "summary": "Markdown을 한글 서식이 살아 있는 PDF로 변환합니다.",
+    },
+    {
+        "id": "settlement",
+        "label": "정산 계산기",
+        "icon": "💸",
+        "summary": "항목별 지출을 입력해 최소 송금 목록을 계산합니다.",
     },
     {
         "id": "menu_picker",
@@ -238,6 +252,10 @@ def render_tools():
         render_text_cleaner()
     elif selected_tool["id"] == "counter":
         _render_counter_tool()
+    elif selected_tool["id"] == "md_pdf":
+        render_md_pdf_tool()
+    elif selected_tool["id"] == "settlement":
+        render_settlement_tool()
     elif selected_tool["id"] == "menu_picker":
         _render_menu_picker_tool()
     elif selected_tool["id"] == "access_logs":

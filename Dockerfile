@@ -1,6 +1,21 @@
 FROM python:3.12-slim-bookworm
 
-RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
+        fonts-noto-cjk \
+        fonts-noto-color-emoji \
+        libffi8 \
+        libgdk-pixbuf-2.0-0 \
+        libharfbuzz-subset0 \
+        libharfbuzz0b \
+        libjpeg62-turbo \
+        libopenjp2-7 \
+        libpango-1.0-0 \
+        libpangoft2-1.0-0 \
+        libxml2 \
+        libxslt1.1 \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

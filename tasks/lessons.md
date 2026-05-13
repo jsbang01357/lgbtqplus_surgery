@@ -12,4 +12,4 @@ Reuse these lessons in future tasks to avoid repeating the same mistakes.
 * (Add learned patterns here...)
 
 ## Missed Requirements
-* (Add learned patterns here...)
+* 작업 체크리스트를 갱신할 때는 새 파일로 덮어쓰기 전에 기존 `tasks/todo.md` 내용을 먼저 확인하고, 이전 기록 아래에 새 작업 섹션을 추가한다.

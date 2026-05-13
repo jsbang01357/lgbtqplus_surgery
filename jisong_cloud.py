@@ -3,9 +3,11 @@ from datetime import datetime
 from app.core_utils import get_now
 from app.storage import render_file_manager
 from app.memo import render_memo_manager
+from app.ai import render_ai
 from app.tools import render_tools
 from app.access_logger import log_access, get_access_logs
 from app.auth import is_authenticated, login_screen
+from app.idle_timeout import inject_idle_timeout
 
 # --- 설정 ---
 # ACCESS_LOG_BLOB 정의는 access_logger.py로 이동됨
@@ -526,6 +528,7 @@ def set_menu(menu_name):
 def main():
     st.set_page_config(page_title="Jisong Cloud", layout="wide")
     inject_global_styles()
+    inject_idle_timeout()
 
     handle_access_log()
     check_for_updates()
@@ -552,6 +555,7 @@ def main():
 
     btn_files_type = "primary" if st.session_state.menu == "files" else "secondary"
     btn_memos_type = "primary" if st.session_state.menu == "memos" else "secondary"
+    btn_ai_type = "primary" if st.session_state.menu == "ai" else "secondary"
     btn_tools_type = "primary" if st.session_state.menu == "tools" else "secondary"
 
     if st.sidebar.button("📂 웹하드", type=btn_files_type, use_container_width=True):
@@ -560,6 +564,10 @@ def main():
 
     if st.sidebar.button("📝 메모장", type=btn_memos_type, use_container_width=True):
         set_menu("memos")
+        st.rerun()
+
+    if st.sidebar.button("🤖 AI", type=btn_ai_type, use_container_width=True):
+        set_menu("ai")
         st.rerun()
 
     if st.sidebar.button("🛠️ 도구모음", type=btn_tools_type, use_container_width=True):
@@ -596,6 +604,11 @@ def main():
             login_screen()
         else:
             render_memo_manager()
+    elif st.session_state.menu == "ai":
+        if not is_authenticated():
+            login_screen()
+        else:
+            render_ai()
     elif st.session_state.menu == "tools":
         render_tools()
 

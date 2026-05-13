@@ -2,3 +2,6 @@ streamlit
 google-cloud-storage
 google-auth
 pandas
+markdown
+weasyprint
+google-genai

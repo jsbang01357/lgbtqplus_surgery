@@ -284,3 +284,23 @@ Mark items as complete as you go.
 - 웹하드와 메모장의 전체 삭제 버튼은 첫 클릭에서 바로 실행되지 않고, 확인 상태를 켠 뒤 두 번째 클릭에서만 실제 삭제가 일어나도록 바꿨다.
 - 확인 상태가 켜지면 경고 메시지와 버튼 라벨이 함께 바뀌어 지금이 삭제 직전 단계라는 점이 분명하게 보이도록 정리했다.
 - 문법 검증과 diff 검사로 이중 확인 로직이 기존 전체 삭제 흐름과 충돌하지 않는지 확인했다.
+
+---
+
+## Jisong Cloud AI 및 도구 확장
+
+- [x] Add idle timeout behavior and AI sidebar route
+- [x] Add Gemini file/text analysis screen
+- [x] Add Markdown to PDF converter tool
+- [x] Add itemized settlement calculator tool
+- [x] Move memo copy/download/delete actions outside the edit expander
+- [x] Update dependencies and deployment/runtime notes
+- [x] Verify syntax and settlement scenarios
+
+## Summary
+- Added an authenticated AI sidebar menu that analyzes selected GCS files and typed text with Gemini, then saves results as memos.
+- Added Markdown to PDF and itemized settlement tools under the tools menu.
+- Added a 10-minute idle close attempt with a browser-policy fallback screen.
+- Moved memo copy/download/delete actions outside the edit expander.
+- Updated runtime dependencies, Docker system packages, README notes, and settlement unit tests.
+
