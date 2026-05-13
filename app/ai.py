@@ -107,7 +107,8 @@ PROMPT_PRESETS = [
         "prompt": "\n".join(
             [
                 "선택한 자료의 내용을 한글로 요약해줘.",
-                "자료의 핵심 주제, 주요 내용, 중요한 수치나 결론을 3~5문장으로 간결하게 정리해줘.",
+                "자료의 핵심 주제, 주요 내용, 중요한 수치나 결론을 정리해줘.",
+                "특히 내가 국시대비를 위해 꼭 알아야 할 내용이 있다면 더 공부해볼 키워드와 설명을 정리해줘",
             ]
         ),
     },
@@ -262,10 +263,15 @@ def _get_ai_result_pdf_bytes(result: str) -> bytes | None:
         st.session_state.ai_result_pdf_source = result
         st.session_state.ai_result_pdf_bytes = None
         st.session_state.ai_result_pdf_error = ""
+
+    if not st.session_state.get("ai_result_pdf_bytes") and not st.session_state.get(
+        "ai_result_pdf_error"
+    ):
         try:
             st.session_state.ai_result_pdf_bytes = markdown_to_pdf_bytes(result)
         except RuntimeError as exc:
             st.session_state.ai_result_pdf_error = str(exc)
+
     return st.session_state.get("ai_result_pdf_bytes")
 
 
@@ -673,6 +679,14 @@ def render_ai():
             st.session_state.ai_result_pdf_source = result
             st.session_state.ai_result_pdf_bytes = None
             st.session_state.ai_result_pdf_error = ""
+
+        if not st.session_state.get("ai_result_pdf_bytes") and not st.session_state.get(
+            "ai_result_pdf_error"
+        ):
+            if st.button("PDF 준비하기", use_container_width=True, key="ai_prepare_pdf"):
+                with st.spinner("PDF를 만드는 중입니다..."):
+                    _get_ai_result_pdf_bytes(result)
+
         if st.session_state.get("ai_result_pdf_bytes"):
             st.download_button(
                 "PDF 다운로드",
@@ -681,11 +695,7 @@ def render_ai():
                 mime="application/pdf",
                 use_container_width=True,
             )
-        elif st.button("PDF 준비하기", use_container_width=True, key="ai_prepare_pdf"):
-            with st.spinner("PDF를 만드는 중입니다..."):
-                _get_ai_result_pdf_bytes(result)
-            st.rerun()
-        else:
+        elif st.session_state.get("ai_result_pdf_error"):
             st.button("PDF 다운로드", disabled=True, use_container_width=True)
     if st.session_state.get("ai_result_pdf_error"):
         st.warning(

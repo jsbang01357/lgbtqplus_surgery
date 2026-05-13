@@ -1,5 +1,4 @@
-import streamlit as st
-import streamlit.components.v1 as components
+from app.streamlit_compat import render_inline_html
 
 
 IDLE_TIMEOUT_SECONDS = 10 * 60
@@ -7,7 +6,7 @@ IDLE_TIMEOUT_SECONDS = 10 * 60
 
 def inject_idle_timeout(timeout_seconds: int = IDLE_TIMEOUT_SECONDS):
     timeout_ms = int(timeout_seconds * 1000)
-    components.html(
+    render_inline_html(
         f"""
         <script>
         (function () {{

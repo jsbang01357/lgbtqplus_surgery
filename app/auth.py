@@ -1,7 +1,8 @@
 import os
 import time
 import streamlit as st
-import streamlit.components.v1 as components
+
+from app.streamlit_compat import render_inline_html
 
 
 def get_admin_password() -> str:
@@ -66,7 +67,7 @@ def login_screen():
             else:
                 st.error("❌ 비밀번호가 올바르지 않습니다.")
 
-    components.html(
+    render_inline_html(
         f"""
         <script>
         // unique execution: {time.time()}
@@ -86,7 +87,7 @@ def login_screen():
                     clearInterval(interval);
                 }}
             }}, 100);
-            
+
             setTimeout(function() {{
                 clearInterval(interval);
             }}, 2000);

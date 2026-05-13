@@ -5,10 +5,10 @@ import zipfile
 import io
 import time
 import random
-import streamlit.components.v1 as components
 from pathlib import PurePosixPath
 
 from app.core_utils import get_now, safe_filename, slugify
+from app.streamlit_compat import render_inline_html
 from components.custom_copy_btn import copy_to_clipboard
 from app.gcs_helper import get_bucket
 
@@ -286,7 +286,7 @@ def render_memo_manager():
             st.session_state.new_memo_key += 1
             st.rerun()
 
-        components.html(
+        render_inline_html(
             f"""
             <script>
             // unique execution: {time.time()}
@@ -314,7 +314,6 @@ def render_memo_manager():
             height=0,
             width=0,
         )
-
     st.markdown(
         """
         <div class="section-block section-block--spacious">

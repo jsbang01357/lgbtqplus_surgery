@@ -394,23 +394,31 @@ def inject_global_styles():
             border: 1px solid var(--panel-border);
             background: rgba(255, 255, 255, 0.92);
             border-radius: 18px;
-            padding: 1rem 1rem 0.2rem 1rem;
+            padding: 1.2rem 1.2rem 1.1rem 1.2rem;
             box-shadow: var(--panel-shadow);
         }
 
+        [data-testid="stForm"] .stButton,
+        [data-testid="stForm"] [data-testid="stFormSubmitButton"] {
+            margin-bottom: 0.35rem;
+        }
+
         .sidebar-footer {
-            position: fixed;
-            bottom: 18px;
-            left: 0;
+            position: static;
             width: 100%;
-            padding: 0 1.1rem;
-            z-index: 99;
+            padding: 0 0.9rem;
+            margin-top: 1.2rem;
             box-sizing: border-box;
         }
 
         @media (min-width: 576px) {
             .sidebar-footer {
+                position: fixed;
+                bottom: 18px;
+                left: 0;
                 width: 300px;
+                padding: 0 1.1rem;
+                z-index: 99;
             }
         }
 
@@ -429,9 +437,9 @@ def inject_global_styles():
             justify-content: space-between;
             gap: 0.8rem;
             align-items: center;
-            min-height: 2.9rem;
-            padding: 0 0.95rem;
-            font-size: 0.88rem;
+            min-height: 2.45rem;
+            padding: 0.35rem 0.75rem;
+            font-size: 0.82rem;
             color: #f9fcfb;
             font-weight: 600;
             border-radius: 12px;
@@ -448,6 +456,8 @@ def inject_global_styles():
         .status-box__value {
             color: #f7faff;
             font-weight: 700;
+            text-align: right;
+            overflow-wrap: anywhere;
         }
 
         .sidebar-footer__meta {
@@ -462,7 +472,13 @@ def inject_global_styles():
         [data-testid="stSidebarNav"]::after {
             content: "";
             display: block;
-            height: 136px;
+            height: 24px;
+        }
+
+        @media (min-width: 576px) {
+            [data-testid="stSidebarNav"]::after {
+                height: 136px;
+            }
         }
         </style>
         """,
