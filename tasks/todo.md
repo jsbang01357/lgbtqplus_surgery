@@ -224,6 +224,20 @@ Mark items as complete as you go.
 - [x] 변경 요약 작성
 
 ## 요약
+## 현재 변경 파악
+
+- [x] 변경 파일과 의도 확인
+- [x] 타입 검사 설정 및 무시 주석 영향 확인
+- [x] 기존 테스트/기본 검증 실행
+- [x] 변경 요약 작성
+
+## 요약
+- 현재 변경은 기능 추가보다 `pyrefly` 타입 검사 도입 과정의 무시 주석 추가가 중심이다.
+- 초기에 보였던 `pyrefly.toml`은 최종 확인 시 파일 시스템과 git 상태에서 사라졌고, 현재 로컬 Python 환경에는 `pyrefly` 모듈이 설치되어 있지 않다.
+- `python3 -m unittest discover -s tests`와 `python3 -m py_compile jisong_cloud.py app/*.py tests/*.py`는 통과했다.
+
+---
+
 - 도구모음 선택 버튼은 상태 변경 직후 `_select_tool()`에서 즉시 `st.rerun()` 하도록 바꿔서 화면 전환 체감이 더 빠르게 반영되도록 정리했다.
 - 웹하드, 메모장, 접속 기록 관리의 전체 삭제 버튼에 전용 key를 부여하고, 전역 CSS에서 해당 key만 빨간 강조 버튼으로 스타일링했다.
 - 문법 검증과 diff 검사로 도구 전환 로직과 Danger 버튼 스타일이 기존 동작을 깨지 않는지 확인했다.
@@ -303,4 +317,3 @@ Mark items as complete as you go.
 - Added a 10-minute idle close attempt with a browser-policy fallback screen.
 - Moved memo copy/download/delete actions outside the edit expander.
 - Updated runtime dependencies, Docker system packages, README notes, and settlement unit tests.
-
