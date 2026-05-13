@@ -38,6 +38,8 @@ OFFICE_TEXT_EXTENSIONS = {".docx", ".xlsx", ".pptx"}
 
 GEMINI_USAGE_LOG_BLOB = "logs/gemini_usage.json"
 MAX_USAGE_LOGS = 1000
+GEMINI_DAILY_LIMIT_KRW = 5000
+GEMINI_MONTHLY_LIMIT_KRW = 15000
 
 
 def _get_config_value(env_name: str, secret_name: str, default):
@@ -428,6 +430,29 @@ def get_monthly_gemini_cost_label() -> str:
     return format_krw_cost(month_total)
 
 
+def _get_usage_limit_status() -> tuple[bool, str]:
+    logs = _load_gemini_usage_logs()
+    today_total, month_total = _sum_usage_costs(logs)
+
+    if today_total >= GEMINI_DAILY_LIMIT_KRW:
+        return (
+            False,
+            "오늘 Gemini 예상 비용이 "
+            f"{format_krw_cost(today_total)}로 일일 한도 "
+            f"{format_krw_cost(GEMINI_DAILY_LIMIT_KRW)}를 넘었습니다.",
+        )
+
+    if month_total >= GEMINI_MONTHLY_LIMIT_KRW:
+        return (
+            False,
+            "이번 달 Gemini 예상 비용이 "
+            f"{format_krw_cost(month_total)}로 월 한도 "
+            f"{format_krw_cost(GEMINI_MONTHLY_LIMIT_KRW)}를 넘었습니다.",
+        )
+
+    return True, ""
+
+
 def _render_usage_cost_summary():
     try:
         logs = _load_gemini_usage_logs()
@@ -439,8 +464,10 @@ def _render_usage_cost_summary():
     col_today, col_month, col_model = st.columns(3)
     with col_today:
         st.metric("오늘 예상 Gemini 비용", format_krw_cost(today_total))
+        st.caption(f"일일 한도 {format_krw_cost(GEMINI_DAILY_LIMIT_KRW)}")
     with col_month:
         st.metric("이번 달 예상 Gemini 비용", format_krw_cost(month_total))
+        st.caption(f"월 한도 {format_krw_cost(GEMINI_MONTHLY_LIMIT_KRW)}")
     with col_model:
         st.metric("모델", GEMINI_MODEL)
     st.caption(
@@ -535,6 +562,13 @@ def render_ai():
         )
 
     _render_usage_cost_summary()
+    try:
+        can_use_gemini, limit_message = _get_usage_limit_status()
+    except Exception as exc:
+        can_use_gemini = False
+        limit_message = f"Gemini 사용량 한도를 확인하지 못했습니다: {exc}"
+    if not can_use_gemini:
+        st.warning(limit_message)
 
     files = list_uploaded_files()
     supported_files = [
@@ -617,6 +651,7 @@ def render_ai():
 
     can_analyze = bool(
         api_key
+        and can_use_gemini
         and (selected_files or selected_memos or extra_text.strip() or question.strip())
     )
     if st.button(

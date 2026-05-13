@@ -8,6 +8,7 @@
 - [x] AI 결과 PDF 준비 버튼 상태 갱신 수정
 - [x] AI 분석 완료 후 결과 영역 자동스크롤 추가
 - [x] Cloud Run Gemini API key를 Secret Manager 주입 방식으로 설정
+- [x] Gemini 일/월 예상 비용 한도 초과 시 분석 제한
 - [x] 기본 검증
 
 ## 요약
@@ -16,6 +17,7 @@
 - AI 결과 PDF는 준비 버튼을 누른 같은 실행 흐름에서 bytes를 생성하고 다운로드 버튼으로 전환되게 했다.
 - Gemini 답변이 생성되면 결과 영역으로 한 번 자동스크롤되도록 했다.
 - 로컬은 `secrets.toml`, Cloud Run은 Secret Manager의 `gemini-api-key`를 `GEMINI_API_KEY`로 주입하도록 배포 설정을 맞췄다.
+- Gemini 예상 비용이 오늘 5,000원 또는 이번 달 15,000원 이상이면 추가 분석을 막도록 했다.
 
 ---
 
