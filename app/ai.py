@@ -62,8 +62,12 @@ def _get_float_config(env_name: str, secret_name: str, default: float) -> float:
 
 
 GEMINI_MODEL = str(_get_config_value("GEMINI_MODEL", "model", "gemini-3-flash-preview"))
-GEMINI_INPUT_PRICE_PER_1M = _get_float_config("GEMINI_INPUT_PRICE_PER_1M", "input_price_per_1m", 0.50)
-GEMINI_OUTPUT_PRICE_PER_1M = _get_float_config("GEMINI_OUTPUT_PRICE_PER_1M", "output_price_per_1m", 3.00)
+GEMINI_INPUT_PRICE_PER_1M = _get_float_config(
+    "GEMINI_INPUT_PRICE_PER_1M", "input_price_per_1m", 0.50
+)
+GEMINI_OUTPUT_PRICE_PER_1M = _get_float_config(
+    "GEMINI_OUTPUT_PRICE_PER_1M", "output_price_per_1m", 3.00
+)
 USD_TO_KRW_RATE = _get_float_config("USD_TO_KRW_RATE", "usd_to_krw_rate", 1478)
 
 
@@ -94,7 +98,7 @@ PROMPT_PRESETS = [
             [
                 "선택한 자료의 특정 환자에 대해 교수님께 물어보면 좋은 질문을 뽑아줘.",
                 "단순 확인 질문보다 임상 판단, 치료 방향, 놓치기 쉬운 risk, 다음 decision point에 관한 질문을 우선해줘.",
-                "각 질문마다 교수님의 답변도 적어줘.",
+                "각 질문에 대해 교수님께서 하실 만한 예상 답변도 함께 적어줘.",
             ]
         ),
     },
@@ -139,7 +143,9 @@ def _file_label(file_info) -> str:
 
 
 def _memo_label(memo_info: dict) -> str:
-    updated_at = memo_info.get("updated_at") or memo_info.get("created_at") or "시간 정보 없음"
+    updated_at = (
+        memo_info.get("updated_at") or memo_info.get("created_at") or "시간 정보 없음"
+    )
     title = memo_info.get("title") or memo_info["file_name"]
     return f"{title} · {updated_at} · {memo_info['file_name']}"
 
@@ -178,15 +184,21 @@ def _extract_office_text(filename: str, data: bytes) -> str:
         with zipfile.ZipFile(io.BytesIO(data)) as zf:
             names = zf.namelist()
             if ext == ".docx":
-                targets = [name for name in names if name.startswith("word/") and name.endswith(".xml")]
+                targets = [
+                    name
+                    for name in names
+                    if name.startswith("word/") and name.endswith(".xml")
+                ]
             elif ext == ".pptx":
                 targets = sorted(
-                    name for name in names
+                    name
+                    for name in names
                     if name.startswith("ppt/slides/slide") and name.endswith(".xml")
                 )
             elif ext == ".xlsx":
                 targets = [
-                    name for name in names
+                    name
+                    for name in names
                     if name == "xl/sharedStrings.xml"
                     or (name.startswith("xl/worksheets/") and name.endswith(".xml"))
                 ]
@@ -207,7 +219,9 @@ def _format_office_context(selected_files) -> str:
         data = download_file_bytes(file_info.blob_name)
         text = _extract_office_text(file_info.name, data)
         if not text:
-            file_parts.append(f"파일명: {file_info.name}\n내용: 텍스트를 추출하지 못했습니다.")
+            file_parts.append(
+                f"파일명: {file_info.name}\n내용: 텍스트를 추출하지 못했습니다."
+            )
             continue
         file_parts.append(f"파일명: {file_info.name}\n내용:\n{text}")
     return "\n\n---\n\n".join(file_parts)
@@ -215,7 +229,9 @@ def _format_office_context(selected_files) -> str:
 
 def _append_question_preset(prompt: str):
     current = st.session_state.get("ai_question", "").strip()
-    st.session_state.ai_question = f"{current}\n\n{prompt}".strip() if current else prompt
+    st.session_state.ai_question = (
+        f"{current}\n\n{prompt}".strip() if current else prompt
+    )
 
 
 def _remove_question_preset(prompt: str):
@@ -422,7 +438,8 @@ def _run_gemini_analysis(
 
     prompt_parts = [
         "너는 개인 클라우드에 저장된 문서와 텍스트를 분석하는 한국어 비서야.",
-        "답변은 읽기 좋게 제목, 핵심 요약, 세부 내용, 다음 행동 제안 순서로 정리해줘.",
+        "나는 의과대학 본과 4학년 학생이야. 주로 병원 실습 관련 내용을 다룰거야.",
+        "답변은 읽기 좋게 제목, 핵심 요약, 세부 내용, 정리 순서로 정리해줘.",
     ]
     if question.strip():
         prompt_parts.append(f"사용자 질문:\n{question.strip()}")
@@ -458,7 +475,9 @@ def _run_gemini_analysis(
             model=GEMINI_MODEL,
             contents=contents,
         )
-        return response.text or "분석 결과가 비어 있습니다.", _extract_usage_record(response)
+        return response.text or "분석 결과가 비어 있습니다.", _extract_usage_record(
+            response
+        )
     finally:
         for uploaded in uploaded_files:
             try:
@@ -483,12 +502,16 @@ def render_ai():
 
     api_key = _get_gemini_api_key()
     if not api_key:
-        st.warning("Gemini API key가 설정되지 않았습니다. GEMINI_API_KEY 또는 st.secrets['gemini']['api_key']를 설정해주세요.")
+        st.warning(
+            "Gemini API key가 설정되지 않았습니다. GEMINI_API_KEY 또는 st.secrets['gemini']['api_key']를 설정해주세요."
+        )
 
     _render_usage_cost_summary()
 
     files = list_uploaded_files()
-    supported_files = [file_info for file_info in files if _is_supported_file(file_info.name)]
+    supported_files = [
+        file_info for file_info in files if _is_supported_file(file_info.name)
+    ]
     unsupported_count = len(files) - len(supported_files)
 
     if unsupported_count:
@@ -565,9 +588,12 @@ def render_ai():
     )
 
     can_analyze = bool(
-        api_key and (selected_files or selected_memos or extra_text.strip() or question.strip())
+        api_key
+        and (selected_files or selected_memos or extra_text.strip() or question.strip())
     )
-    if st.button("분석하기", type="primary", use_container_width=True, disabled=not can_analyze):
+    if st.button(
+        "분석하기", type="primary", use_container_width=True, disabled=not can_analyze
+    ):
         with st.spinner("Gemini가 자료를 분석하는 중입니다..."):
             try:
                 result_text, usage_record = _run_gemini_analysis(
@@ -580,10 +606,14 @@ def render_ai():
                 try:
                     _record_gemini_usage(usage_record)
                 except Exception as usage_exc:
-                    st.warning(f"분석은 완료됐지만 비용 로그 저장에 실패했습니다: {usage_exc}")
+                    st.warning(
+                        f"분석은 완료됐지만 비용 로그 저장에 실패했습니다: {usage_exc}"
+                    )
                 st.session_state.ai_result = result_text
                 st.session_state.ai_last_usage = usage_record
-                st.session_state.ai_result_title = f"AI 분석 {get_now().strftime('%Y-%m-%d %H:%M')}"
+                st.session_state.ai_result_title = (
+                    f"AI 분석 {get_now().strftime('%Y-%m-%d %H:%M')}"
+                )
                 st.toast("✅ 분석이 완료되었습니다.")
                 st.rerun()
             except Exception as exc:
@@ -658,4 +688,6 @@ def render_ai():
         else:
             st.button("PDF 다운로드", disabled=True, use_container_width=True)
     if st.session_state.get("ai_result_pdf_error"):
-        st.warning(f"PDF 생성 준비 중 오류가 발생했습니다: {st.session_state.ai_result_pdf_error}")
+        st.warning(
+            f"PDF 생성 준비 중 오류가 발생했습니다: {st.session_state.ai_result_pdf_error}"
+        )

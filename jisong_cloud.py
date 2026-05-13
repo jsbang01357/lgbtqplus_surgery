@@ -543,7 +543,7 @@ def main():
     st.sidebar.markdown(
         """
         <div class="app-shell">
-            <h1 class="app-shell__title">Jisong Cloud</h1>
+            <h1 class="app-shell__title">☁️ Jisong Cloud</h1>
         </div>
         """,
         unsafe_allow_html=True,
