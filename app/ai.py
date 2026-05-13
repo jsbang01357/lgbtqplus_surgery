@@ -14,6 +14,7 @@ from app.gcs_helper import get_bucket
 from app.md_pdf import markdown_to_pdf_bytes
 from app.memo import load_memo_list_cached, load_single_memo_content, save_memo_txt
 from app.storage import download_file_bytes, list_uploaded_files
+from app.streamlit_compat import render_inline_html
 from components.custom_copy_btn import copy_to_clipboard
 
 
@@ -273,6 +274,27 @@ def _get_ai_result_pdf_bytes(result: str) -> bytes | None:
             st.session_state.ai_result_pdf_error = str(exc)
 
     return st.session_state.get("ai_result_pdf_bytes")
+
+
+def _scroll_to_ai_result_once():
+    if not st.session_state.pop("ai_scroll_to_result", False):
+        return
+
+    render_inline_html(
+        """
+        <script>
+        window.setTimeout(function () {
+            var doc = window.parent.document;
+            var target = doc.getElementById("ai-result-anchor");
+            if (target) {
+                target.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+        }, 180);
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
 
 
 def _read_gemini_usage_blob() -> tuple[list[dict], int | None]:
@@ -620,6 +642,7 @@ def render_ai():
                 st.session_state.ai_result_title = (
                     f"AI 분석 {get_now().strftime('%Y-%m-%d %H:%M')}"
                 )
+                st.session_state.ai_scroll_to_result = True
                 st.toast("✅ 분석이 완료되었습니다.")
                 st.rerun()
             except Exception as exc:
@@ -629,8 +652,10 @@ def render_ai():
     if not result:
         return
 
+    _scroll_to_ai_result_once()
     st.markdown(
         """
+        <div id="ai-result-anchor"></div>
         <div class="section-block section-block--spacious">
             <p class="section-block__eyebrow">Result</p>
             <h3 class="section-block__title">분석 결과</h3>
