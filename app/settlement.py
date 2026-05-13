@@ -67,25 +67,27 @@ def calculate_settlement(people: list[str], expense_rows: Iterable[dict]) -> Set
         return SettlementResult([], [], ["사람 목록을 먼저 입력해주세요."])
 
     for row_index, row in enumerate(expense_rows, start=1):
-        title = str(row.get("내용", "") or "").strip()
-        payer = str(row.get("결제자", "") or "").strip()
-        amount = _coerce_amount(row.get("금액"))
-        participants = parse_participants(str(row.get("참여자", "") or ""), people)
+        title = str(row.get("항목", row.get("내용", "")) or "").strip()
+        payer = str(row.get("돈낸사람", row.get("결제자", "")) or "").strip()
+        raw_amount = row.get("비용", row.get("금액"))
+        raw_participants = str(row.get("n빵할사람", row.get("참여자", "")) or "").strip()
+        amount = _coerce_amount(raw_amount)
+        participants = parse_participants(raw_participants, people)
 
-        if not title and not payer and amount is None and not str(row.get("참여자", "") or "").strip():
+        if not title and not payer and amount is None and not raw_participants:
+            continue
+        if not payer:
+            errors.append(f"{row_index}행 돈낸사람은 꼭 입력해야 합니다.")
             continue
         if payer not in people:
-            errors.append(f"{row_index}행 결제자가 사람 목록에 없습니다: {payer or '(비어 있음)'}")
+            errors.append(f"{row_index}행 돈낸사람이 사람 목록에 없습니다: {payer}")
             continue
         if amount is None:
-            errors.append(f"{row_index}행 금액은 1원 이상의 정수여야 합니다.")
+            errors.append(f"{row_index}행 비용은 1원 이상의 정수여야 합니다.")
             continue
         unknown = [person for person in participants if person not in people]
         if unknown:
-            errors.append(f"{row_index}행 참여자가 사람 목록에 없습니다: {', '.join(unknown)}")
-            continue
-        if not participants:
-            errors.append(f"{row_index}행 참여자가 비어 있습니다.")
+            errors.append(f"{row_index}행 n빵할사람이 사람 목록에 없습니다: {', '.join(unknown)}")
             continue
 
         paid[payer] += amount
@@ -130,19 +132,18 @@ def render_settlement_tool():
     import pandas as pd
     import streamlit as st
 
-    st.info("사람별 지출 항목을 입력하면 균등 분할 기준으로 최소 송금 목록을 계산합니다.")
+    st.info("사람 목록을 입력한 뒤 지출 행을 추가하면 n빵 기준으로 누가 누구에게 얼마를 보내면 되는지 계산합니다.")
 
-    people_raw = st.text_area(
-        "사람 목록",
-        height=120,
-        placeholder="예: 지송, 민수, 영희\n또는 한 줄에 한 명씩 입력",
+    people_raw = st.text_input(
+        "사람",
+        placeholder="예: 지송, 지송2, 지송3",
         key="settlement_people",
     )
     people = parse_people(people_raw)
 
     default_rows = pd.DataFrame(
         [
-            {"내용": "", "결제자": "", "금액": None, "참여자": "전체"},
+            {"돈낸사람": "", "비용": None, "n빵할사람": "", "항목": ""},
         ]
     )
     edited = st.data_editor(
@@ -151,13 +152,14 @@ def render_settlement_tool():
         use_container_width=True,
         hide_index=True,
         column_config={
-            "내용": st.column_config.TextColumn("내용", help="예: 숙소, 저녁, 택시"),
-            "결제자": st.column_config.TextColumn("결제자", help="사람 목록에 있는 이름"),
-            "금액": st.column_config.NumberColumn("금액", min_value=1, step=100, format="%d"),
-            "참여자": st.column_config.TextColumn("참여자", help="전체 또는 이름, 이름"),
+            "돈낸사람": st.column_config.TextColumn("돈낸사람", help="사람 목록에 있는 이름. 필수"),
+            "비용": st.column_config.NumberColumn("비용", min_value=1, step=100, format="%d", help="필수"),
+            "n빵할사람": st.column_config.TextColumn("n빵할사람", help="비우면 전체 n빵. 여러 명은 쉼표로 구분"),
+            "항목": st.column_config.TextColumn("항목", help="예: 숙소, 저녁, 택시. 생략 가능"),
         },
         key="settlement_expenses",
     )
+    st.caption("n빵할사람은 비워두면 전체 n빵으로 계산합니다. 여러 명은 `, `로 구분하세요.")
 
     if st.button("정산 계산하기", type="primary", use_container_width=True):
         rows = edited.to_dict("records")
@@ -173,15 +175,27 @@ def render_settlement_tool():
             st.warning(error)
 
     if result.summary_rows:
-        st.markdown("#### 사람별 정산")
-        st.dataframe(pd.DataFrame(result.summary_rows), use_container_width=True, hide_index=True)
+        st.markdown("#### 사람별 잔액")
+        for row in result.summary_rows:
+            balance = row["잔액"]
+            if balance > 0:
+                st.write(
+                    f"- {row['사람']}: {row['낸 금액']:,}원 냄 / {row['부담 금액']:,}원 부담 → {balance:,}원 받을 예정"
+                )
+            elif balance < 0:
+                st.write(
+                    f"- {row['사람']}: {row['낸 금액']:,}원 냄 / {row['부담 금액']:,}원 부담 → {-balance:,}원 보낼 예정"
+                )
+            else:
+                st.write(
+                    f"- {row['사람']}: {row['낸 금액']:,}원 냄 / {row['부담 금액']:,}원 부담 → 정산 완료"
+                )
 
     st.markdown("#### 최소 송금")
     if result.transfer_rows:
-        st.dataframe(pd.DataFrame(result.transfer_rows), use_container_width=True, hide_index=True)
         for transfer in result.transfer_rows:
             st.write(
-                f"{transfer['보내는 사람']} → {transfer['받는 사람']}: {transfer['금액']:,}원"
+                f"- {transfer['보내는 사람']} → {transfer['받는 사람']}: {transfer['금액']:,}원"
             )
     elif result.summary_rows and not result.errors:
         st.success("추가 송금이 필요 없습니다.")

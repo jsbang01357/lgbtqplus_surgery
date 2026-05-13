@@ -3,7 +3,7 @@ from datetime import datetime
 from app.core_utils import get_now
 from app.storage import render_file_manager
 from app.memo import render_memo_manager
-from app.ai import render_ai
+from app.ai import get_monthly_gemini_cost_label, render_ai
 from app.tools import render_tools
 from app.access_logger import log_access, get_access_logs
 from app.auth import is_authenticated, login_screen
@@ -496,6 +496,13 @@ def format_last_access_display(raw_value: str) -> str:
     return raw_value
 
 
+def get_sidebar_ai_cost_display() -> str:
+    try:
+        return get_monthly_gemini_cost_label()
+    except Exception:
+        return "확인 실패"
+
+
 def check_for_updates():
     """
     if "last_memo_mtime" not in st.session_state:
@@ -586,8 +593,12 @@ def main():
                     <span>직전 접속</span>
                     <span class="status-box__value">{format_last_access_display(st.session_state.last_access_display)}</span>
                 </div>
+                    <div class="status-box__row">
+                    <span>이번 달 AI</span>
+                    <span class="status-box__value">{get_sidebar_ai_cost_display()}</span>
+                </div>
             </div>
-            <p class="sidebar-footer__meta">Jisong Bang 2026<br>Ver 3.0 (260429)</p>
+            <p class="sidebar-footer__meta">Jisong Bang 2026<br>Ver 4.0 (260513)</p>
         </div>
         """,
         unsafe_allow_html=True,

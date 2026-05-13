@@ -22,16 +22,16 @@ TOOLS = [
         "summary": "마크다운과 복붙 텍스트를 읽기 좋은 형태로 다듬습니다.",
     },
     {
-        "id": "counter",
-        "label": "글자수 카운터",
-        "icon": "📝",
-        "summary": "글자 수, 단어 수, 예상 문서 분량을 빠르게 계산합니다.",
-    },
-    {
         "id": "md_pdf",
         "label": "MD to PDF",
         "icon": "📄",
         "summary": "Markdown을 한글 서식이 살아 있는 PDF로 변환합니다.",
+    },
+    {
+        "id": "counter",
+        "label": "글자수 카운터",
+        "icon": "📝",
+        "summary": "글자 수, 단어 수, 예상 문서 분량을 빠르게 계산합니다.",
     },
     {
         "id": "settlement",

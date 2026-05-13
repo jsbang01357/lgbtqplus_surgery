@@ -1,12 +1,17 @@
 import io
+import json
 import os
+from datetime import datetime
 from pathlib import PurePosixPath
 
 import streamlit as st
 
 from app.core_utils import get_now
+from app.gcs_helper import get_bucket
+from app.md_pdf import markdown_to_pdf_bytes
 from app.memo import load_memo_list_cached, load_single_memo_content, save_memo_txt
 from app.storage import download_file_bytes, list_uploaded_files
+from components.custom_copy_btn import copy_to_clipboard
 
 
 SUPPORTED_EXTENSIONS = {
@@ -20,7 +25,20 @@ SUPPORTED_EXTENSIONS = {
     ".md",
     ".markdown",
     ".csv",
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsx",
+    ".ppt",
+    ".pptx",
 }
+
+GEMINI_MODEL = "gemini-3-flash-preview"
+GEMINI_USAGE_LOG_BLOB = "logs/gemini_usage.json"
+GEMINI_INPUT_PRICE_PER_1M = 0.50
+GEMINI_OUTPUT_PRICE_PER_1M = 3.00
+USD_TO_KRW_RATE = 1478
+MAX_USAGE_LOGS = 1000
 
 
 PROMPT_PRESETS = [
@@ -122,13 +140,184 @@ def _append_question_preset(prompt: str):
     st.session_state.ai_question = f"{current}\n\n{prompt}".strip() if current else prompt
 
 
+def _remove_question_preset(prompt: str):
+    current = st.session_state.get("ai_question", "")
+    updated = current.replace(f"\n\n{prompt}", "").replace(prompt, "", 1).strip()
+    st.session_state.ai_question = updated
+
+
+def _toggle_question_preset(preset: dict):
+    active_labels = set(st.session_state.get("ai_active_prompt_presets", []))
+    label = preset["label"]
+    if label in active_labels:
+        active_labels.remove(label)
+        _remove_question_preset(preset["prompt"])
+    else:
+        active_labels.add(label)
+        _append_question_preset(preset["prompt"])
+    st.session_state.ai_active_prompt_presets = sorted(active_labels)
+
+
+def _result_download_filename(extension: str) -> str:
+    timestamp = get_now().strftime("%Y%m%d_%H%M")
+    return f"ai_analysis_{timestamp}.{extension}"
+
+
+def _get_ai_result_pdf_bytes(result: str) -> bytes | None:
+    if st.session_state.get("ai_result_pdf_source") != result:
+        st.session_state.ai_result_pdf_source = result
+        st.session_state.ai_result_pdf_bytes = None
+        st.session_state.ai_result_pdf_error = ""
+        try:
+            st.session_state.ai_result_pdf_bytes = markdown_to_pdf_bytes(result)
+        except RuntimeError as exc:
+            st.session_state.ai_result_pdf_error = str(exc)
+    return st.session_state.get("ai_result_pdf_bytes")
+
+
+@st.cache_data(ttl=30)
+def _load_gemini_usage_logs() -> list[dict]:
+    bucket = get_bucket()
+    blob = bucket.blob(GEMINI_USAGE_LOG_BLOB)
+    if not blob.exists():
+        return []
+    try:
+        data = json.loads(blob.download_as_text(encoding="utf-8"))
+    except Exception:
+        return []
+    return data if isinstance(data, list) else []
+
+
+def _save_gemini_usage_logs(logs: list[dict]):
+    bucket = get_bucket()
+    blob = bucket.blob(GEMINI_USAGE_LOG_BLOB)
+    blob.upload_from_string(
+        json.dumps(logs[:MAX_USAGE_LOGS], ensure_ascii=False, indent=2),
+        content_type="application/json; charset=utf-8",
+    )
+
+
+def _usage_value(usage_metadata, name: str) -> int:
+    if usage_metadata is None:
+        return 0
+    value = getattr(usage_metadata, name, 0)
+    if value is None and hasattr(usage_metadata, "get"):
+        value = usage_metadata.get(name, 0)
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _extract_usage_record(response) -> dict:
+    usage = getattr(response, "usage_metadata", None)
+    input_tokens = _usage_value(usage, "prompt_token_count")
+    candidate_tokens = _usage_value(usage, "candidates_token_count")
+    thoughts_tokens = _usage_value(usage, "thoughts_token_count")
+    total_tokens = _usage_value(usage, "total_token_count")
+
+    output_tokens = candidate_tokens + thoughts_tokens
+    if output_tokens == 0 and total_tokens > input_tokens:
+        output_tokens = total_tokens - input_tokens
+
+    estimated_cost = (
+        input_tokens * GEMINI_INPUT_PRICE_PER_1M
+        + output_tokens * GEMINI_OUTPUT_PRICE_PER_1M
+    ) / 1_000_000
+    estimated_cost_krw = estimated_cost * USD_TO_KRW_RATE
+    return {
+        "time": get_now().isoformat(),
+        "model": GEMINI_MODEL,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens or input_tokens + output_tokens,
+        "estimated_cost_usd": estimated_cost,
+        "estimated_cost_krw": estimated_cost_krw,
+    }
+
+
+def _record_gemini_usage(usage_record: dict):
+    if not usage_record.get("input_tokens") and not usage_record.get("output_tokens"):
+        return
+    logs = _load_gemini_usage_logs()
+    logs.insert(0, usage_record)
+    _save_gemini_usage_logs(logs)
+    _load_gemini_usage_logs.clear()
+
+
+def _parse_usage_time(value: str) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _entry_cost_krw(entry: dict) -> float:
+    if "estimated_cost_krw" in entry:
+        return float(entry.get("estimated_cost_krw") or 0)
+    return float(entry.get("estimated_cost_usd") or 0) * USD_TO_KRW_RATE
+
+
+def _sum_usage_costs(logs: list[dict]) -> tuple[float, float]:
+    now = get_now()
+    today_key = now.strftime("%Y-%m-%d")
+    month_key = now.strftime("%Y-%m")
+    today_total = 0.0
+    month_total = 0.0
+
+    for entry in logs:
+        entry_time = _parse_usage_time(entry.get("time", ""))
+        if entry_time is None:
+            continue
+        cost = _entry_cost_krw(entry)
+        if entry_time.strftime("%Y-%m") == month_key:
+            month_total += cost
+        if entry_time.strftime("%Y-%m-%d") == today_key:
+            today_total += cost
+    return today_total, month_total
+
+
+def format_krw_cost(cost: float) -> str:
+    rounded = int(float(cost or 0) + 0.5)
+    return f"₩{rounded:,}"
+
+
+def get_monthly_gemini_cost_label() -> str:
+    logs = _load_gemini_usage_logs()
+    _, month_total = _sum_usage_costs(logs)
+    return format_krw_cost(month_total)
+
+
+def _render_usage_cost_summary():
+    try:
+        logs = _load_gemini_usage_logs()
+    except Exception as exc:
+        st.caption(f"Gemini 예상 비용 로그를 불러오지 못했습니다: {exc}")
+        return
+
+    today_total, month_total = _sum_usage_costs(logs)
+    col_today, col_month, col_model = st.columns(3)
+    with col_today:
+        st.metric("오늘 예상 Gemini 비용", format_krw_cost(today_total))
+    with col_month:
+        st.metric("이번 달 예상 Gemini 비용", format_krw_cost(month_total))
+    with col_model:
+        st.metric("모델", GEMINI_MODEL)
+    st.caption(
+        "Gemini 응답의 usage metadata와 Gemini 3 Flash Preview 유료 Standard 단가"
+        f"($0.50/1M input, $3.00/1M output, 1 USD = {USD_TO_KRW_RATE:,} KRW)로 계산한 앱 내부 추정치입니다."
+    )
+
+
 def _run_gemini_analysis(
     api_key: str,
     selected_files,
     selected_memos: list[dict],
     extra_text: str,
     question: str,
-) -> str:
+) -> tuple[str, dict]:
     try:
         from google import genai
     except ImportError as exc:
@@ -167,10 +356,10 @@ def _run_gemini_analysis(
 
         contents = ["\n\n".join(prompt_parts), *uploaded_files]
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=GEMINI_MODEL,
             contents=contents,
         )
-        return response.text or "분석 결과가 비어 있습니다."
+        return response.text or "분석 결과가 비어 있습니다.", _extract_usage_record(response)
     finally:
         for uploaded in uploaded_files:
             try:
@@ -197,12 +386,17 @@ def render_ai():
     if not api_key:
         st.warning("Gemini API key가 설정되지 않았습니다. GEMINI_API_KEY 또는 st.secrets['gemini']['api_key']를 설정해주세요.")
 
+    _render_usage_cost_summary()
+
     files = list_uploaded_files()
     supported_files = [file_info for file_info in files if _is_supported_file(file_info.name)]
     unsupported_count = len(files) - len(supported_files)
 
     if unsupported_count:
-        st.caption(f"PDF, 이미지, TXT, MD, CSV만 v1 분석 대상으로 표시합니다. 제외된 파일: {unsupported_count}개")
+        st.caption(
+            "PDF, 이미지, TXT, MD, CSV, Word, Excel, PPT 파일만 분석 대상으로 표시합니다. "
+            f"제외된 파일: {unsupported_count}개"
+        )
 
     file_options = {_file_label(file_info): file_info for file_info in supported_files}
     selected_labels = st.multiselect(
@@ -235,6 +429,8 @@ def render_ai():
 
     if "ai_question" not in st.session_state:
         st.session_state.ai_question = ""
+    if "ai_active_prompt_presets" not in st.session_state:
+        st.session_state.ai_active_prompt_presets = []
 
     st.markdown(
         """
@@ -251,13 +447,16 @@ def render_ai():
     for row_start in range(0, len(PROMPT_PRESETS), 2):
         columns = st.columns(2)
         for column, preset in zip(columns, PROMPT_PRESETS[row_start : row_start + 2]):
+            is_active = preset["label"] in st.session_state.ai_active_prompt_presets
             with column:
                 if st.button(
                     preset["label"],
                     key=f"ai_prompt_preset_{row_start}_{preset['label']}",
+                    type="primary" if is_active else "secondary",
                     use_container_width=True,
                 ):
-                    _append_question_preset(preset["prompt"])
+                    _toggle_question_preset(preset)
+                    st.rerun()
 
     question = st.text_area(
         "질문 / 요청",
@@ -272,15 +471,22 @@ def render_ai():
     if st.button("분석하기", type="primary", use_container_width=True, disabled=not can_analyze):
         with st.spinner("Gemini가 자료를 분석하는 중입니다..."):
             try:
-                st.session_state.ai_result = _run_gemini_analysis(
+                result_text, usage_record = _run_gemini_analysis(
                     api_key=api_key,
                     selected_files=selected_files,
                     selected_memos=selected_memos,
                     extra_text=extra_text,
                     question=question,
                 )
+                try:
+                    _record_gemini_usage(usage_record)
+                except Exception as usage_exc:
+                    st.warning(f"분석은 완료됐지만 비용 로그 저장에 실패했습니다: {usage_exc}")
+                st.session_state.ai_result = result_text
+                st.session_state.ai_last_usage = usage_record
                 st.session_state.ai_result_title = f"AI 분석 {get_now().strftime('%Y-%m-%d %H:%M')}"
                 st.toast("✅ 분석이 완료되었습니다.")
+                st.rerun()
             except Exception as exc:
                 st.error(f"분석 중 오류가 발생했습니다: {exc}")
 
@@ -307,3 +513,41 @@ def render_ai():
     if st.button("메모로 저장", use_container_width=True, key="ai_save_to_memo"):
         save_memo_txt(memo_title.strip() or "AI 분석 결과", result)
         st.toast("✅ AI 분석 결과를 메모로 저장했습니다.")
+
+    st.markdown(
+        """
+        <div class="section-block section-block--spacious">
+            <p class="section-block__eyebrow">Export</p>
+            <h3 class="section-block__title">결과 내보내기</h3>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    col_copy, col_md, col_pdf = st.columns(3)
+    with col_copy:
+        copy_to_clipboard(
+            result,
+            before_copy_label="복사",
+            after_copy_label="복사됨",
+            key="ai_result_copy",
+        )
+    with col_md:
+        st.download_button(
+            "MD 다운로드",
+            data=result.encode("utf-8"),
+            file_name=_result_download_filename("md"),
+            mime="text/markdown",
+            use_container_width=True,
+        )
+    with col_pdf:
+        pdf_bytes = _get_ai_result_pdf_bytes(result)
+        st.download_button(
+            "PDF 다운로드",
+            data=pdf_bytes or b"",
+            file_name=_result_download_filename("pdf"),
+            mime="application/pdf",
+            use_container_width=True,
+            disabled=not pdf_bytes,
+        )
+    if st.session_state.get("ai_result_pdf_error"):
+        st.warning(f"PDF 생성 준비 중 오류가 발생했습니다: {st.session_state.ai_result_pdf_error}")
