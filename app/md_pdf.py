@@ -1,5 +1,3 @@
-import streamlit as st
-
 from app.core_utils import get_now
 
 
@@ -91,7 +89,19 @@ def markdown_to_pdf_bytes(markdown_text: str) -> bytes:
     return HTML(string=html).write_pdf(stylesheets=[CSS(string=PDF_CSS)])
 
 
+def decode_markdown_upload(uploaded_file) -> str:
+    return uploaded_file.getvalue().decode("utf-8-sig", errors="replace")
+
+
+def _uploaded_file_signature(uploaded_file) -> tuple[str, int] | None:
+    if uploaded_file is None:
+        return None
+    return (uploaded_file.name, uploaded_file.size)
+
+
 def render_md_pdf_tool():
+    import streamlit as st
+
     st.info("Markdown 텍스트나 .md 파일을 한글 서식이 포함된 PDF로 변환합니다.")
 
     uploaded = st.file_uploader(
@@ -99,13 +109,21 @@ def render_md_pdf_tool():
         type=["md", "markdown", "txt"],
         key="md_pdf_upload",
     )
-    uploaded_text = ""
+
+    upload_signature = _uploaded_file_signature(uploaded)
+    if upload_signature and st.session_state.get("md_pdf_upload_signature") != upload_signature:
+        st.session_state.md_pdf_input = decode_markdown_upload(uploaded)
+        st.session_state.md_pdf_upload_signature = upload_signature
+        st.session_state.md_pdf_bytes = None
+        st.session_state.md_pdf_filename = None
+    elif "md_pdf_input" not in st.session_state:
+        st.session_state.md_pdf_input = ""
+
     if uploaded is not None:
-        uploaded_text = uploaded.getvalue().decode("utf-8", errors="replace")
+        st.caption(f"업로드됨: {uploaded.name}")
 
     markdown_text = st.text_area(
         "Markdown 내용",
-        value=uploaded_text,
         height=360,
         placeholder="# 제목\n\n- 항목\n- 항목",
         key="md_pdf_input",
@@ -133,4 +151,3 @@ def render_md_pdf_tool():
             mime="application/pdf",
             use_container_width=True,
         )
-
