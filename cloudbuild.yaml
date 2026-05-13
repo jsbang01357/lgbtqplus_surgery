@@ -25,7 +25,7 @@ steps:
       - '--image=asia-northeast1-docker.pkg.dev/jisong-cloud-492111/cloud-run-source-deploy/jisong-cloud-tokyo:$COMMIT_SHA'
       - '--service-account=jisong-cloud-run@jisong-cloud-492111.iam.gserviceaccount.com'
       - '--update-env-vars=GCS_BUCKET_NAME=jisong-cloud-storage'
-      - '--update-secrets=ADMIN_PASSWORD=admin-password:1'
+      - '--update-secrets=ADMIN_PASSWORD=admin-password:1,GEMINI_API_KEY=gemini-api-key:latest'
       - '--quiet'
     id: Deploy
 

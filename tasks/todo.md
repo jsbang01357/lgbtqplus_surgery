@@ -7,6 +7,7 @@
 - [x] 로그인 폼 카드 여백 보정
 - [x] AI 결과 PDF 준비 버튼 상태 갱신 수정
 - [x] AI 분석 완료 후 결과 영역 자동스크롤 추가
+- [x] Cloud Run Gemini API key를 Secret Manager 주입 방식으로 설정
 - [x] 기본 검증
 
 ## 요약
@@ -14,6 +15,7 @@
 - 모바일 사이드바 상태 박스는 고정 배치를 해제하고, 로그인 폼은 하단 여백을 늘렸다.
 - AI 결과 PDF는 준비 버튼을 누른 같은 실행 흐름에서 bytes를 생성하고 다운로드 버튼으로 전환되게 했다.
 - Gemini 답변이 생성되면 결과 영역으로 한 번 자동스크롤되도록 했다.
+- 로컬은 `secrets.toml`, Cloud Run은 Secret Manager의 `gemini-api-key`를 `GEMINI_API_KEY`로 주입하도록 배포 설정을 맞췄다.
 
 ---
 

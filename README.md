@@ -335,6 +335,8 @@ streamlit run jisong_cloud.py
 1. `GEMINI_API_KEY`
 2. `st.secrets["gemini"]["api_key"]`
 
+로컬 개발에서는 `.streamlit/secrets.toml`의 `st.secrets["gemini"]["api_key"]`를 사용하고, Cloud Run에서는 Secret Manager의 `gemini-api-key`를 `GEMINI_API_KEY` 환경변수로 주입합니다.
+
 ### Gemini 모델/비용 계산값
 `app/ai.py` 기준으로 아래 환경변수 또는 `st.secrets["gemini"]` 값을 사용할 수 있습니다.
 
@@ -371,8 +373,34 @@ docker run -p 8080:8080 jisong-cloud
 - 리전: `asia-northeast1`
 - 서비스명: `jisong-cloud-tokyo`
 - 환경변수: `GCS_BUCKET_NAME=jisong-cloud-storage`
-- 시크릿: `ADMIN_PASSWORD=admin-password:1`
+- 시크릿: `ADMIN_PASSWORD=admin-password:1`, `GEMINI_API_KEY=gemini-api-key:latest`
 - 서비스 계정 지정 사용
+
+Gemini API key를 Secret Manager에 처음 등록할 때:
+
+```bash
+printf '%s' 'YOUR_GEMINI_API_KEY' | gcloud secrets create gemini-api-key \
+  --project jisong-cloud-492111 \
+  --replication-policy automatic \
+  --data-file=-
+```
+
+이미 secret이 있으면 새 버전만 추가합니다.
+
+```bash
+printf '%s' 'YOUR_GEMINI_API_KEY' | gcloud secrets versions add gemini-api-key \
+  --project jisong-cloud-492111 \
+  --data-file=-
+```
+
+Cloud Run 실행 서비스 계정이 secret을 읽을 수 있게 권한을 부여합니다.
+
+```bash
+gcloud secrets add-iam-policy-binding gemini-api-key \
+  --project jisong-cloud-492111 \
+  --member='serviceAccount:jisong-cloud-run@jisong-cloud-492111.iam.gserviceaccount.com' \
+  --role='roles/secretmanager.secretAccessor'
+```
 
 ---
 
