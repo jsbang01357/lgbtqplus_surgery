@@ -562,11 +562,11 @@ def main():
         set_menu("files")
         st.rerun()
 
-    if st.sidebar.button("📝 메모장", type=btn_memos_type, use_container_width=True):
+    if st.sidebar.button("📋 메모장", type=btn_memos_type, use_container_width=True):
         set_menu("memos")
         st.rerun()
 
-    if st.sidebar.button("🤖 AI", type=btn_ai_type, use_container_width=True):
+    if st.sidebar.button("✨ AI", type=btn_ai_type, use_container_width=True):
         set_menu("ai")
         st.rerun()
 

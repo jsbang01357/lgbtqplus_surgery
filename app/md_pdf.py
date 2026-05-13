@@ -1,6 +1,17 @@
 from app.core_utils import get_now
 
 
+WEASYPRINT_INSTALL_HINT = """
+WeasyPrint 실행에 필요한 시스템 라이브러리를 찾지 못했습니다.
+
+macOS 로컬 실행 환경에서는 Homebrew로 아래 패키지를 설치한 뒤 앱을 다시 시작하세요.
+
+brew install glib pango gdk-pixbuf libffi
+
+Cloud Run/Docker 배포 환경은 Dockerfile의 apt 패키지로 처리합니다.
+""".strip()
+
+
 PDF_CSS = """
 @page {
     size: A4;
@@ -79,6 +90,8 @@ def markdown_to_pdf_bytes(markdown_text: str) -> bytes:
         from weasyprint import CSS, HTML
     except ImportError as exc:
         raise RuntimeError("markdown 또는 weasyprint 패키지가 설치되어 있지 않습니다.") from exc
+    except OSError as exc:
+        raise RuntimeError(f"{WEASYPRINT_INSTALL_HINT}\n\n원본 오류: {exc}") from exc
 
     body = markdown.markdown(
         markdown_text,
@@ -86,7 +99,10 @@ def markdown_to_pdf_bytes(markdown_text: str) -> bytes:
         output_format="html5",
     )
     html = f"<!doctype html><html><head><meta charset='utf-8'></head><body>{body}</body></html>"
-    return HTML(string=html).write_pdf(stylesheets=[CSS(string=PDF_CSS)])
+    try:
+        return HTML(string=html).write_pdf(stylesheets=[CSS(string=PDF_CSS)])
+    except OSError as exc:
+        raise RuntimeError(f"{WEASYPRINT_INSTALL_HINT}\n\n원본 오류: {exc}") from exc
 
 
 def decode_markdown_upload(uploaded_file) -> str:
