@@ -39,6 +39,41 @@
 
 ---
 
+## Mac mini 병행 서버 Phase 2 구성
+
+- [x] 기존 Cloud Run 배포와 로컬 실행 경로 확인
+- [x] Mac mini용 Docker Compose와 환경 변수 샘플 추가
+- [x] Cloudflare Tunnel 및 Access 운영 문서 추가
+- [x] AI 화면에서 Ollama 로컬 모델 선택 경로 추가
+- [x] 기본 검증 실행
+
+## 요약
+- Cloud Run용 `Dockerfile`은 유지하고, Mac mini 병행 운영 전용 `docker-compose.local.yml`과 `.env.local.example`을 추가했다.
+- `mac.jisong.dev`용 Cloudflare Tunnel, Access 정책, 내부 관리자 비밀번호 역할을 `docs/mac-mini-phase2.md`에 정리했다.
+- AI 화면에서 Gemini, Ollama, auto fallback 모드를 선택할 수 있게 하고, Ollama는 텍스트 기반 자료를 `host.docker.internal:11434` 또는 `ai.mac.jisong.dev`로 전달하도록 했다.
+- Ollama 실제 설치 모델명 `gemma4:e4b`, `qwen3.5:9b`를 앱 옵션과 환경 샘플에 반영했다.
+- 문법 검증과 `unittest discover` 기준 기본 테스트를 통과했다.
+- Docker 설치 후 `docker compose -f docker-compose.local.yml config`, `docker compose -f docker-compose.local.yml build jisong-cloud`, 빌드 이미지 내부 `py_compile`까지 통과했다.
+
+---
+
+## Mac mini 로컬 저장소 mirror
+
+- [x] GCS 직접 호출 구조 확인
+- [x] 로컬 파일 기반 bucket adapter 추가
+- [x] Mac mini compose에 로컬 저장소 volume과 `local_mirror` 환경변수 추가
+- [x] 로컬 backend 다운로드 동작을 Streamlit 다운로드 버튼으로 분기
+- [x] 로컬 저장소 동작 테스트 추가
+- [x] Docker/테스트 검증 실행
+
+## 요약
+- `STORAGE_BACKEND=local_mirror`를 추가해 Mac mini에서는 로컬 디스크를 우선 읽고 쓰며 GCS에 mirror할 수 있게 했다.
+- 로컬 저장소는 compose에서 `/Users/jsbang/jisong-data/storage`를 컨테이너 `/data/jisong-cloud`에 mount한다.
+- 로컬 backend는 signed URL 대신 Streamlit 다운로드 버튼으로 파일을 내려받는다.
+- 로컬 bucket adapter 단위 테스트, 전체 unittest, compose config, Docker build, 로컬-only 컨테이너 기동 확인까지 통과했다.
+
+---
+
 ## 프로젝트 전반 개선점 점검
 
 - [x] 현재 작업트리와 주요 파일 구조 확인

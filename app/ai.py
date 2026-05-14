@@ -2,6 +2,8 @@ import io
 import json
 import os
 import re
+import urllib.error
+import urllib.request
 import zipfile
 from datetime import datetime
 from pathlib import PurePosixPath
@@ -66,6 +68,36 @@ def _get_float_config(env_name: str, secret_name: str, default: float) -> float:
 
 
 GEMINI_MODEL = str(_get_config_value("GEMINI_MODEL", "model", "gemini-3-flash-preview"))
+AI_PROVIDER = str(_get_config_value("AI_PROVIDER", "provider", "gemini")).lower()
+AI_FALLBACK_PROVIDER = str(
+    _get_config_value("AI_FALLBACK_PROVIDER", "fallback_provider", "gemini")
+).lower()
+OLLAMA_BASE_URL = str(
+    _get_config_value("OLLAMA_BASE_URL", "ollama_base_url", "http://localhost:11434")
+).rstrip("/")
+OLLAMA_MODEL = str(_get_config_value("OLLAMA_MODEL", "ollama_model", "gemma4:e4b"))
+OLLAMA_MODEL_OPTIONS = [
+    model.strip()
+    for model in str(
+        _get_config_value(
+            "OLLAMA_MODEL_OPTIONS", "ollama_model_options", "gemma4:e4b,qwen3.5:9b"
+        )
+    ).split(",")
+    if model.strip()
+]
+if OLLAMA_MODEL not in OLLAMA_MODEL_OPTIONS:
+    OLLAMA_MODEL_OPTIONS.insert(0, OLLAMA_MODEL)
+OLLAMA_TIMEOUT_SECONDS = int(
+    _get_float_config("OLLAMA_TIMEOUT_SECONDS", "ollama_timeout_seconds", 180)
+)
+OLLAMA_CF_ACCESS_CLIENT_ID = str(
+    _get_config_value("OLLAMA_CF_ACCESS_CLIENT_ID", "ollama_cf_access_client_id", "")
+)
+OLLAMA_CF_ACCESS_CLIENT_SECRET = str(
+    _get_config_value(
+        "OLLAMA_CF_ACCESS_CLIENT_SECRET", "ollama_cf_access_client_secret", ""
+    )
+)
 GEMINI_INPUT_PRICE_PER_1M = _get_float_config(
     "GEMINI_INPUT_PRICE_PER_1M", "input_price_per_1m", 0.50
 )
@@ -151,6 +183,22 @@ def _get_gemini_api_key() -> str:
         pass
 
     return ""
+
+
+def _get_ollama_headers() -> dict[str, str]:
+    headers = {"Content-Type": "application/json"}
+    if OLLAMA_CF_ACCESS_CLIENT_ID and OLLAMA_CF_ACCESS_CLIENT_SECRET:
+        headers["CF-Access-Client-Id"] = OLLAMA_CF_ACCESS_CLIENT_ID
+        headers["CF-Access-Client-Secret"] = OLLAMA_CF_ACCESS_CLIENT_SECRET
+    return headers
+
+
+def _provider_label(provider: str) -> str:
+    if provider == "auto":
+        return f"자동: Ollama 우선, 실패 시 {AI_FALLBACK_PROVIDER}"
+    if provider == "ollama":
+        return "Ollama (Mac mini)"
+    return "Gemini"
 
 
 def _is_supported_file(filename: str) -> bool:
@@ -249,6 +297,56 @@ def _format_office_context(selected_files) -> str:
             continue
         file_parts.append(f"파일명: {file_info.name}\n내용:\n{text}")
     return "\n\n---\n\n".join(file_parts)
+
+
+def _get_text_file_context(selected_files) -> str:
+    file_parts = []
+    for file_info in selected_files:
+        ext = PurePosixPath(file_info.name).suffix.lower()
+        if ext not in {".txt", ".md", ".markdown", ".csv"}:
+            continue
+        data = download_file_bytes(file_info.blob_name)
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError:
+            text = data.decode("utf-8", errors="replace")
+        file_parts.append(f"파일명: {file_info.name}\n내용:\n{text}")
+    return "\n\n---\n\n".join(file_parts)
+
+
+def _build_analysis_prompt(
+    selected_files,
+    selected_memos: list[dict],
+    extra_text: str,
+    question: str,
+    include_text_files: bool = False,
+) -> str:
+    prompt_parts = [
+        "너는 개인 클라우드에 저장된 문서와 텍스트를 분석하는 한국어 비서야.",
+        "나는 의과대학 본과 4학년 학생이야. 주로 병원 실습 관련 내용을 다룰거야.",
+        "답변은 읽기 좋게 제목, 핵심 요약, 세부 내용, 정리 순서로 정리해줘.",
+    ]
+    if question.strip():
+        prompt_parts.append(f"사용자 질문:\n{question.strip()}")
+    else:
+        prompt_parts.append("사용자 질문이 없으면 선택한 자료의 핵심 내용을 요약해줘.")
+    if extra_text.strip():
+        prompt_parts.append(f"추가 텍스트:\n{extra_text.strip()}")
+
+    memo_context = _format_memo_context(selected_memos)
+    if memo_context:
+        prompt_parts.append(f"선택한 메모:\n{memo_context}")
+
+    office_context = _format_office_context(selected_files)
+    if office_context:
+        prompt_parts.append(f"선택한 Office 파일에서 추출한 텍스트:\n{office_context}")
+
+    if include_text_files:
+        text_file_context = _get_text_file_context(selected_files)
+        if text_file_context:
+            prompt_parts.append(f"선택한 텍스트 파일:\n{text_file_context}")
+
+    return "\n\n".join(prompt_parts)
 
 
 def _append_question_preset(prompt: str):
@@ -609,23 +707,12 @@ def _run_gemini_analysis(
     client = genai.Client(api_key=api_key)
     uploaded_files = []
 
-    prompt_parts = [
-        "너는 개인 클라우드에 저장된 문서와 텍스트를 분석하는 한국어 비서야.",
-        "나는 의과대학 본과 4학년 학생이야. 주로 병원 실습 관련 내용을 다룰거야.",
-        "답변은 읽기 좋게 제목, 핵심 요약, 세부 내용, 정리 순서로 정리해줘.",
-    ]
-    if question.strip():
-        prompt_parts.append(f"사용자 질문:\n{question.strip()}")
-    else:
-        prompt_parts.append("사용자 질문이 없으면 선택한 자료의 핵심 내용을 요약해줘.")
-    if extra_text.strip():
-        prompt_parts.append(f"추가 텍스트:\n{extra_text.strip()}")
-    memo_context = _format_memo_context(selected_memos)
-    if memo_context:
-        prompt_parts.append(f"선택한 메모:\n{memo_context}")
-    office_context = _format_office_context(selected_files)
-    if office_context:
-        prompt_parts.append(f"선택한 Office 파일에서 추출한 텍스트:\n{office_context}")
+    prompt = _build_analysis_prompt(
+        selected_files=selected_files,
+        selected_memos=selected_memos,
+        extra_text=extra_text,
+        question=question,
+    )
 
     try:
         for file_info in selected_files:
@@ -643,7 +730,7 @@ def _run_gemini_analysis(
             )
             uploaded_files.append(uploaded)
 
-        contents = ["\n\n".join(prompt_parts), *uploaded_files]
+        contents = [prompt, *uploaded_files]
         response = client.models.generate_content(
             model=GEMINI_MODEL,
             contents=contents,
@@ -659,24 +746,116 @@ def _run_gemini_analysis(
                 pass
 
 
+def _run_ollama_analysis(
+    model: str,
+    selected_files,
+    selected_memos: list[dict],
+    extra_text: str,
+    question: str,
+) -> tuple[str, dict]:
+    unsupported_files = [
+        file_info.name
+        for file_info in selected_files
+        if PurePosixPath(file_info.name).suffix.lower()
+        not in {".txt", ".md", ".markdown", ".csv", ".docx", ".xlsx", ".pptx"}
+    ]
+    prompt = _build_analysis_prompt(
+        selected_files=selected_files,
+        selected_memos=selected_memos,
+        extra_text=extra_text,
+        question=question,
+        include_text_files=True,
+    )
+    if unsupported_files:
+        prompt += (
+            "\n\n참고: Ollama 로컬 분석에서는 PDF/이미지 같은 바이너리 파일을 직접 읽지 못해서 "
+            f"다음 파일은 제외했습니다: {', '.join(unsupported_files)}"
+        )
+
+    payload = json.dumps(
+        {"model": model, "prompt": prompt, "stream": False},
+        ensure_ascii=False,
+    ).encode("utf-8")
+    request = urllib.request.Request(
+        f"{OLLAMA_BASE_URL}/api/generate",
+        data=payload,
+        headers=_get_ollama_headers(),
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=OLLAMA_TIMEOUT_SECONDS) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Ollama HTTP {exc.code}: {detail}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"Ollama 서버에 연결하지 못했습니다: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("Ollama 응답을 해석하지 못했습니다.") from exc
+
+    result = str(data.get("response") or "").strip()
+    if not result:
+        result = "분석 결과가 비어 있습니다."
+    usage_record = {
+        "time": get_now().isoformat(),
+        "model": model,
+        "provider": "ollama",
+        "input_tokens": int(data.get("prompt_eval_count") or 0),
+        "output_tokens": int(data.get("eval_count") or 0),
+        "total_tokens": int(data.get("prompt_eval_count") or 0)
+        + int(data.get("eval_count") or 0),
+        "estimated_cost_usd": 0,
+        "estimated_cost_krw": 0,
+    }
+    return result, usage_record
+
+
 def _run_and_store_ai_response(
     api_key: str,
+    provider: str,
+    ollama_model: str,
     selected_files,
     selected_memos: list[dict],
     extra_text: str,
     question: str,
 ):
-    result_text, usage_record = _run_gemini_analysis(
-        api_key=api_key,
-        selected_files=selected_files,
-        selected_memos=selected_memos,
-        extra_text=extra_text,
-        question=_build_chat_prompt(question),
-    )
-    try:
-        _record_gemini_usage(usage_record)
-    except Exception as usage_exc:
-        st.warning(f"분석은 완료됐지만 비용 로그 저장에 실패했습니다: {usage_exc}")
+    chat_prompt = _build_chat_prompt(question)
+    if provider in {"ollama", "auto"}:
+        try:
+            result_text, usage_record = _run_ollama_analysis(
+                model=ollama_model,
+                selected_files=selected_files,
+                selected_memos=selected_memos,
+                extra_text=extra_text,
+                question=chat_prompt,
+            )
+        except Exception as ollama_exc:
+            if provider != "auto" or AI_FALLBACK_PROVIDER != "gemini" or not api_key:
+                raise
+            st.warning(f"Ollama 호출에 실패해 Gemini로 이어서 분석합니다: {ollama_exc}")
+            result_text, usage_record = _run_gemini_analysis(
+                api_key=api_key,
+                selected_files=selected_files,
+                selected_memos=selected_memos,
+                extra_text=extra_text,
+                question=chat_prompt,
+            )
+            try:
+                _record_gemini_usage(usage_record)
+            except Exception as usage_exc:
+                st.warning(f"분석은 완료됐지만 비용 로그 저장에 실패했습니다: {usage_exc}")
+    else:
+        result_text, usage_record = _run_gemini_analysis(
+            api_key=api_key,
+            selected_files=selected_files,
+            selected_memos=selected_memos,
+            extra_text=extra_text,
+            question=chat_prompt,
+        )
+        try:
+            _record_gemini_usage(usage_record)
+        except Exception as usage_exc:
+            st.warning(f"분석은 완료됐지만 비용 로그 저장에 실패했습니다: {usage_exc}")
 
     result_text = _postprocess_ai_result(result_text)
     st.session_state.ai_result = result_text
@@ -691,7 +870,7 @@ def render_ai():
         """
         <div class="section-block">
             <p class="section-block__eyebrow">AI</p>
-            <h2 class="section-block__title">Gemini 파일 및 텍스트 분석</h2>
+            <h2 class="section-block__title">AI 파일 및 텍스트 분석</h2>
             <p class="section-block__body">
                 웹하드 파일, 메모장 텍스트, 직접 입력한 텍스트를 함께 분석하고 결과를 메모로 남길 수 있습니다.
             </p>
@@ -701,10 +880,6 @@ def render_ai():
     )
 
     api_key = _get_gemini_api_key()
-    if not api_key:
-        st.warning(
-            "Gemini API key가 설정되지 않았습니다. GEMINI_API_KEY 또는 st.secrets['gemini']['api_key']를 설정해주세요."
-        )
 
     _render_usage_cost_summary()
     try:
@@ -714,6 +889,41 @@ def render_ai():
         limit_message = f"Gemini 사용량 한도를 확인하지 못했습니다: {exc}"
     if not can_use_gemini:
         st.warning(limit_message)
+
+    provider_options = ["gemini", "ollama"]
+    if api_key:
+        provider_options.append("auto")
+    provider_index = 0
+    if AI_PROVIDER in provider_options:
+        provider_index = provider_options.index(AI_PROVIDER)
+    provider = st.radio(
+        "AI 모델 모드",
+        options=provider_options,
+        index=provider_index,
+        format_func=_provider_label,
+        horizontal=True,
+        key="ai_provider",
+    )
+    ollama_model = OLLAMA_MODEL
+    if provider in {"ollama", "auto"}:
+        ollama_index = (
+            OLLAMA_MODEL_OPTIONS.index(OLLAMA_MODEL)
+            if OLLAMA_MODEL in OLLAMA_MODEL_OPTIONS
+            else 0
+        )
+        ollama_model = st.selectbox(
+            "Ollama 모델",
+            options=OLLAMA_MODEL_OPTIONS,
+            index=ollama_index,
+            key="ai_ollama_model",
+        )
+        st.caption(
+            f"Ollama endpoint: {OLLAMA_BASE_URL}. PDF/이미지는 로컬 모델에 직접 전달하지 않고 텍스트 자료만 분석합니다."
+        )
+    if provider == "gemini" and not api_key:
+        st.warning(
+            "Gemini API key가 설정되지 않았습니다. GEMINI_API_KEY 또는 st.secrets['gemini']['api_key']를 설정해주세요."
+        )
 
     files = list_uploaded_files()
     supported_files = [
@@ -806,17 +1016,24 @@ def render_ai():
     )
 
     can_analyze = bool(
-        api_key
-        and can_use_gemini
+        (provider in {"ollama", "auto"} or api_key)
+        and (provider in {"ollama", "auto"} or can_use_gemini)
         and (selected_files or selected_memos or extra_text.strip() or question.strip())
     )
     if st.button(
         "분석하기", type="primary", use_container_width=True, disabled=not can_analyze
     ):
-        with st.spinner("Gemini가 자료를 분석하는 중입니다..."):
+        spinner_label = (
+            "Ollama가 자료를 분석하는 중입니다..."
+            if provider in {"ollama", "auto"}
+            else "Gemini가 자료를 분석하는 중입니다..."
+        )
+        with st.spinner(spinner_label):
             try:
                 _run_and_store_ai_response(
                     api_key=api_key,
+                    provider=provider,
+                    ollama_model=ollama_model,
                     selected_files=selected_files,
                     selected_memos=selected_memos,
                     extra_text=extra_text,
@@ -891,7 +1108,7 @@ def render_ai():
         placeholder="방금 답변을 바탕으로 더 물어볼 내용을 입력하세요.",
         key="ai_followup_question",
     )
-    can_followup = bool(api_key and can_use_gemini)
+    can_followup = bool(provider in {"ollama", "auto"} or (api_key and can_use_gemini))
     if st.button(
         "추가 요청 보내기",
         type="primary",
@@ -902,10 +1119,17 @@ def render_ai():
         if not followup_question.strip():
             st.warning("추가 요청 내용을 입력해주세요.")
         else:
-            with st.spinner("Gemini가 이어서 답변하는 중입니다..."):
+            spinner_label = (
+                "Ollama가 이어서 답변하는 중입니다..."
+                if provider in {"ollama", "auto"}
+                else "Gemini가 이어서 답변하는 중입니다..."
+            )
+            with st.spinner(spinner_label):
                 try:
                     _run_and_store_ai_response(
                         api_key=api_key,
+                        provider=provider,
+                        ollama_model=ollama_model,
                         selected_files=selected_files,
                         selected_memos=selected_memos,
                         extra_text=extra_text,

@@ -4,6 +4,8 @@ import streamlit as st
 from google.cloud import storage
 from google.oauth2 import service_account
 
+from app.blob_store import LocalMirrorBucket, get_storage_backend, is_local_storage_backend
+
 
 @st.cache_resource
 def get_gcs_client() -> storage.Client:
@@ -55,6 +57,11 @@ def get_bucket_name() -> str:
 
 
 def get_bucket() -> storage.Bucket:
+    if is_local_storage_backend():
+        remote_bucket = None
+        if get_storage_backend() == "local_mirror":
+            remote_bucket = get_gcs_client().bucket(get_bucket_name())
+        return LocalMirrorBucket(remote_bucket=remote_bucket)
     return get_gcs_client().bucket(get_bucket_name())
 
 
