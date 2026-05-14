@@ -145,25 +145,33 @@ def render_md_pdf_tool():
         key="md_pdf_input",
     )
 
-    if st.button("PDF 만들기", type="primary", use_container_width=True):
-        if not markdown_text.strip():
-            st.warning("변환할 Markdown 내용을 입력해주세요.")
-            return
+    has_markdown = bool(markdown_text.strip())
+    if has_markdown and st.session_state.get("md_pdf_source") != markdown_text:
+        st.session_state.md_pdf_source = markdown_text
+        st.session_state.md_pdf_bytes = None
+        st.session_state.md_pdf_error = ""
+        st.session_state.md_pdf_filename = (
+            f"converted_{get_now().strftime('%Y%m%d_%H%M')}.pdf"
+        )
+
+    if has_markdown and not st.session_state.get("md_pdf_bytes") and not st.session_state.get(
+        "md_pdf_error"
+    ):
         with st.spinner("PDF를 만드는 중입니다..."):
             try:
                 st.session_state.md_pdf_bytes = markdown_to_pdf_bytes(markdown_text)
-                st.session_state.md_pdf_filename = (
-                    f"converted_{get_now().strftime('%Y%m%d_%H%M')}.pdf"
-                )
-                st.toast("✅ PDF 준비 완료!")
             except Exception as exc:
-                st.error(f"PDF 생성 중 오류가 발생했습니다: {exc}")
+                st.session_state.md_pdf_error = str(exc)
 
-    if st.session_state.get("md_pdf_bytes"):
-        st.download_button(
-            "PDF 다운로드",
-            data=st.session_state.md_pdf_bytes,
-            file_name=st.session_state.get("md_pdf_filename", "converted.pdf"),
-            mime="application/pdf",
-            use_container_width=True,
-        )
+    st.download_button(
+        "PDF 다운로드",
+        data=st.session_state.get("md_pdf_bytes") or b"",
+        file_name=st.session_state.get("md_pdf_filename", "converted.pdf"),
+        mime="application/pdf",
+        use_container_width=True,
+        disabled=not st.session_state.get("md_pdf_bytes"),
+    )
+    if not has_markdown:
+        st.caption("Markdown 내용을 입력하면 PDF 다운로드 버튼이 활성화됩니다.")
+    elif st.session_state.get("md_pdf_error"):
+        st.warning(f"PDF 생성 중 오류가 발생했습니다: {st.session_state.md_pdf_error}")

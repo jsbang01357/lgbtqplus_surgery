@@ -1,12 +1,20 @@
 import json
 import random
+from datetime import timedelta
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
 from app.access_logger import clear_access_logs, get_access_logs
+from app.ai import (
+    _entry_cost_krw,
+    _load_gemini_usage_logs,
+    _parse_usage_time,
+    format_krw_cost,
+)
 from app.auth import get_admin_password, is_authenticated, login_screen
+from app.core_utils import get_now
 from app.md_pdf import render_md_pdf_tool
 from app.settlement import render_settlement_tool
 from app.text_cleaner import render_text_cleaner
@@ -38,6 +46,12 @@ TOOLS = [
         "label": "정산 계산기",
         "icon": "💸",
         "summary": "항목별 지출을 입력해 최소 송금 목록을 계산합니다.",
+    },
+    {
+        "id": "ai_costs",
+        "label": "AI 예상비용",
+        "icon": "📊",
+        "summary": "Gemini 사용량과 예상 비용을 날짜별로 확인합니다.",
     },
     {
         "id": "menu_picker",
@@ -186,6 +200,148 @@ def _render_menu_picker_tool():
             st.error("menu_list.json 파일이 없습니다.")
 
 
+def _build_ai_cost_rows(logs: list[dict]) -> tuple[list[dict], list[dict]]:
+    detail_rows = []
+    daily_totals: dict[str, dict] = {}
+
+    for entry in logs:
+        entry_time = _parse_usage_time(entry.get("time", ""))
+        if entry_time is None:
+            continue
+
+        cost_krw = _entry_cost_krw(entry)
+        input_tokens = int(entry.get("input_tokens") or 0)
+        output_tokens = int(entry.get("output_tokens") or 0)
+        total_tokens = int(entry.get("total_tokens") or input_tokens + output_tokens)
+        date_key = entry_time.strftime("%Y-%m-%d")
+
+        detail_rows.append(
+            {
+                "시간": entry_time.strftime("%Y-%m-%d %H:%M"),
+                "날짜": date_key,
+                "모델": entry.get("model", ""),
+                "입력 토큰": input_tokens,
+                "출력 토큰": output_tokens,
+                "전체 토큰": total_tokens,
+                "예상 비용(KRW)": round(cost_krw, 2),
+                "예상 비용(USD)": float(entry.get("estimated_cost_usd") or 0),
+            }
+        )
+
+        daily = daily_totals.setdefault(
+            date_key,
+            {
+                "날짜": date_key,
+                "요청 수": 0,
+                "입력 토큰": 0,
+                "출력 토큰": 0,
+                "전체 토큰": 0,
+                "예상 비용(KRW)": 0.0,
+            },
+        )
+        daily["요청 수"] += 1
+        daily["입력 토큰"] += input_tokens
+        daily["출력 토큰"] += output_tokens
+        daily["전체 토큰"] += total_tokens
+        daily["예상 비용(KRW)"] += cost_krw
+
+    daily_rows = sorted(daily_totals.values(), key=lambda row: row["날짜"])
+    detail_rows.sort(key=lambda row: row["시간"], reverse=True)
+    for row in daily_rows:
+        row["예상 비용(KRW)"] = round(row["예상 비용(KRW)"], 2)
+    return daily_rows, detail_rows
+
+
+def _render_ai_costs_tool():
+    st.info("Gemini usage 로그를 기준으로 앱 내부 예상 비용을 날짜별로 분석합니다.")
+
+    try:
+        logs = _load_gemini_usage_logs()
+    except Exception as exc:
+        st.error(f"Gemini 사용량 로그를 불러오지 못했습니다: {exc}")
+        return
+
+    if not logs:
+        st.write("Gemini 사용량 로그가 없습니다.")
+        return
+
+    period = st.radio(
+        "분석 범위",
+        options=["최근 7일", "최근 30일", "전체"],
+        index=1,
+        horizontal=True,
+        key="ai_cost_period",
+    )
+    cutoff = None
+    if period == "최근 7일":
+        cutoff = get_now() - timedelta(days=7)
+    elif period == "최근 30일":
+        cutoff = get_now() - timedelta(days=30)
+
+    filtered_logs = []
+    for entry in logs:
+        entry_time = _parse_usage_time(entry.get("time", ""))
+        if entry_time is None:
+            continue
+        if cutoff is not None and entry_time < cutoff:
+            continue
+        filtered_logs.append(entry)
+
+    daily_rows, detail_rows = _build_ai_cost_rows(filtered_logs)
+    if not daily_rows:
+        st.write("선택한 기간의 Gemini 사용량 로그가 없습니다.")
+        return
+
+    total_cost = sum(row["예상 비용(KRW)"] for row in daily_rows)
+    total_requests = sum(row["요청 수"] for row in daily_rows)
+    total_tokens = sum(row["전체 토큰"] for row in daily_rows)
+    avg_cost = total_cost / total_requests if total_requests else 0
+
+    col_cost, col_requests, col_tokens, col_avg = st.columns(4)
+    with col_cost:
+        st.metric("총 예상 비용", format_krw_cost(total_cost))
+    with col_requests:
+        st.metric("요청 수", f"{total_requests:,}회")
+    with col_tokens:
+        st.metric("전체 토큰", f"{total_tokens:,}")
+    with col_avg:
+        st.metric("요청당 평균", format_krw_cost(avg_cost))
+
+    daily_df = pd.DataFrame(daily_rows)
+    chart_df = daily_df.set_index("날짜")[["예상 비용(KRW)"]]
+    st.bar_chart(chart_df, use_container_width=True)
+
+    detail_df = pd.DataFrame(detail_rows)
+    csv_col_daily, csv_col_detail = st.columns(2)
+    with csv_col_daily:
+        csv_bytes = daily_df.to_csv(index=False, encoding="utf-8-sig").encode(
+            "utf-8-sig"
+        )
+        st.download_button(
+            "날짜별 비용 CSV 다운로드",
+            data=csv_bytes,
+            file_name=f"ai_costs_daily_{get_now().strftime('%Y%m%d_%H%M')}.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+    with csv_col_detail:
+        detail_csv_bytes = detail_df.to_csv(index=False, encoding="utf-8-sig").encode(
+            "utf-8-sig"
+        )
+        st.download_button(
+            "상세 로그 CSV 다운로드",
+            data=detail_csv_bytes,
+            file_name=f"ai_costs_detail_{get_now().strftime('%Y%m%d_%H%M')}.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+
+    st.dataframe(daily_df, use_container_width=True, hide_index=True)
+
+    with st.expander("상세 로그 보기"):
+        st.dataframe(detail_df, use_container_width=True, hide_index=True)
+
+
 def _render_access_logs_tool():
     if not is_authenticated():
         login_screen()
@@ -256,6 +412,8 @@ def render_tools():
         render_md_pdf_tool()
     elif selected_tool["id"] == "settlement":
         render_settlement_tool()
+    elif selected_tool["id"] == "ai_costs":
+        _render_ai_costs_tool()
     elif selected_tool["id"] == "menu_picker":
         _render_menu_picker_tool()
     elif selected_tool["id"] == "access_logs":

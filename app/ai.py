@@ -14,7 +14,7 @@ from app.core_utils import get_now
 from app.gcs_helper import get_bucket
 from app.md_pdf import markdown_to_pdf_bytes
 from app.memo import load_memo_list_cached, load_single_memo_content, save_memo_txt
-from app.storage import download_file_bytes, list_uploaded_files
+from app.storage import download_file_bytes, list_uploaded_files, save_generated_file
 from app.streamlit_compat import render_inline_html
 from components.custom_copy_btn import copy_to_clipboard
 
@@ -273,6 +273,16 @@ def _toggle_question_preset(preset: dict):
     else:
         active_labels.add(label)
         _append_question_preset(preset["prompt"])
+    st.session_state.ai_active_prompt_presets = sorted(active_labels)
+
+
+def _append_all_question_presets():
+    active_labels = set(st.session_state.get("ai_active_prompt_presets", []))
+    for preset in PROMPT_PRESETS:
+        if preset["label"] in active_labels:
+            continue
+        _append_question_preset(preset["prompt"])
+        active_labels.add(preset["label"])
     st.session_state.ai_active_prompt_presets = sorted(active_labels)
 
 
@@ -649,6 +659,33 @@ def _run_gemini_analysis(
                 pass
 
 
+def _run_and_store_ai_response(
+    api_key: str,
+    selected_files,
+    selected_memos: list[dict],
+    extra_text: str,
+    question: str,
+):
+    result_text, usage_record = _run_gemini_analysis(
+        api_key=api_key,
+        selected_files=selected_files,
+        selected_memos=selected_memos,
+        extra_text=extra_text,
+        question=_build_chat_prompt(question),
+    )
+    try:
+        _record_gemini_usage(usage_record)
+    except Exception as usage_exc:
+        st.warning(f"분석은 완료됐지만 비용 로그 저장에 실패했습니다: {usage_exc}")
+
+    result_text = _postprocess_ai_result(result_text)
+    st.session_state.ai_result = result_text
+    st.session_state.ai_chat_history.append({"q": question.strip(), "a": result_text})
+    st.session_state.ai_last_usage = usage_record
+    st.session_state.ai_result_title = f"AI 분석 {get_now().strftime('%Y-%m-%d %H:%M')}"
+    st.session_state.ai_scroll_to_result = True
+
+
 def render_ai():
     st.markdown(
         """
@@ -736,6 +773,14 @@ def render_ai():
         """,
         unsafe_allow_html=True,
     )
+    if st.button(
+        "프롬프트 일괄 추가",
+        use_container_width=True,
+        key="ai_prompt_preset_all",
+    ):
+        _append_all_question_presets()
+        st.rerun()
+
     for row_start in range(0, len(PROMPT_PRESETS), 2):
         columns = st.columns(2)
         for column, preset in zip(columns, PROMPT_PRESETS[row_start : row_start + 2]):
@@ -770,29 +815,13 @@ def render_ai():
     ):
         with st.spinner("Gemini가 자료를 분석하는 중입니다..."):
             try:
-                result_text, usage_record = _run_gemini_analysis(
+                _run_and_store_ai_response(
                     api_key=api_key,
                     selected_files=selected_files,
                     selected_memos=selected_memos,
                     extra_text=extra_text,
-                    question=_build_chat_prompt(question),
+                    question=question,
                 )
-                try:
-                    _record_gemini_usage(usage_record)
-                except Exception as usage_exc:
-                    st.warning(
-                        f"분석은 완료됐지만 비용 로그 저장에 실패했습니다: {usage_exc}"
-                    )
-                result_text = _postprocess_ai_result(result_text)
-                st.session_state.ai_result = result_text
-                st.session_state.ai_chat_history.append(
-                    {"q": question.strip(), "a": result_text}
-                )
-                st.session_state.ai_last_usage = usage_record
-                st.session_state.ai_result_title = (
-                    f"AI 분석 {get_now().strftime('%Y-%m-%d %H:%M')}"
-                )
-                st.session_state.ai_scroll_to_result = True
                 st.toast("✅ 분석이 완료되었습니다.")
                 st.rerun()
             except Exception as exc:
@@ -820,9 +849,73 @@ def render_ai():
         value=st.session_state.get("ai_result_title", "AI 분석 결과"),
         key="ai_result_memo_title",
     )
-    if st.button("메모로 저장", use_container_width=True, key="ai_save_to_memo"):
-        save_memo_txt(memo_title.strip() or "AI 분석 결과", result)
-        st.toast("✅ AI 분석 결과를 메모로 저장했습니다.")
+    col_save_memo, col_save_pdf = st.columns(2)
+    with col_save_memo:
+        if st.button("메모로 저장", use_container_width=True, key="ai_save_to_memo"):
+            save_memo_txt(memo_title.strip() or "AI 분석 결과", result)
+            st.toast("✅ AI 분석 결과를 메모로 저장했습니다.")
+    with col_save_pdf:
+        if st.button(
+            "PDF로 저장(웹하드)",
+            use_container_width=True,
+            key="ai_save_pdf_to_storage",
+        ):
+            pdf_bytes = _get_ai_result_pdf_bytes(result)
+            if not pdf_bytes:
+                st.warning("PDF 생성이 완료되지 않아 웹하드에 저장하지 못했습니다.")
+            else:
+                try:
+                    saved_name = save_generated_file(
+                        f"{memo_title.strip() or 'AI 분석 결과'}.pdf",
+                        pdf_bytes,
+                        "application/pdf",
+                    )
+                    st.toast(f"✅ 웹하드에 '{saved_name}' 저장 완료")
+                except Exception as exc:
+                    st.error(f"웹하드 저장 중 오류가 발생했습니다: {exc}")
+
+    st.markdown(
+        """
+        <div class="section-block section-block--spacious">
+            <p class="section-block__eyebrow">Follow-up</p>
+            <h3 class="section-block__title">추가 요청</h3>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if st.session_state.pop("ai_followup_clear", False):
+        st.session_state.ai_followup_question = ""
+    followup_question = st.text_area(
+        "추가 요청",
+        height=120,
+        placeholder="방금 답변을 바탕으로 더 물어볼 내용을 입력하세요.",
+        key="ai_followup_question",
+    )
+    can_followup = bool(api_key and can_use_gemini)
+    if st.button(
+        "추가 요청 보내기",
+        type="primary",
+        use_container_width=True,
+        disabled=not can_followup,
+        key="ai_send_followup",
+    ):
+        if not followup_question.strip():
+            st.warning("추가 요청 내용을 입력해주세요.")
+        else:
+            with st.spinner("Gemini가 이어서 답변하는 중입니다..."):
+                try:
+                    _run_and_store_ai_response(
+                        api_key=api_key,
+                        selected_files=selected_files,
+                        selected_memos=selected_memos,
+                        extra_text=extra_text,
+                        question=followup_question,
+                    )
+                    st.session_state.ai_followup_clear = True
+                    st.toast("✅ 추가 답변이 완료되었습니다.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"추가 요청 중 오류가 발생했습니다: {exc}")
 
     st.markdown(
         """
@@ -850,46 +943,30 @@ def render_ai():
             use_container_width=True,
         )
     with col_pdf:
-        if st.session_state.get("ai_result_pdf_source") != result:
-            st.session_state.ai_result_pdf_source = result
-            st.session_state.ai_result_pdf_bytes = None
-            st.session_state.ai_result_pdf_error = ""
+        result_pdf_bytes = _get_ai_result_pdf_bytes(result)
 
-        if not st.session_state.get("ai_result_pdf_bytes") and not st.session_state.get(
-            "ai_result_pdf_error"
-        ):
-            if st.button("PDF 준비하기", use_container_width=True, key="ai_prepare_pdf"):
-                with st.spinner("PDF를 만드는 중입니다..."):
-                    _get_ai_result_pdf_bytes(result)
-
-        if st.session_state.get("ai_result_pdf_bytes"):
-            st.download_button(
-                "PDF 다운로드",
-                data=st.session_state.ai_result_pdf_bytes,
-                file_name=_result_download_filename("pdf"),
-                mime="application/pdf",
-                use_container_width=True,
-            )
-        elif st.session_state.get("ai_result_pdf_error"):
-            st.button("PDF 다운로드", disabled=True, use_container_width=True)
+        st.download_button(
+            "PDF 다운로드",
+            data=result_pdf_bytes or b"",
+            file_name=_result_download_filename("pdf"),
+            mime="application/pdf",
+            use_container_width=True,
+            disabled=result_pdf_bytes is None,
+        )
     with col_hist:
-        if st.button("대화 PDF 저장", use_container_width=True, key="ai_history_pdf"):
-            with st.spinner("대화 PDF를 만드는 중입니다..."):
-                _get_ai_history_pdf_bytes(
-                    st.session_state.get("ai_chat_history", [])
-                )
+        history_pdf_bytes = _get_ai_history_pdf_bytes(
+            st.session_state.get("ai_chat_history", [])
+        )
 
-        if st.session_state.get("ai_history_pdf_bytes"):
-            st.download_button(
-                "대화 PDF 다운로드",
-                data=st.session_state.ai_history_pdf_bytes,
-                file_name=_result_download_filename("pdf"),
-                mime="application/pdf",
-                use_container_width=True,
-                key="ai_history_pdf_dl",
-            )
-        elif st.session_state.get("ai_history_pdf_error"):
-            st.button("대화 PDF 다운로드", disabled=True, use_container_width=True)
+        st.download_button(
+            "대화 PDF 다운로드",
+            data=history_pdf_bytes or b"",
+            file_name=_result_download_filename("pdf"),
+            mime="application/pdf",
+            use_container_width=True,
+            disabled=history_pdf_bytes is None,
+            key="ai_history_pdf_dl",
+        )
 
     if st.session_state.get("ai_result_pdf_error"):
         st.warning(

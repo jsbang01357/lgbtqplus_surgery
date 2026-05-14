@@ -146,8 +146,6 @@ def save_memo_txt(title, content, original_file_name=None):
         load_memo_list_cached.clear()
         load_single_memo_content.clear()
         create_zip_of_memos.clear()
-        if "zip_data_memos" in st.session_state:
-            st.session_state.zip_data_memos = None
         return
 
     safe_name = slugify(title)
@@ -172,8 +170,6 @@ def save_memo_txt(title, content, original_file_name=None):
     load_memo_list_cached.clear()
     load_single_memo_content.clear()
     create_zip_of_memos.clear()
-    if "zip_data_memos" in st.session_state:
-        st.session_state.zip_data_memos = None
 
 
 def delete_memo_txt(file_name):
@@ -187,8 +183,6 @@ def delete_memo_txt(file_name):
     load_memo_list_cached.clear()
     load_single_memo_content.clear()
     create_zip_of_memos.clear()
-    if "zip_data_memos" in st.session_state:
-        st.session_state.zip_data_memos = None
 
 
 def clear_all_memos():
@@ -200,8 +194,6 @@ def clear_all_memos():
     load_memo_list_cached.clear()
     load_single_memo_content.clear()
     create_zip_of_memos.clear()
-    if "zip_data_memos" in st.session_state:
-        st.session_state.zip_data_memos = None
 
 
 @st.cache_data(ttl=60)
@@ -461,31 +453,15 @@ def render_memo_manager():
             unsafe_allow_html=True,
         )
 
-        if "zip_data_memos" not in st.session_state:
-            st.session_state.zip_data_memos = None
-
-        col_m_zip1, col_m_zip2 = st.columns([1, 1])
-        with col_m_zip1:
-            if st.button("📦 모든 메모 ZIP 준비하기", use_container_width=True):
-                with st.spinner("압축 중..."):
-                    st.session_state.zip_data_memos = create_zip_of_memos(memos_list)
-                    st.toast("✅ ZIP 준비 완료!")
-
-        with col_m_zip2:
-            if st.session_state.zip_data_memos:
-                st.download_button(
-                    label="📥 준비된 ZIP 다운로드",
-                    data=st.session_state.zip_data_memos,
-                    file_name=f"memos_{get_now().strftime('%Y%m%d_%H%M')}.zip",
-                    mime="application/zip",
-                    use_container_width=True,
-                )
-            else:
-                st.button(
-                    "📥 ZIP 다운로드 (준비 필요)",
-                    disabled=True,
-                    use_container_width=True,
-                )
+        zip_data = create_zip_of_memos(memos_list)
+        st.download_button(
+            label="📥 ZIP 다운로드",
+            data=zip_data,
+            file_name=f"memos_{get_now().strftime('%Y%m%d_%H%M')}.zip",
+            mime="application/zip",
+            use_container_width=True,
+            disabled=zip_data is None,
+        )
 
         st.markdown(
             """

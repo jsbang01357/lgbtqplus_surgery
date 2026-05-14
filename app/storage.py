@@ -5,8 +5,10 @@ import io
 import mimetypes
 import html
 from dataclasses import dataclass
+from datetime import timedelta
 from pathlib import Path, PurePosixPath
 from typing import Optional
+from urllib.parse import quote
 
 from app.core_utils import get_now, KST
 from app.gcs_helper import get_bucket
@@ -96,12 +98,33 @@ def save_uploaded_file(uploaded_file):
         # 저장 후 목록 캐시 비우기
         list_uploaded_files_cached.clear()
         create_zip_of_files.clear()
-        if "zip_data_files" in st.session_state:
-            st.session_state.zip_data_files = None
         return True
     except Exception as e:
         st.error(f"업로드 오류: {e}")
         return False
+
+
+def save_generated_file(
+    filename: str,
+    content: bytes,
+    content_type: str = "application/octet-stream",
+) -> str:
+    if len(content) > MAX_UPLOAD_SIZE_BYTES:
+        raise ValueError("생성된 파일이 50MB 제한을 초과했습니다.")
+
+    name = PurePosixPath(filename).stem or "file"
+    ext = PurePosixPath(filename).suffix
+    timestamp = get_now().strftime("%Y%m%d_%H%M%S")
+    new_filename = f"{name}_{timestamp}{ext}"
+    blob_name = normalize_blob_name(UPLOAD_PREFIX, new_filename)
+
+    bucket = get_bucket()
+    blob = bucket.blob(blob_name)
+    blob.upload_from_string(content, content_type=content_type)
+
+    list_uploaded_files_cached.clear()
+    create_zip_of_files.clear()
+    return new_filename
 
 
 def delete_uploaded_file(blob_name: str):
@@ -113,8 +136,6 @@ def delete_uploaded_file(blob_name: str):
     list_uploaded_files_cached.clear()
     download_file_bytes.clear()
     create_zip_of_files.clear()
-    if "zip_data_files" in st.session_state:
-        st.session_state.zip_data_files = None
 
 
 def clear_all_uploaded_files():
@@ -127,8 +148,6 @@ def clear_all_uploaded_files():
     list_uploaded_files_cached.clear()
     download_file_bytes.clear()
     create_zip_of_files.clear()
-    if "zip_data_files" in st.session_state:
-        st.session_state.zip_data_files = None
 
 
 @st.cache_data(ttl=300)
@@ -136,6 +155,22 @@ def download_file_bytes(blob_name: str) -> bytes:
     bucket = get_bucket()
     blob = bucket.blob(blob_name)
     return blob.download_as_bytes()
+
+
+def create_file_download_url(file_info: GCSFileInfo) -> str:
+    bucket = get_bucket()
+    blob = bucket.blob(file_info.blob_name)
+    safe_ascii_name = file_info.name.replace("\\", "_").replace('"', "'")
+    encoded_name = quote(file_info.name)
+    return blob.generate_signed_url(
+        version="v4",
+        expiration=timedelta(minutes=15),
+        method="GET",
+        response_disposition=(
+            f"attachment; filename=\"{safe_ascii_name}\"; filename*=UTF-8''{encoded_name}"
+        ),
+        response_type=file_info.content_type or "application/octet-stream",
+    )
 
 
 @st.cache_data(ttl=60)
@@ -214,8 +249,6 @@ def render_file_manager():
         st.session_state.confirm_clear_files = False
     if "scroll_to_bottom_once" not in st.session_state:
         st.session_state.scroll_to_bottom_once = False
-    if "prepared_file_downloads" not in st.session_state:
-        st.session_state.prepared_file_downloads = {}
 
     def process_uploaded_files():
         current_key = f"uploader_{st.session_state['file_uploader_key']}"
@@ -312,32 +345,20 @@ def render_file_manager():
             col_download, col_delete = st.columns([1, 1])
 
             with col_download:
-                prepared = st.session_state.prepared_file_downloads.get(file_info.blob_name)
-                if prepared:
-                    st.download_button(
-                        label="다운로드",
-                        data=prepared,
-                        file_name=file_info.name,
-                        mime=file_info.content_type or "application/octet-stream",
+                try:
+                    st.link_button(
+                        "다운로드",
+                        create_file_download_url(file_info),
                         use_container_width=True,
-                        key=f"dl_{file_info.blob_name}",
                     )
-                elif st.button(
-                    "다운로드 준비",
-                    key=f"prep_dl_{file_info.blob_name}",
-                    use_container_width=True,
-                ):
-                    with st.spinner("파일을 준비하는 중..."):
-                        st.session_state.prepared_file_downloads[file_info.blob_name] = download_file_bytes(
-                            file_info.blob_name
-                        )
-                    st.rerun()
+                except Exception as e:
+                    st.button("다운로드", disabled=True, use_container_width=True)
+                    st.caption(f"다운로드 링크 생성 실패: {e}")
 
             with col_delete:
                 if st.button("삭제", key=f"del_{file_info.blob_name}", use_container_width=True):
                     try:
                         delete_uploaded_file(file_info.blob_name)
-                        st.session_state.prepared_file_downloads.pop(file_info.blob_name, None)
                         st.toast(f"🗑️ '{file_info.name}' 삭제됨")
                         st.rerun()
                     except Exception as e:
@@ -356,27 +377,15 @@ def render_file_manager():
             unsafe_allow_html=True,
         )
 
-        if "zip_data_files" not in st.session_state:
-            st.session_state.zip_data_files = None
-
-        col_zip1, col_zip2 = st.columns([1, 1])
-        with col_zip1:
-            if st.button("📦 원버튼 ZIP 다운로드 준비", use_container_width=True):
-                with st.spinner("압축 중..."):
-                    st.session_state.zip_data_files = create_zip_of_files()
-                    st.toast("✅ ZIP 파일 준비 완료!")
-
-        with col_zip2:
-            if st.session_state.zip_data_files:
-                st.download_button(
-                    label="📥 준비된 ZIP 다운로드",
-                    data=st.session_state.zip_data_files,
-                    file_name=f"files_{get_now().strftime('%Y%m%d_%H%M')}.zip",
-                    mime="application/zip",
-                    use_container_width=True,
-                )
-            else:
-                st.button("📥 ZIP 다운로드 (준비 필요)", disabled=True, use_container_width=True)
+        zip_data = create_zip_of_files()
+        st.download_button(
+            label="📥 ZIP 다운로드",
+            data=zip_data,
+            file_name=f"files_{get_now().strftime('%Y%m%d_%H%M')}.zip",
+            mime="application/zip",
+            use_container_width=True,
+            disabled=zip_data is None,
+        )
 
         st.markdown(
             """
