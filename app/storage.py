@@ -12,6 +12,7 @@ from app.core_utils import get_now, KST
 from app.gcs_helper import get_bucket
 
 UPLOAD_PREFIX = "uploads"
+MAX_UPLOAD_SIZE_BYTES = 50 * 1024 * 1024
 FILE_ICON_DIR = Path(__file__).resolve().parent.parent / "assets" / "icons" / "filetypes"
 
 
@@ -85,6 +86,9 @@ def save_uploaded_file(uploaded_file):
         blob = bucket.blob(blob_name)
 
         content = uploaded_file.getvalue()
+        if len(content) > MAX_UPLOAD_SIZE_BYTES:
+            st.error(f"{uploaded_file.name} 파일이 50MB 제한을 초과했습니다.")
+            return False
         content_type = uploaded_file.type or guess_content_type(uploaded_file.name)
 
         blob.upload_from_string(content, content_type=content_type)
@@ -208,6 +212,8 @@ def render_file_manager():
         st.session_state["file_uploader_key"] = 0
     if "confirm_clear_files" not in st.session_state:
         st.session_state.confirm_clear_files = False
+    if "scroll_to_bottom_once" not in st.session_state:
+        st.session_state.scroll_to_bottom_once = False
     if "prepared_file_downloads" not in st.session_state:
         st.session_state.prepared_file_downloads = {}
 
@@ -236,7 +242,7 @@ def render_file_manager():
         unsafe_allow_html=True,
     )
     st.file_uploader(
-        "파일 선택 (PPT, PDF 등)",
+        "파일 선택 (PPT, PDF 등, 파일당 최대 50MB)",
         accept_multiple_files=True,
         key=f"uploader_{st.session_state['file_uploader_key']}",
         on_change=process_uploaded_files,
@@ -355,7 +361,7 @@ def render_file_manager():
 
         col_zip1, col_zip2 = st.columns([1, 1])
         with col_zip1:
-            if st.button("📦 모든 파일 ZIP 준비하기", use_container_width=True):
+            if st.button("📦 원버튼 ZIP 다운로드 준비", use_container_width=True):
                 with st.spinner("압축 중..."):
                     st.session_state.zip_data_files = create_zip_of_files()
                     st.toast("✅ ZIP 파일 준비 완료!")
@@ -400,6 +406,7 @@ def render_file_manager():
         ):
             if not st.session_state.confirm_clear_files:
                 st.session_state.confirm_clear_files = True
+                st.session_state.scroll_to_bottom_once = True
                 st.rerun()
             try:
                 clear_all_uploaded_files()
@@ -412,3 +419,17 @@ def render_file_manager():
         st.info("검색 조건에 맞는 파일이 없습니다.")
     else:
         st.info("현재 저장된 파일이 없습니다.")
+
+
+    if st.session_state.get("scroll_to_bottom_once"):
+        st.session_state.scroll_to_bottom_once = False
+        st.markdown(
+            """
+            <script>
+            window.parent.document
+                .querySelector('[data-testid="stAppViewContainer"]')
+                .scrollTo({top: 999999, behavior: 'smooth'});
+            </script>
+            """,
+            unsafe_allow_html=True,
+        )

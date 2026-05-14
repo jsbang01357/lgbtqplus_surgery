@@ -2,7 +2,12 @@ import io
 import unittest
 import zipfile
 
-from app.ai import _extract_office_text, format_krw_cost
+from app.ai import (
+    _extract_office_text,
+    _format_chat_history_markdown,
+    _postprocess_ai_result,
+    format_krw_cost,
+)
 
 
 def _make_zip(entries: dict[str, str]) -> bytes:
@@ -33,6 +38,23 @@ class AiHelperTests(unittest.TestCase):
     def test_krw_cost_rounding(self):
         self.assertEqual(format_krw_cost(0.49), "₩0")
         self.assertEqual(format_krw_cost(0.5), "₩1")
+
+    def test_postprocess_masks_names_and_expands_abbreviation_once(self):
+        result = _postprocess_ai_result("환자명: 홍길동\n홍길동 환자는 HTN, HTN 병력이 있습니다.")
+
+        self.assertNotIn("홍길동", result)
+        self.assertIn("환자명: [이름 비공개]", result)
+        self.assertEqual(result.count("HTN (Hypertension)"), 1)
+        self.assertIn("HTN 병력", result)
+
+    def test_format_chat_history_markdown(self):
+        markdown = _format_chat_history_markdown(
+            [{"q": "다음 계획?", "a": "추적 관찰"}, {"q": "", "a": "요약"}]
+        )
+
+        self.assertIn("## 대화 1", markdown)
+        self.assertIn("**Q.** 다음 계획?", markdown)
+        self.assertIn("**Q.** (질문 없음)", markdown)
 
 
 if __name__ == "__main__":

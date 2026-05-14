@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import re
 import zipfile
 from datetime import datetime
 from pathlib import PurePosixPath
@@ -74,6 +75,21 @@ GEMINI_OUTPUT_PRICE_PER_1M = _get_float_config(
 USD_TO_KRW_RATE = _get_float_config("USD_TO_KRW_RATE", "usd_to_krw_rate", 1478)
 
 
+MEDICAL_ABBREVIATIONS = {
+    "HTN": "Hypertension",
+    "DM": "Diabetes Mellitus",
+    "CKD": "Chronic Kidney Disease",
+    "CHF": "Congestive Heart Failure",
+    "COPD": "Chronic Obstructive Pulmonary Disease",
+    "CABG": "Coronary Artery Bypass Graft",
+    "MI": "Myocardial Infarction",
+    "CPR": "Cardiopulmonary Resuscitation",
+}
+PERSON_NAME_LABEL_RE = re.compile(
+    r"(?P<label>(?:환자명|성명|이름)\s*[:：]\s*)(?P<name>[가-힣]{2,4})"
+)
+PERSON_NAME_CONTEXT_RE = re.compile(r"(?P<name>[가-힣]{2,4})(?=\s*(?:님|씨|환자))")
+
 PROMPT_PRESETS = [
     {
         "label": "SOAP 1분 발표",
@@ -104,6 +120,10 @@ PROMPT_PRESETS = [
                 "각 질문에 대해 교수님께서 하실 만한 예상 답변도 함께 적어줘.",
             ]
         ),
+    },
+    {
+        "label": "국시 핵심 개념",
+        "prompt": "국시 대비 관점에서 중요한 개념을 우선순위로 설명하고, 자주 출제되는 함정 포인트를 같이 정리해줘.",
     },
     {
         "label": "자료 요약",
@@ -261,6 +281,62 @@ def _result_download_filename(extension: str) -> str:
     return f"ai_analysis_{timestamp}.{extension}"
 
 
+def _build_chat_prompt(question: str) -> str:
+    history = st.session_state.get("ai_chat_history", [])
+    cleaned_question = question.strip()
+    if not history:
+        return cleaned_question
+
+    prompt_parts = [
+        "이전 대화 흐름을 참고해서 이어서 답변해줘.",
+        "이전 대화:",
+    ]
+    for index, item in enumerate(history[-5:], start=1):
+        prev_question = str(item.get("q", "")).strip()
+        prev_answer = str(item.get("a", "")).strip()
+        if not prev_question and not prev_answer:
+            continue
+        prompt_parts.append(
+            "\n".join(
+                [
+                    f"[{index}] 질문: {prev_question or '(질문 없음)'}",
+                    f"[{index}] 답변: {prev_answer or '(답변 없음)'}",
+                ]
+            )
+        )
+
+    if cleaned_question:
+        prompt_parts.append(f"새 질문:\n{cleaned_question}")
+    else:
+        prompt_parts.append("새 질문이 없으면 이전 대화를 간단히 요약해줘.")
+    return "\n\n".join(prompt_parts)
+
+
+def _mask_person_names(text: str) -> str:
+    def replace_label_match(match: re.Match) -> str:
+        return f"{match.group('label')}[이름 비공개]"
+
+    masked = PERSON_NAME_LABEL_RE.sub(replace_label_match, text)
+    return PERSON_NAME_CONTEXT_RE.sub("[이름 비공개]", masked)
+
+
+def _expand_medical_abbreviations_once(text: str) -> str:
+    expanded = text
+    for abbreviation, full_name in MEDICAL_ABBREVIATIONS.items():
+        pattern = re.compile(rf"\b{re.escape(abbreviation)}\b(?!\s*\()", re.IGNORECASE)
+
+        def replace_once(match: re.Match) -> str:
+            original = match.group(0)
+            return f"{original} ({full_name})"
+
+        expanded = pattern.sub(replace_once, expanded, count=1)
+    return expanded
+
+
+def _postprocess_ai_result(result: str) -> str:
+    return _expand_medical_abbreviations_once(_mask_person_names(result))
+
+
 def _get_ai_result_pdf_bytes(result: str) -> bytes | None:
     if st.session_state.get("ai_result_pdf_source") != result:
         st.session_state.ai_result_pdf_source = result
@@ -276,6 +352,38 @@ def _get_ai_result_pdf_bytes(result: str) -> bytes | None:
             st.session_state.ai_result_pdf_error = str(exc)
 
     return st.session_state.get("ai_result_pdf_bytes")
+
+
+def _format_chat_history_markdown(history: list[dict]) -> str:
+    parts = []
+    for index, item in enumerate(history, start=1):
+        question = str(item.get("q", "")).strip() or "(질문 없음)"
+        answer = str(item.get("a", "")).strip() or "(답변 없음)"
+        parts.append(f"## 대화 {index}\n\n**Q.** {question}\n\n**A.**\n\n{answer}")
+    return "\n\n---\n\n".join(parts)
+
+
+def _get_ai_history_pdf_bytes(history: list[dict]) -> bytes | None:
+    source = json.dumps(history, ensure_ascii=False, sort_keys=True)
+    if st.session_state.get("ai_history_pdf_source") != source:
+        st.session_state.ai_history_pdf_source = source
+        st.session_state.ai_history_pdf_bytes = None
+        st.session_state.ai_history_pdf_error = ""
+
+    if not history:
+        st.session_state.ai_history_pdf_error = "저장할 AI 대화 기록이 없습니다."
+        return None
+
+    if not st.session_state.get("ai_history_pdf_bytes") and not st.session_state.get(
+        "ai_history_pdf_error"
+    ):
+        try:
+            markdown = _format_chat_history_markdown(history)
+            st.session_state.ai_history_pdf_bytes = markdown_to_pdf_bytes(markdown)
+        except RuntimeError as exc:
+            st.session_state.ai_history_pdf_error = str(exc)
+
+    return st.session_state.get("ai_history_pdf_bytes")
 
 
 def _scroll_to_ai_result_once():
@@ -642,6 +750,9 @@ def render_ai():
                     _toggle_question_preset(preset)
                     st.rerun()
 
+    if "ai_chat_history" not in st.session_state:
+        st.session_state.ai_chat_history = []
+
     question = st.text_area(
         "질문 / 요청",
         height=140,
@@ -664,7 +775,7 @@ def render_ai():
                     selected_files=selected_files,
                     selected_memos=selected_memos,
                     extra_text=extra_text,
-                    question=question,
+                    question=_build_chat_prompt(question),
                 )
                 try:
                     _record_gemini_usage(usage_record)
@@ -672,7 +783,11 @@ def render_ai():
                     st.warning(
                         f"분석은 완료됐지만 비용 로그 저장에 실패했습니다: {usage_exc}"
                     )
+                result_text = _postprocess_ai_result(result_text)
                 st.session_state.ai_result = result_text
+                st.session_state.ai_chat_history.append(
+                    {"q": question.strip(), "a": result_text}
+                )
                 st.session_state.ai_last_usage = usage_record
                 st.session_state.ai_result_title = (
                     f"AI 분석 {get_now().strftime('%Y-%m-%d %H:%M')}"
@@ -718,7 +833,7 @@ def render_ai():
         """,
         unsafe_allow_html=True,
     )
-    col_copy, col_md, col_pdf = st.columns(3)
+    col_copy, col_md, col_pdf, col_hist = st.columns(4)
     with col_copy:
         copy_to_clipboard(
             result,
@@ -757,7 +872,30 @@ def render_ai():
             )
         elif st.session_state.get("ai_result_pdf_error"):
             st.button("PDF 다운로드", disabled=True, use_container_width=True)
+    with col_hist:
+        if st.button("대화 PDF 저장", use_container_width=True, key="ai_history_pdf"):
+            with st.spinner("대화 PDF를 만드는 중입니다..."):
+                _get_ai_history_pdf_bytes(
+                    st.session_state.get("ai_chat_history", [])
+                )
+
+        if st.session_state.get("ai_history_pdf_bytes"):
+            st.download_button(
+                "대화 PDF 다운로드",
+                data=st.session_state.ai_history_pdf_bytes,
+                file_name=_result_download_filename("pdf"),
+                mime="application/pdf",
+                use_container_width=True,
+                key="ai_history_pdf_dl",
+            )
+        elif st.session_state.get("ai_history_pdf_error"):
+            st.button("대화 PDF 다운로드", disabled=True, use_container_width=True)
+
     if st.session_state.get("ai_result_pdf_error"):
         st.warning(
             f"PDF 생성 준비 중 오류가 발생했습니다: {st.session_state.ai_result_pdf_error}"
+        )
+    if st.session_state.get("ai_history_pdf_error"):
+        st.warning(
+            f"대화 PDF 생성 준비 중 오류가 발생했습니다: {st.session_state.ai_history_pdf_error}"
         )

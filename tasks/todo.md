@@ -503,3 +503,19 @@ Mark items as complete as you go.
 - Added a 10-minute idle close attempt with a browser-policy fallback screen.
 - Moved memo copy/download/delete actions outside the edit expander.
 - Updated runtime dependencies, Docker system packages, README notes, and settlement unit tests.
+
+---
+
+## 푸시 전 변경 정리
+
+- [x] 현재 변경 파일과 누락 구현 확인
+- [x] 기존 `tasks/todo.md`, `tasks/lessons.md` 기록 복구
+- [x] AI 멀티턴/후처리/내보내기 구현 정리
+- [x] 로그인 실패 제한과 파일 다운로드 UX 점검
+- [x] 테스트와 문법 검증 실행
+- [x] 최종 변경 요약 작성
+
+## 요약
+- 기존 작업 기록을 보존하도록 `tasks/todo.md`, `tasks/lessons.md`를 복구하고 이번 정리 내역만 추가했다.
+- AI 멀티턴 프롬프트, 결과 후처리, 대화 PDF 내보내기 누락 구현을 보완하고 helper 테스트를 추가했다.
+- 로그인 실패 제한, 업로드 용량 제한, 파일 다운로드 준비 흐름은 문법/테스트 검증까지 완료했다.
