@@ -110,6 +110,24 @@
 
 ---
 
+## Mac mini 보안 및 자동 기동 점검
+
+- [x] 외부 도메인 응답과 Cloudflare Access 적용 여부 확인
+- [x] `.env.local` 및 Docker용 service account JSON 권한 축소
+- [x] Mac mini 로컬 compose에서 전체 앱 관리자 인증 옵션 추가
+- [x] LaunchAgent 자동 기동 스크립트와 plist 추가
+- [x] LaunchAgent 설치 및 1회 실행 확인
+- [x] 기본 문법 및 테스트 검증
+
+## 요약
+- `mac.jisong.dev`는 현재 curl에서 200을 반환하므로 Cloudflare Access가 앞단에서 강제되고 있지는 않은 상태로 판단했다.
+- local compose에는 `REQUIRE_AUTH_ALL=true`를 추가해 Cloudflare Access가 없어도 도구모음까지 앱 내부 관리자 로그인을 거치게 했다.
+- `.env.local`과 `.streamlit/gcp-service-account.json` 권한을 `600`으로 낮췄다.
+- `scripts/start-local-server.sh`와 `launchd/com.jisong.cloud.local.plist`를 추가하고 `~/Library/LaunchAgents/com.jisong.cloud.local.plist`에 설치했다.
+- LaunchAgent는 `last exit code = 0`으로 실행됐고 compose 컨테이너 재생성을 수행했다.
+
+---
+
 ## 프로젝트 전반 개선점 점검
 
 - [x] 현재 작업트리와 주요 파일 구조 확인

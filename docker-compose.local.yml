@@ -16,6 +16,7 @@ services:
       - "8501"
     environment:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      REQUIRE_AUTH_ALL: ${REQUIRE_AUTH_ALL:-true}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3-flash-preview}
       STORAGE_BACKEND: ${STORAGE_BACKEND:-local_mirror}

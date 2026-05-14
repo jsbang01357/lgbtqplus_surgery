@@ -6,7 +6,7 @@ from app.memo import render_memo_manager
 from app.ai import get_monthly_gemini_cost_label, render_ai
 from app.tools import render_tools
 from app.access_logger import log_access, get_access_logs
-from app.auth import is_authenticated, login_screen
+from app.auth import is_authenticated, login_screen, should_require_auth_for_all_pages
 from app.idle_timeout import inject_idle_timeout
 
 # --- 설정 ---
@@ -570,6 +570,10 @@ def main():
             st.session_state.menu = st.query_params["tab"]
         else:
             st.session_state.menu = "files"
+
+    if should_require_auth_for_all_pages() and not is_authenticated():
+        login_screen()
+        return
 
     st.sidebar.markdown(
         '<p class="sidebar-section-label">Workspace</p>',

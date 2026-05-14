@@ -35,6 +35,11 @@ def is_authenticated() -> bool:
     return st.session_state.get("authenticated", False)
 
 
+def should_require_auth_for_all_pages() -> bool:
+    value = os.getenv("REQUIRE_AUTH_ALL", "")
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _get_lock_remaining_seconds() -> int:
     until_ts = int(st.session_state.get("auth_lock_until", 0) or 0)
     now_ts = int(time.time())
