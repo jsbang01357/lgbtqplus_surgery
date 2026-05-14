@@ -5,7 +5,15 @@ services:
     container_name: jisong-cloud-local
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${JISONG_CLOUD_PORT:-8501}:8080"
+      - "127.0.0.1:${JISONG_CLOUD_PORT:-8501}:8501"
+    command:
+      - streamlit
+      - run
+      - jisong_cloud.py
+      - --server.address
+      - 0.0.0.0
+      - --server.port
+      - "8501"
     environment:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
@@ -33,6 +41,7 @@ services:
     container_name: jisong-cloudflared
     command: tunnel --no-autoupdate run --token ${CLOUDFLARED_TOKEN}
     restart: unless-stopped
+    network_mode: "service:jisong-cloud"
     depends_on:
       - jisong-cloud
 

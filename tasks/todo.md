@@ -64,13 +64,49 @@
 - [x] Mac mini compose에 로컬 저장소 volume과 `local_mirror` 환경변수 추가
 - [x] 로컬 backend 다운로드 동작을 Streamlit 다운로드 버튼으로 분기
 - [x] 로컬 저장소 동작 테스트 추가
+- [x] 로컬-only 파일을 GCS로 다시 올리는 reconcile 경로 추가
+- [x] 도구모음에 저장소 상태와 수동 동기화 추가
 - [x] Docker/테스트 검증 실행
 
 ## 요약
 - `STORAGE_BACKEND=local_mirror`를 추가해 Mac mini에서는 로컬 디스크를 우선 읽고 쓰며 GCS에 mirror할 수 있게 했다.
 - 로컬 저장소는 compose에서 `/Users/jsbang/jisong-data/storage`를 컨테이너 `/data/jisong-cloud`에 mount한다.
 - 로컬 backend는 signed URL 대신 Streamlit 다운로드 버튼으로 파일을 내려받는다.
-- 로컬 bucket adapter 단위 테스트, 전체 unittest, compose config, Docker build, 로컬-only 컨테이너 기동 확인까지 통과했다.
+- 목록 조회와 수동 동기화 시 GCS pull 이후 로컬-only 파일을 GCS로 push하도록 보강했다.
+- 도구모음에 `저장소 상태`를 추가해 backend, 로컬/GCS 파일 수, 로컬 용량, 수동 동기화를 확인할 수 있게 했다.
+- 로컬 mirror 테스트를 포함해 `unittest discover` 17개, compose config, Docker build, 로컬-only 컨테이너 기동과 HTTP 200 확인까지 통과했다.
+
+---
+
+## Mac mini 로컬 컨테이너 기동
+
+- [x] `.streamlit/secrets.toml` 기준으로 `.env.local` 생성
+- [x] Docker용 GCS service account JSON 생성
+- [x] 로컬 저장소 bind mount 경로 생성
+- [x] `jisong-cloud` 컨테이너 빌드 및 기동
+- [x] `127.0.0.1:8501` HTTP 응답 확인
+- [x] 컨테이너 내부 `local_mirror` backend 상태 확인
+
+## 요약
+- `.env.local`과 `.streamlit/gcp-service-account.json`을 생성했다.
+- `jisong-cloud-local` 컨테이너가 `127.0.0.1:8501 -> 8080`으로 실행 중이다.
+- 컨테이너 내부 저장소 backend는 `local_mirror`이며 GCS mirror/pull이 켜져 있다.
+- Cloudflare Tunnel token은 아직 없어 `cloudflared`는 실행하지 않고 앱 컨테이너만 먼저 올렸다.
+
+---
+
+## Mac mini tunnel 및 로그 pull 보정
+
+- [x] `mac.jisong.dev` static asset 실패 원인 확인
+- [x] Cloudflare dashboard의 `localhost:8501` origin이 컨테이너 내부 localhost를 보던 문제 수정
+- [x] GCS `logs/access_log.json`, `logs/gemini_usage.json` 단일 파일 pull 경로 수정
+- [x] 테스트와 Docker 재기동 검증
+
+## 요약
+- `cloudflared`가 앱 컨테이너와 같은 network namespace에서 실행되도록 바꾸고, Streamlit local compose port를 8501로 맞췄다.
+- `mac.jisong.dev/_stcore/health`와 문제가 났던 `DataFrame.DUkanX9_.css`가 200으로 응답하는 것을 확인했다.
+- `blob.exists()`에서 GCS remote blob을 확인해 없던 단일 로그 파일도 로컬로 pull되도록 수정했다.
+- `logs/access_log.json`, `logs/gemini_usage.json`가 컨테이너 내부에서 `exists() == True`로 확인됐다.
 
 ---
 

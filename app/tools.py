@@ -14,7 +14,9 @@ from app.ai import (
     format_krw_cost,
 )
 from app.auth import get_admin_password, is_authenticated, login_screen
+from app.blob_store import get_storage_backend, is_local_storage_backend
 from app.core_utils import get_now
+from app.gcs_helper import get_bucket
 from app.md_pdf import render_md_pdf_tool
 from app.settlement import render_settlement_tool
 from app.text_cleaner import render_text_cleaner
@@ -52,6 +54,12 @@ TOOLS = [
         "label": "AI 예상비용",
         "icon": "📊",
         "summary": "Gemini 사용량과 예상 비용을 날짜별로 확인합니다.",
+    },
+    {
+        "id": "storage_status",
+        "label": "저장소 상태",
+        "icon": "🗄️",
+        "summary": "로컬 저장소와 GCS mirror 상태를 확인하고 동기화합니다.",
     },
     {
         "id": "menu_picker",
@@ -342,6 +350,71 @@ def _render_ai_costs_tool():
         st.dataframe(detail_df, use_container_width=True, hide_index=True)
 
 
+def _format_bytes(size: int) -> str:
+    units = ["B", "KB", "MB", "GB", "TB"]
+    value = float(size or 0)
+    for unit in units:
+        if value < 1024 or unit == units[-1]:
+            if unit == "B":
+                return f"{int(value)} {unit}"
+            return f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{size} B"
+
+
+def _render_storage_status_tool():
+    if not is_authenticated():
+        login_screen()
+        return
+
+    st.info("현재 앱이 쓰는 저장소 backend와 Mac mini 로컬 mirror 상태를 확인합니다.")
+    backend = get_storage_backend()
+    bucket = get_bucket()
+
+    if hasattr(bucket, "get_status"):
+        status = bucket.get_status()
+        col_backend, col_local, col_size, col_remote = st.columns(4)
+        with col_backend:
+            st.metric("Backend", status["backend"])
+        with col_local:
+            st.metric("로컬 파일", f"{status['local_file_count']:,}개")
+        with col_size:
+            st.metric("로컬 용량", _format_bytes(status["local_total_bytes"]))
+        with col_remote:
+            remote_count = status.get("remote_file_count")
+            st.metric("GCS 파일", "-" if remote_count is None else f"{remote_count:,}개")
+
+        st.write(f"로컬 경로: `{status['root']}`")
+        st.write(
+            "GCS 쓰기 mirror: "
+            f"{'켜짐' if status['sync_to_gcs'] else '꺼짐'} / "
+            "GCS pull: "
+            f"{'켜짐' if status['pull_from_gcs'] else '꺼짐'}"
+        )
+        if status.get("remote_error"):
+            st.warning(f"GCS 상태 확인 실패: {status['remote_error']}")
+
+        if st.button("지금 동기화", type="primary", use_container_width=True):
+            try:
+                bucket.sync_all()
+                st.toast("✅ 로컬 저장소와 GCS 동기화를 실행했습니다.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"동기화 중 오류가 발생했습니다: {exc}")
+        return
+
+    st.metric("Backend", backend)
+    st.caption(
+        "현재 backend는 GCS 직접 사용입니다. 로컬 mirror 상태는 Mac mini의 "
+        "`STORAGE_BACKEND=local_mirror`에서 표시됩니다."
+    )
+    try:
+        remote_count = sum(1 for blob in bucket.list_blobs() if not blob.name.endswith("/"))
+        st.metric("GCS 파일", f"{remote_count:,}개")
+    except Exception as exc:
+        st.warning(f"GCS 파일 수를 확인하지 못했습니다: {exc}")
+
+
 def _render_access_logs_tool():
     if not is_authenticated():
         login_screen()
@@ -414,6 +487,8 @@ def render_tools():
         render_settlement_tool()
     elif selected_tool["id"] == "ai_costs":
         _render_ai_costs_tool()
+    elif selected_tool["id"] == "storage_status":
+        _render_storage_status_tool()
     elif selected_tool["id"] == "menu_picker":
         _render_menu_picker_tool()
     elif selected_tool["id"] == "access_logs":

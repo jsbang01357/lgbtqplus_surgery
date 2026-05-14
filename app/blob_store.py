@@ -58,6 +58,18 @@ def _safe_blob_path(root: Path, blob_name: str) -> Path:
     return path
 
 
+def _local_blob_names(root: Path, prefix: str = "") -> list[str]:
+    base = _safe_blob_path(root, prefix)
+    if not base.exists():
+        return []
+    names = []
+    for path in base.rglob("*"):
+        if not path.is_file() or path.name.endswith(".meta.json"):
+            continue
+        names.append(path.relative_to(root).as_posix())
+    return sorted(names)
+
+
 class LocalBlob:
     def __init__(
         self,
@@ -116,6 +128,12 @@ class LocalBlob:
         self._load_metadata()
 
     def exists(self) -> bool:
+        if (
+            not self._path.exists()
+            and self.bucket.should_pull_from_gcs
+            and self.bucket.remote_blob_exists(self.name)
+        ):
+            self.bucket.pull_blob_from_gcs(self.name)
         return self._path.exists()
 
     def reload(self):
@@ -178,6 +196,7 @@ class LocalMirrorBucket:
             and remote_bucket is not None
             and _bool_env("LOCAL_STORAGE_PULL_FROM_GCS", True)
         )
+        self.should_push_to_gcs = self.should_mirror_to_gcs
 
     def blob(self, blob_name: str) -> LocalBlob:
         blob = LocalBlob(self, blob_name)
@@ -187,6 +206,8 @@ class LocalMirrorBucket:
     def list_blobs(self, prefix: str = ""):
         if self.should_pull_from_gcs:
             self.pull_prefix_from_gcs(prefix)
+        if self.should_push_to_gcs:
+            self.push_prefix_to_gcs(prefix)
 
         base = _safe_blob_path(self.root, prefix)
         if not base.exists():
@@ -215,12 +236,71 @@ class LocalMirrorBucket:
                     continue
             self._write_remote_blob(remote_blob)
 
+    def push_prefix_to_gcs(self, prefix: str):
+        if self.remote_bucket is None:
+            return
+        for blob_name in _local_blob_names(self.root, prefix):
+            local_blob = self.blob(blob_name)
+            remote_blob = self.remote_bucket.blob(blob_name)
+            remote_exists = remote_blob.exists()
+            remote_updated = getattr(remote_blob, "updated", None)
+            if remote_exists and local_blob.updated and remote_updated:
+                if remote_updated >= local_blob.updated:
+                    continue
+            remote_blob.metadata = local_blob.metadata or {}
+            remote_blob.upload_from_string(
+                local_blob.download_as_bytes(),
+                content_type=local_blob.content_type,
+            )
+
+    def sync_prefix(self, prefix: str):
+        if self.should_pull_from_gcs:
+            self.pull_prefix_from_gcs(prefix)
+        if self.should_push_to_gcs:
+            self.push_prefix_to_gcs(prefix)
+
+    def sync_all(self):
+        for prefix in ("uploads/", "memos/", "logs/"):
+            self.sync_prefix(prefix)
+
+    def get_status(self) -> dict:
+        local_files = _local_blob_names(self.root)
+        status = {
+            "backend": get_storage_backend(),
+            "root": str(self.root),
+            "local_file_count": len(local_files),
+            "local_total_bytes": sum(
+                _safe_blob_path(self.root, name).stat().st_size for name in local_files
+            ),
+            "sync_to_gcs": self.should_mirror_to_gcs,
+            "pull_from_gcs": self.should_pull_from_gcs,
+            "remote_available": self.remote_bucket is not None,
+        }
+        if self.remote_bucket is not None:
+            try:
+                status["remote_file_count"] = sum(
+                    1
+                    for blob in self.remote_bucket.list_blobs()
+                    if not blob.name.endswith("/")
+                )
+            except Exception as exc:
+                status["remote_error"] = str(exc)
+        return status
+
     def pull_blob_from_gcs(self, blob_name: str):
         if self.remote_bucket is None:
             return
         remote_blob = self.remote_bucket.blob(blob_name)
         if remote_blob.exists():
             self._write_remote_blob(remote_blob)
+
+    def remote_blob_exists(self, blob_name: str) -> bool:
+        if self.remote_bucket is None:
+            return False
+        try:
+            return self.remote_bucket.blob(blob_name).exists()
+        except Exception:
+            return False
 
     def _write_remote_blob(self, remote_blob):
         path = _safe_blob_path(self.root, remote_blob.name)
