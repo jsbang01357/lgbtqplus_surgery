@@ -142,6 +142,8 @@
 
 ---
 
+- [x] VS Code `launch.json`에 API 서버(Uvicorn) 실행 설정 추가
+
 # 📝 Todo
 
 Use this file to write short checklists for non-trivial work.
