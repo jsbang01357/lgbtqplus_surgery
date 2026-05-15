@@ -303,10 +303,22 @@ async def ai_analyze(request: Request):
         can_use, limit_message = _get_usage_limit_status()
         if not can_use:
             return _json({"error": limit_message}, status_code=429)
+        selected_blob_names = set(payload.get("blob_names") or [])
+        selected_memo_file_names = set(payload.get("memo_file_names") or [])
+        selected_files = [
+            file_info
+            for file_info in list_uploaded_files()
+            if file_info.blob_name in selected_blob_names
+        ]
+        selected_memos = [
+            load_single_memo_content(file_name)
+            for file_name in selected_memo_file_names
+            if file_name
+        ]
         result, usage_record = _run_gemini_analysis(
             api_key=api_key,
-            selected_files=[],
-            selected_memos=[],
+            selected_files=selected_files,
+            selected_memos=selected_memos,
             extra_text=payload.get("extra_text", ""),
             question=prompt,
         )

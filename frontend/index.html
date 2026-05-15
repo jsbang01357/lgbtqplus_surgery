@@ -195,6 +195,22 @@
         <div class="ai-workbench">
           <div class="prompt-panel">
             <div class="preset-row" id="preset-row"></div>
+            <div class="ai-source-grid">
+              <div>
+                <div class="source-heading">
+                  <strong>파일</strong>
+                  <small id="ai-file-status">선택 없음</small>
+                </div>
+                <div class="source-list" id="ai-file-sources"></div>
+              </div>
+              <div>
+                <div class="source-heading">
+                  <strong>메모</strong>
+                  <small id="ai-memo-status">선택 없음</small>
+                </div>
+                <div class="source-list" id="ai-memo-sources"></div>
+              </div>
+            </div>
             <textarea id="ai-prompt" rows="7">SOAP 1분 발표용으로 핵심만 정리해줘.</textarea>
             <div class="form-actions">
               <button class="button button-primary" id="run-ai" type="button">분석 시작</button>

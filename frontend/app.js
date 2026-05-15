@@ -44,6 +44,10 @@ const memoListStatus = document.querySelector("#memo-list-status");
 const memoSaveButton = document.querySelector("#memo-save-button");
 const saveAiMemoButton = document.querySelector("#save-ai-memo");
 const toolOutput = document.querySelector("#tool-output");
+const aiFileSources = document.querySelector("#ai-file-sources");
+const aiMemoSources = document.querySelector("#ai-memo-sources");
+const aiFileStatus = document.querySelector("#ai-file-status");
+const aiMemoStatus = document.querySelector("#ai-memo-status");
 
 function escapeHtml(value = "") {
   return String(value)
@@ -106,6 +110,12 @@ function resetMemoForm() {
   document.querySelector("#memo-file-name").value = "";
   state.editingMemoFileName = "";
   memoSaveButton.textContent = "메모 저장";
+}
+
+function selectedValues(selector) {
+  return Array.from(document.querySelectorAll(`${selector}:checked`)).map(
+    (input) => input.value,
+  );
 }
 
 function setBusy(button, busyText, isBusy) {
@@ -212,6 +222,7 @@ async function loadFiles() {
     showToast(error.message);
   }
   renderFiles();
+  renderAiSources();
 }
 
 async function loadMemos() {
@@ -228,6 +239,7 @@ async function loadMemos() {
     state.memos = [...memos];
   }
   renderMemos();
+  renderAiSources();
 }
 
 function fromBase64Url(value) {
@@ -430,6 +442,47 @@ function renderPresets() {
   row.innerHTML = presets
     .map((preset) => `<button type="button" data-preset="${preset}">${preset}</button>`)
     .join("");
+}
+
+function renderAiSources() {
+  const realFiles = state.files.filter((file) => file.blobName);
+  const realMemos = state.memos.filter((memo) => memo.fileName);
+  aiFileSources.innerHTML = realFiles.length
+    ? realFiles
+        .slice(0, 8)
+        .map(
+          (file, index) => `
+            <label class="source-option">
+              <input type="checkbox" value="${escapeHtml(file.blobName)}" data-ai-file />
+              <span>${escapeHtml(file.name)}</span>
+              <small>${escapeHtml(file.size)}</small>
+            </label>
+          `,
+        )
+        .join("")
+    : `<p class="source-empty">인증 후 파일을 선택할 수 있습니다.</p>`;
+  aiMemoSources.innerHTML = realMemos.length
+    ? realMemos
+        .slice(0, 8)
+        .map(
+          (memo) => `
+            <label class="source-option">
+              <input type="checkbox" value="${escapeHtml(memo.fileName)}" data-ai-memo />
+              <span>${escapeHtml(memo.title)}</span>
+              <small>${escapeHtml(memo.updated || "메모")}</small>
+            </label>
+          `,
+        )
+        .join("")
+    : `<p class="source-empty">인증 후 메모를 선택할 수 있습니다.</p>`;
+  updateAiSourceStatus();
+}
+
+function updateAiSourceStatus() {
+  const fileCount = selectedValues("[data-ai-file]").length;
+  const memoCount = selectedValues("[data-ai-memo]").length;
+  aiFileStatus.textContent = fileCount ? `${fileCount}개 선택` : "선택 없음";
+  aiMemoStatus.textContent = memoCount ? `${memoCount}개 선택` : "선택 없음";
 }
 
 function renderTool(tool) {
@@ -747,7 +800,11 @@ document.querySelector("#run-ai").addEventListener("click", async () => {
     <p>Gemini가 요청을 정리하고 있습니다.</p>
   `;
   try {
-    const data = await postJson("/api/ai/analyze", { prompt });
+    const data = await postJson("/api/ai/analyze", {
+      prompt,
+      blob_names: selectedValues("[data-ai-file]"),
+      memo_file_names: selectedValues("[data-ai-memo]"),
+    });
     result.innerHTML = `
       <span>AI result</span>
       <h3>분석 결과</h3>
@@ -804,10 +861,13 @@ document.querySelector(".tool-grid").addEventListener("click", (event) => {
   renderTool(card.dataset.tool);
 });
 
+document.querySelector(".ai-source-grid").addEventListener("change", updateAiSourceStatus);
+
 async function bootstrap() {
   renderFiles();
   renderMemos();
   renderPresets();
+  renderAiSources();
   renderTool("cleaner");
   const session = await loadSession();
   if (session?.authorized) {

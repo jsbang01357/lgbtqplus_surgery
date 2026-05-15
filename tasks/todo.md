@@ -756,3 +756,17 @@ Mark items as complete as you go.
 ## 요약
 - 도구모음의 정적 카드들을 실제 작업 패널로 전환했다.
 - MD to PDF endpoint는 인증 전 401로 막히고, 프론트 HTML은 200으로 응답함을 확인했다.
+
+---
+
+## AI 소스 선택 마감
+
+- [x] AI 분석에 파일 선택 목록 추가
+- [x] AI 분석에 메모 선택 목록 추가
+- [x] 선택한 파일/메모를 `/api/ai/analyze` payload로 전달
+- [x] 문법, 테스트, 로컬 HTTP 검증
+
+## 요약
+- 인증 후 로드된 GCS 파일과 메모를 AI 분석 소스로 선택할 수 있게 했다.
+- 선택된 GCS blob과 memo file name은 서버에서 다시 조회해 Gemini 분석 context로 전달한다.
+- `node --check`, `py_compile`, unittest 22개, 로컬 HTTP 200/401/owner session 응답을 확인했다.
