@@ -24,8 +24,8 @@ steps:
       - '--platform=managed'
       - '--image=asia-northeast1-docker.pkg.dev/jisong-cloud-492111/cloud-run-source-deploy/jisong-cloud-tokyo:$COMMIT_SHA'
       - '--service-account=jisong-cloud-run@jisong-cloud-492111.iam.gserviceaccount.com'
-      - '--update-env-vars=GCS_BUCKET_NAME=jisong-cloud-storage,REQUIRE_CLOUDFLARE_ACCESS=true,CLOUDFLARE_ACCESS_ALLOWED_EMAILS=jsbang01357@gmail.com,ALLOW_GOOGLE_AUTH_FALLBACK=true,PASSKEY_RP_ID=cloud.jisong.dev,PASSKEY_ORIGIN=https://cloud.jisong.dev,PASSKEY_RP_NAME=Jisong Cloud'
-      - '--update-secrets=ADMIN_PASSWORD=admin-password:1,GEMINI_API_KEY=gemini-api-key:latest'
+      - '--update-env-vars=GCS_BUCKET_NAME=jisong-cloud-storage,REQUIRE_CLOUDFLARE_ACCESS=false,CLOUDFLARE_ACCESS_ALLOWED_EMAILS=jsbang01357@gmail.com,ALLOW_ACCOUNT_ID_FALLBACK=true,JISONG_ACCOUNT_LOGIN_ID=jsbang01357@gmail.com,PASSKEY_RP_ID=cloud.jisong.dev,PASSKEY_ORIGIN=https://cloud.jisong.dev,PASSKEY_RP_NAME=Jisong Cloud'
+      - '--update-secrets=GEMINI_API_KEY=gemini-api-key:latest,JISONG_ACCOUNT_PASSWORD=account-login-password:latest'
       - '--quiet'
     id: Deploy
 

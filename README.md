@@ -393,8 +393,8 @@ uvicorn api_server:app --host 127.0.0.1 --port 8080
 
 - 리전: `asia-northeast1`
 - 서비스명: `jisong-cloud-tokyo`
-- 환경변수: `GCS_BUCKET_NAME=jisong-cloud-storage`, `REQUIRE_CLOUDFLARE_ACCESS=false`, `CLOUDFLARE_ACCESS_ALLOWED_EMAILS=jsbang01357@gmail.com`, `ALLOW_ACCOUNT_ID_FALLBACK=true`, `JISONG_ACCOUNT_LOGIN_ID=jsbang01357@gmail.com`, `JISONG_ACCOUNT_PASSWORD`, `PASSKEY_RP_ID=cloud.jisong.dev`, `PASSKEY_ORIGIN=https://cloud.jisong.dev`, `PASSKEY_RP_NAME=Jisong Cloud`
-- 시크릿: `ADMIN_PASSWORD=admin-password:1`, `GEMINI_API_KEY=gemini-api-key:latest`
+- 환경변수: `GCS_BUCKET_NAME=jisong-cloud-storage`, `REQUIRE_CLOUDFLARE_ACCESS=false`, `CLOUDFLARE_ACCESS_ALLOWED_EMAILS=jsbang01357@gmail.com`, `ALLOW_ACCOUNT_ID_FALLBACK=true`, `JISONG_ACCOUNT_LOGIN_ID=jsbang01357@gmail.com`, `PASSKEY_RP_ID=cloud.jisong.dev`, `PASSKEY_ORIGIN=https://cloud.jisong.dev`, `PASSKEY_RP_NAME=Jisong Cloud`
+- 시크릿: `GEMINI_API_KEY=gemini-api-key:latest`, `JISONG_ACCOUNT_PASSWORD=account-login-password:latest`
 - 서비스 계정 지정 사용
 
 Gemini API key를 Secret Manager에 처음 등록할 때:
@@ -414,10 +414,24 @@ printf '%s' 'YOUR_GEMINI_API_KEY' | gcloud secrets versions add gemini-api-key \
   --data-file=-
 ```
 
+계정 ID fallback 비밀번호는 별도 secret으로 관리합니다.
+
+```bash
+printf '%s' 'YOUR_ACCOUNT_PASSWORD' | gcloud secrets create account-login-password \
+  --project jisong-cloud-492111 \
+  --replication-policy automatic \
+  --data-file=-
+```
+
 Cloud Run 실행 서비스 계정이 secret을 읽을 수 있게 권한을 부여합니다.
 
 ```bash
 gcloud secrets add-iam-policy-binding gemini-api-key \
+  --project jisong-cloud-492111 \
+  --member='serviceAccount:jisong-cloud-run@jisong-cloud-492111.iam.gserviceaccount.com' \
+  --role='roles/secretmanager.secretAccessor'
+
+gcloud secrets add-iam-policy-binding account-login-password \
   --project jisong-cloud-492111 \
   --member='serviceAccount:jisong-cloud-run@jisong-cloud-492111.iam.gserviceaccount.com' \
   --role='roles/secretmanager.secretAccessor'

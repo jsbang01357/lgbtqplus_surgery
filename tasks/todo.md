@@ -862,3 +862,18 @@ Mark items as complete as you go.
 ## 요약
 - 실사용 흐름 기준으로 인증, AI 결과물, 메모/파일 동작을 정리한다.
 - `node --check`, `py_compile`, unittest 26개를 확인했다. 로컬 HTTP 서버 실행은 현재 sandbox/승인 제한으로 보류했다.
+
+---
+
+## GCS Cloud Run 빌드 설정 정리
+
+- [x] `cloudbuild.yaml` 배포 환경변수를 현재 GCS/Passkey/ID+비번 인증 기준으로 갱신
+- [x] 계정 비밀번호를 Cloud Run Secret Manager 주입값으로 변경
+- [x] Dockerfile에 Python 런타임 기본 env 추가
+- [x] 배포 문서의 env/secret 목록 갱신
+- [x] 빌드 설정 문법 및 정적 검증
+- [ ] Docker daemon 연결 후 실제 이미지 빌드 검증
+
+## 요약
+- Cloud Build가 더 이상 Cloudflare OTP 필수/Google Access fallback 기준으로 배포하지 않게 정리한다.
+- `cloudbuild.yaml` YAML 파싱, `py_compile`, `node --check`, unittest 26개를 확인했다. 로컬 Docker build는 Docker daemon socket 부재로 보류했다.
