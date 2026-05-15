@@ -209,8 +209,13 @@ function setSessionChip(session) {
   state.session = session;
   sessionChip.classList.remove("is-authorized", "is-locked");
   if (session?.authorized) {
-    sessionChip.textContent =
-      session.auth_method === "passkey" ? "Passkey 인증됨" : "Google 인증됨";
+    const authLabel =
+      session.auth_method === "passkey"
+        ? "Passkey 인증됨"
+        : session.auth_method === "account"
+          ? "계정 ID 인증됨"
+          : "Access 인증됨";
+    sessionChip.textContent = authLabel;
     sessionChip.classList.add("is-authorized");
     document.body.classList.add("is-authorized");
     return;
@@ -365,7 +370,7 @@ function showToast(message) {
 
 async function registerPasskey() {
   if (!window.PublicKeyCredential) {
-    await continueWithGoogleAuth();
+    await loginWithAccountId();
     return;
   }
   try {
@@ -383,7 +388,7 @@ async function registerPasskey() {
 
 async function loginWithPasskey() {
   if (!window.PublicKeyCredential) {
-    await continueWithGoogleAuth();
+    await loginWithAccountId();
     return;
   }
   try {
@@ -400,23 +405,23 @@ async function loginWithPasskey() {
   }
 }
 
-async function continueWithGoogleAuth() {
+async function loginWithAccountId() {
   try {
-    const response = await fetch("/api/session");
-    const data = await response.json();
-    setSessionChip(data);
-    if (data.authorized && data.auth_method === "google") {
+    const session = await loadSession();
+    if (session?.authorized) {
       await Promise.all([loadFiles(), loadMemos()]);
-      showToast("Google 인증으로 계속합니다.");
+      showToast("이미 인증되어 있습니다.");
       return;
     }
-    if (data.cloudflare_access?.allowed && data.google_auth_fallback_allowed) {
-      showToast("허용된 Google 계정으로 인증되었습니다.");
-      return;
-    }
-    showToast("jsbang01357@gmail.com Google 인증이 필요합니다.");
+    const defaultId = session?.account_login_id || "jsbang01357@gmail.com";
+    const accountId = window.prompt("계정 ID를 입력하세요.", defaultId);
+    if (!accountId) return;
+    await postJson("/api/auth/account/login", { account_id: accountId });
+    await loadSession();
+    await Promise.all([loadFiles(), loadMemos()]);
+    showToast("계정 ID 로그인 완료");
   } catch (error) {
-    showToast(error.message || "Google 인증 상태를 확인하지 못했습니다.");
+    showToast(error.message || "계정 ID 로그인에 실패했습니다.");
   }
 }
 
@@ -732,7 +737,7 @@ document.querySelector("#download-all").addEventListener("click", async () => {
 
 document.querySelector("#passkey-register").addEventListener("click", registerPasskey);
 document.querySelector("#passkey-login").addEventListener("click", loginWithPasskey);
-document.querySelector("#google-auth-fallback").addEventListener("click", continueWithGoogleAuth);
+document.querySelector("#account-id-login").addEventListener("click", loginWithAccountId);
 document.querySelector("#file-search").addEventListener("input", (event) => {
   state.fileQuery = event.target.value;
   renderFiles();

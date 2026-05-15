@@ -35,10 +35,19 @@ def get_access_context(headers) -> AccessContext:
 
 
 def require_cloudflare_access() -> bool:
-    value = os.getenv("REQUIRE_CLOUDFLARE_ACCESS", "true")
+    value = os.getenv("REQUIRE_CLOUDFLARE_ACCESS", "false")
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def allow_google_auth_fallback() -> bool:
     value = os.getenv("ALLOW_GOOGLE_AUTH_FALLBACK", "true")
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def allow_account_id_fallback() -> bool:
+    value = os.getenv("ALLOW_ACCOUNT_ID_FALLBACK", "true")
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def account_login_id() -> str:
+    return os.getenv("JISONG_ACCOUNT_LOGIN_ID", owner_email()).strip().lower()

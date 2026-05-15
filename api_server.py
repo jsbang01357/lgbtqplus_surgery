@@ -1,6 +1,7 @@
 import mimetypes
 import io
 import re
+import secrets
 from pathlib import Path
 
 from starlette.applications import Starlette
@@ -9,7 +10,14 @@ from starlette.responses import FileResponse, JSONResponse, Response, StreamingR
 from starlette.routing import Route
 
 from app import passkeys
-from app.security import allow_google_auth_fallback, get_access_context, require_cloudflare_access
+from app.security import (
+    account_login_id,
+    allow_account_id_fallback,
+    allow_google_auth_fallback,
+    get_access_context,
+    owner_email,
+    require_cloudflare_access,
+)
 from app.storage import (
     create_zip_of_files,
     create_file_download_url,
@@ -44,6 +52,9 @@ from app.md_pdf import markdown_to_pdf_bytes
 
 FRONTEND_DIR = (Path(__file__).resolve().parent / "frontend").resolve()
 INCLUDE_RE = re.compile(r"<!--\s*include:(?P<path>[^ ]+)\s*-->")
+ACCOUNT_SESSION_COOKIE = "jisong_account_session"
+ACCOUNT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 30
+ACCOUNT_SESSIONS: dict[str, str] = {}
 
 
 def _json(data, status_code=200):
@@ -66,7 +77,7 @@ def _render_frontend_html() -> str:
 
 
 def _request_email(request: Request) -> str:
-    return get_access_context(request.headers).email or "local-dev@jisong.dev"
+    return get_access_context(request.headers).email or owner_email()
 
 
 def _passkey_token(request: Request) -> str:
@@ -74,6 +85,26 @@ def _passkey_token(request: Request) -> str:
     if header.lower().startswith("bearer "):
         return header.split(" ", 1)[1].strip()
     return request.cookies.get("jisong_passkey_session", "")
+
+
+def _account_token(request: Request) -> str:
+    return request.cookies.get(ACCOUNT_SESSION_COOKIE, "")
+
+
+def _verify_account_session(request: Request, email: str) -> bool:
+    token = _account_token(request)
+    return bool(token and ACCOUNT_SESSIONS.get(token) == email)
+
+
+def _create_account_session(email: str) -> str:
+    token = secrets.token_urlsafe(32)
+    ACCOUNT_SESSIONS[token] = email
+    return token
+
+
+def _should_secure_cookie(request: Request) -> bool:
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").lower()
+    return request.url.scheme == "https" or forwarded_proto == "https"
 
 
 def _access_context_allowed(request: Request) -> tuple[bool, str]:
@@ -87,17 +118,24 @@ def _auth_state(request: Request) -> dict:
     access_context = get_access_context(request.headers)
     email = _request_email(request)
     passkey_ok = passkeys.verify_session(_passkey_token(request), email=email)
+    account_id_ok = allow_account_id_fallback() and _verify_account_session(request, email)
     access_ok = access_context.allowed or not require_cloudflare_access()
     google_fallback_ok = allow_google_auth_fallback() and access_context.allowed
-    authorized = access_ok and (passkey_ok or google_fallback_ok)
+    authorized = access_ok and (passkey_ok or account_id_ok or google_fallback_ok)
     auth_method = ""
     if authorized:
-        auth_method = "passkey" if passkey_ok else "google"
+        if passkey_ok:
+            auth_method = "passkey"
+        elif account_id_ok:
+            auth_method = "account"
+        else:
+            auth_method = "google"
     return {
         "email": email,
         "access_context": access_context,
         "access_ok": access_ok,
         "passkey_ok": passkey_ok,
+        "account_id_ok": account_id_ok,
         "google_fallback_ok": google_fallback_ok,
         "authorized": authorized,
         "auth_method": auth_method,
@@ -109,7 +147,7 @@ def _is_authorized(request: Request) -> tuple[bool, str]:
     if not state["access_ok"]:
         return False, "Cloudflare Access 인증이 필요합니다."
     if not state["authorized"]:
-        return False, "패스키 인증이 필요합니다."
+        return False, "패스키 또는 계정 ID 인증이 필요합니다."
     return True, ""
 
 
@@ -123,17 +161,41 @@ async def session(request: Request):
     return _json(
         {
             "cloudflare_access_required": require_cloudflare_access(),
+            "account_id_fallback_allowed": allow_account_id_fallback(),
             "google_auth_fallback_allowed": allow_google_auth_fallback(),
+            "account_login_id": account_login_id(),
             "cloudflare_access": {
                 "email": access_context.email,
                 "has_jwt": access_context.has_jwt,
                 "allowed": access_context.allowed,
             },
             "passkey_authenticated": state["passkey_ok"],
+            "account_authenticated": state["account_id_ok"],
             "authorized": state["authorized"],
             "auth_method": state["auth_method"],
         }
     )
+
+
+async def account_login(request: Request):
+    if not allow_account_id_fallback():
+        return _json({"error": "계정 ID fallback이 꺼져 있습니다."}, status_code=403)
+    payload = await request.json()
+    login_id = str(payload.get("account_id") or payload.get("email") or "").strip().lower()
+    if login_id != account_login_id():
+        return _json({"error": "허용된 계정 ID가 아닙니다."}, status_code=401)
+    email = owner_email()
+    token = _create_account_session(email)
+    response = _json({"ok": True, "email": email, "expires_in": ACCOUNT_SESSION_TTL_SECONDS})
+    response.set_cookie(
+        ACCOUNT_SESSION_COOKIE,
+        token,
+        max_age=ACCOUNT_SESSION_TTL_SECONDS,
+        httponly=True,
+        secure=_should_secure_cookie(request),
+        samesite="lax",
+    )
+    return response
 
 
 async def usage_summary(request: Request):
@@ -208,7 +270,7 @@ async def passkey_login_verify(request: Request):
         result["token"],
         max_age=result["expires_in"],
         httponly=True,
-        secure=True,
+        secure=_should_secure_cookie(request),
         samesite="lax",
     )
     return response
@@ -417,6 +479,7 @@ routes = [
     Route("/api/auth/passkey/register/verify", passkey_register_verify, methods=["POST"]),
     Route("/api/auth/passkey/login/options", passkey_login_options, methods=["POST"]),
     Route("/api/auth/passkey/login/verify", passkey_login_verify, methods=["POST"]),
+    Route("/api/auth/account/login", account_login, methods=["POST"]),
     Route("/api/files", files_list, methods=["GET"]),
     Route("/api/files", files_upload, methods=["POST"]),
     Route("/api/files/delete", files_delete, methods=["POST"]),

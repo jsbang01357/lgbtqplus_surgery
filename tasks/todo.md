@@ -813,3 +813,17 @@ Mark items as complete as you go.
 ## 요약
 - `index.html`은 shell 역할만 하도록 줄이고, 기능별 HTML partial을 서버에서 조립하도록 바꿨다.
 - `py_compile`, `node --check`, `unittest 22개`, 로컬 `/` HTTP 200 및 partial 조립을 확인했다.
+
+---
+
+## Access OTP 제거 방향 인증 전환
+
+- [x] Cloudflare Access 필수 요구를 기본 off로 전환
+- [x] 패스키 등록/로그인을 소유자 이메일 기준으로 동작하게 정리
+- [x] 계정 ID fallback 세션 API 추가
+- [x] 프론트엔드 인증 버튼을 `패스키 + 계정 ID` 흐름으로 변경
+- [x] 문법, 테스트, 로컬 HTTP 검증
+
+## 요약
+- Cloudflare Access 헤더가 있으면 계속 인정하되, 이메일 OTP가 앱 진입을 막지 않도록 앱 자체 인증을 1차 경계로 바꾼다.
+- `py_compile`, `node --check`, unittest 25개, 로컬 계정 ID 로그인/세션/API 200 응답을 확인했다.

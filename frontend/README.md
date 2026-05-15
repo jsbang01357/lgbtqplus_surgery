@@ -2,7 +2,7 @@
 
 `DESIGN.md`의 Apple식 UI 언어를 반영한 새 정적 프론트엔드입니다.
 
-현재 프론트엔드는 `api_server.py`가 정적 파일로 제공하며, 파일, 메모, AI, 도구 화면은 `/api/*` endpoint를 통해 GCS/Gemini 로직과 연결됩니다. 운영 기준은 GCP 프로젝트이며 Cloudflare Access와 패스키 인증을 기본 경계로 둡니다.
+현재 프론트엔드는 `api_server.py`가 정적 파일로 제공하며, 파일, 메모, AI, 도구 화면은 `/api/*` endpoint를 통해 GCS/Gemini 로직과 연결됩니다. 운영 기준은 GCP 프로젝트이며 패스키와 계정 ID fallback을 앱 인증 경계로 둡니다.
 
 ## 실행
 
@@ -30,4 +30,4 @@ uvicorn api_server:app --host 127.0.0.1 --port 8080
 - 파일 업로드/삭제/다운로드는 `app/storage.py` 로직을 Starlette API로 감싸 연결합니다.
 - 메모 CRUD는 `app/memo.py` 로직을 Starlette API로 감싸 연결합니다.
 - AI 분석은 `app/ai.py`의 Gemini 비용 제한 흐름을 유지한 채 `/api/ai/analyze` endpoint로 연결합니다.
-- 인증은 Cloudflare Access를 외부 관문으로 두고, 앱 내부 민감 작업은 WebAuthn 패스키로 보호합니다.
+- 인증은 WebAuthn 패스키를 우선 사용하고, 패스키가 어려운 환경에서는 소유자 계정 ID fallback으로 앱 세션을 발급합니다.

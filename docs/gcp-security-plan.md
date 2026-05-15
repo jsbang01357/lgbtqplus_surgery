@@ -44,9 +44,10 @@ User
 
 ## 환경 변수
 
-- `REQUIRE_CLOUDFLARE_ACCESS=true`: Cloudflare Access 통과를 API 접근 조건으로 사용
+- `REQUIRE_CLOUDFLARE_ACCESS=false`: Cloudflare Access 이메일 OTP를 피하기 위해 기본 필수 조건에서는 제외한다.
 - `CLOUDFLARE_ACCESS_ALLOWED_EMAILS=jsbang01357@gmail.com`: 소유자 Google 계정만 허용한다. 값을 비워도 앱 기본값은 `jsbang01357@gmail.com`이다.
-- `ALLOW_GOOGLE_AUTH_FALLBACK=true`: 패스키를 쓸 수 없는 브라우저에서는 Cloudflare Access의 Google 인증 세션만으로 통과시킨다.
+- `ALLOW_ACCOUNT_ID_FALLBACK=true`: 패스키를 쓸 수 없는 브라우저에서는 소유자 계정 ID 세션으로 통과시킨다.
+- `JISONG_ACCOUNT_LOGIN_ID=jsbang01357@gmail.com`
 - `PASSKEY_RP_ID=cloud.jisong.dev`
 - `PASSKEY_ORIGIN=https://cloud.jisong.dev`
 - `PASSKEY_RP_NAME=Jisong Cloud`
