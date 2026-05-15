@@ -20,6 +20,7 @@ uvicorn api_server:app --host 127.0.0.1 --port 8080
 - `partials/memos.html`: 메모장 화면
 - `partials/ai.html`: AI 분석 화면
 - `partials/tools.html`: 도구모음 화면
+- `partials/settings.html`: 계정 ID 로그인, 접속 기록, Gemini 사용량 설정 화면
 - `styles.css`: Apple 스타일 디자인 토큰과 반응형 레이아웃
 - `app.js`: 인증 상태, 파일/메모 CRUD, AI 분석, 도구모음 상호작용
 
@@ -31,3 +32,4 @@ uvicorn api_server:app --host 127.0.0.1 --port 8080
 - 메모 CRUD는 `app/memo.py` 로직을 Starlette API로 감싸 연결합니다.
 - AI 분석은 `app/ai.py`의 Gemini 비용 제한 흐름을 유지한 채 `/api/ai/analyze` endpoint로 연결합니다.
 - 인증은 WebAuthn 패스키를 우선 사용하고, 패스키가 어려운 환경에서는 소유자 계정 ID fallback으로 앱 세션을 발급합니다.
+- 화면 전환은 `/home`, `/files`, `/memos`, `/ai`, `/tools`, `/settings` 경로 기준으로 한 화면씩 표시합니다.

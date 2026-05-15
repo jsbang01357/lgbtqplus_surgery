@@ -102,8 +102,19 @@ a {
 }
 
 .global-links a:hover,
-.sub-links a:hover {
+.sub-links a:hover,
+.global-links a.is-active,
+.sub-links a.is-active {
   opacity: 1;
+}
+
+.global-links a.is-active,
+.sub-links a.is-active {
+  color: var(--color-primary-on-dark);
+}
+
+.sub-links a.is-active {
+  color: var(--color-primary);
 }
 
 .nav-icon {
@@ -231,6 +242,10 @@ a {
 .product-tile {
   min-height: 720px;
   padding: 80px 32px;
+}
+
+[data-page][hidden] {
+  display: none !important;
 }
 
 .product-tile-light {
@@ -812,6 +827,55 @@ textarea {
   line-height: 1.1;
 }
 
+.settings-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  width: min(100%, 1180px);
+  margin: 48px auto 0;
+}
+
+.settings-card {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.settings-card-wide {
+  grid-column: 1 / -1;
+}
+
+.settings-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.settings-list {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-row {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr) minmax(140px, 0.5fr);
+  gap: 14px;
+  align-items: center;
+  padding: 14px 0;
+  border-top: 1px solid var(--color-hairline);
+}
+
+.settings-row strong,
+.settings-row span,
+.settings-row small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-row small {
+  color: var(--color-muted);
+}
+
 .footer {
   display: flex;
   justify-content: space-between;
@@ -880,7 +944,8 @@ textarea {
   .utility-layout,
   .memo-board,
   .ai-workbench,
-  .ai-source-grid {
+  .ai-source-grid,
+  .settings-layout {
     grid-template-columns: 1fr;
   }
 
@@ -890,8 +955,18 @@ textarea {
 
   .metric-strip,
   .tool-grid,
-  .tool-metrics {
+  .tool-metrics,
+  .settings-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-card-wide {
+    grid-column: auto;
+  }
+
+  .settings-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 }
 
@@ -945,7 +1020,8 @@ textarea {
 
   .metric-strip,
   .tool-grid,
-  .tool-metrics {
+  .tool-metrics,
+  .settings-metrics {
     grid-template-columns: 1fr;
   }
 

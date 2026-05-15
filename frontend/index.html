@@ -8,15 +8,15 @@
   </head>
   <body>
     <header class="global-nav" aria-label="Global">
-      <a class="brand-mark" href="#home" aria-label="Jisong Cloud home">
+      <a class="brand-mark" href="/home" data-route="home" aria-label="Jisong Cloud home">
         <span class="brand-glyph" aria-hidden="true"></span>
         <span>Jisong Cloud</span>
       </a>
       <nav class="global-links" aria-label="Primary">
-        <a href="#files">Files</a>
-        <a href="#memos">Memos</a>
-        <a href="#ai">AI</a>
-        <a href="#tools">Tools</a>
+        <a href="/files" data-route="files">Files</a>
+        <a href="/memos" data-route="memos">Memos</a>
+        <a href="/ai" data-route="ai">AI</a>
+        <a href="/tools" data-route="tools">Tools</a>
       </nav>
       <button class="nav-icon" type="button" aria-label="Search">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -27,18 +27,18 @@
     </header>
 
     <div class="sub-nav">
-      <a class="sub-title" href="#home">Jisong Cloud</a>
+      <a class="sub-title" href="/home" data-route="home">Jisong Cloud</a>
       <nav class="sub-links" aria-label="Workspace">
-        <a href="#files">웹하드</a>
-        <a href="#memos">메모장</a>
-        <a href="#ai">AI</a>
-        <a href="#tools">도구모음</a>
+        <a href="/files" data-route="files">웹하드</a>
+        <a href="/memos" data-route="memos">메모장</a>
+        <a href="/ai" data-route="ai">AI</a>
+        <a href="/tools" data-route="tools">도구모음</a>
       </nav>
       <div class="auth-actions" aria-label="Authentication">
         <span class="session-chip" id="session-chip">인증 확인 중</span>
         <button class="button button-secondary button-small" id="passkey-register" type="button">패스키 등록</button>
         <button class="button button-primary button-small" id="passkey-login" type="button">로그인</button>
-        <button class="button button-secondary button-small" id="account-id-login" type="button">계정 ID</button>
+        <a class="button button-secondary button-small" href="/settings" target="_blank" rel="noopener">설정</a>
       </div>
     </div>
 
@@ -48,11 +48,12 @@
       <!-- include:partials/memos.html -->
       <!-- include:partials/ai.html -->
       <!-- include:partials/tools.html -->
+      <!-- include:partials/settings.html -->
     </main>
 
     <footer class="footer">
       <p>Jisong Cloud · Cloud Run</p>
-      <p>Cloudflare Access, Passkey, GCS, Gemini 기준으로 동작합니다.</p>
+      <p>Passkey, Account ID, GCS, Gemini 기준으로 동작합니다.</p>
     </footer>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>

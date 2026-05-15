@@ -38,9 +38,11 @@ from app.memo import (
 from app.ai import (
     GEMINI_MODEL,
     format_krw_cost,
+    _entry_cost_krw,
     _get_gemini_api_key,
     _load_gemini_usage_logs,
     _get_usage_limit_status,
+    _parse_usage_time,
     _postprocess_ai_result,
     _record_gemini_usage,
     _run_gemini_analysis,
@@ -49,6 +51,7 @@ from app.ai import (
 from app.gcs_helper import get_bucket
 from app.core_utils import get_now
 from app.md_pdf import markdown_to_pdf_bytes
+from app.access_logger import get_access_logs
 
 FRONTEND_DIR = (Path(__file__).resolve().parent / "frontend").resolve()
 INCLUDE_RE = re.compile(r"<!--\s*include:(?P<path>[^ ]+)\s*-->")
@@ -217,6 +220,72 @@ async def usage_summary(request: Request):
         )
     except Exception as exc:
         return _json({"error": str(exc)}, status_code=500)
+
+
+async def settings_access_logs(request: Request):
+    ok, message = _is_authorized(request)
+    if not ok:
+        return _json({"error": message}, status_code=401)
+    try:
+        logs = get_access_logs()[:50]
+    except Exception as exc:
+        return _json({"error": str(exc)}, status_code=500)
+    ip_counts: dict[str, int] = {}
+    for entry in logs:
+        ip = str(entry.get("ip") or "Unknown")
+        ip_counts[ip] = ip_counts.get(ip, 0) + 1
+    top_ips = [
+        {"ip": ip, "count": count}
+        for ip, count in sorted(ip_counts.items(), key=lambda item: item[1], reverse=True)[:5]
+    ]
+    return _json(
+        {
+            "total": len(logs),
+            "unique_ips": len(ip_counts),
+            "latest": logs[0] if logs else {},
+            "top_ips": top_ips,
+            "logs": logs[:12],
+        }
+    )
+
+
+async def settings_gemini_usage(request: Request):
+    ok, message = _is_authorized(request)
+    if not ok:
+        return _json({"error": message}, status_code=401)
+    try:
+        logs = _load_gemini_usage_logs()
+    except Exception as exc:
+        return _json({"error": str(exc)}, status_code=500)
+
+    today_total, month_total = _sum_usage_costs(logs)
+    total_tokens = sum(int(entry.get("total_tokens") or 0) for entry in logs)
+    input_tokens = sum(int(entry.get("input_tokens") or 0) for entry in logs)
+    output_tokens = sum(int(entry.get("output_tokens") or 0) for entry in logs)
+    daily: dict[str, dict] = {}
+    for entry in logs:
+        entry_time = _parse_usage_time(entry.get("time", ""))
+        day = entry_time.strftime("%Y-%m-%d") if entry_time else "unknown"
+        row = daily.setdefault(day, {"date": day, "requests": 0, "tokens": 0, "cost": 0.0})
+        row["requests"] += 1
+        row["tokens"] += int(entry.get("total_tokens") or 0)
+        row["cost"] += _entry_cost_krw(entry)
+
+    daily_rows = sorted(daily.values(), key=lambda row: row["date"], reverse=True)[:10]
+    for row in daily_rows:
+        row["cost_label"] = format_krw_cost(row["cost"])
+    return _json(
+        {
+            "model": GEMINI_MODEL,
+            "request_count": len(logs),
+            "today_cost_label": format_krw_cost(today_total),
+            "month_cost_label": format_krw_cost(month_total),
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_tokens": total_tokens,
+            "daily": daily_rows,
+        }
+    )
 
 
 async def passkey_register_options(request: Request):
@@ -475,6 +544,8 @@ routes = [
     Route("/api/health", health, methods=["GET"]),
     Route("/api/session", session, methods=["GET"]),
     Route("/api/usage/summary", usage_summary, methods=["GET"]),
+    Route("/api/settings/access-logs", settings_access_logs, methods=["GET"]),
+    Route("/api/settings/gemini-usage", settings_gemini_usage, methods=["GET"]),
     Route("/api/auth/passkey/register/options", passkey_register_options, methods=["POST"]),
     Route("/api/auth/passkey/register/verify", passkey_register_verify, methods=["POST"]),
     Route("/api/auth/passkey/login/options", passkey_login_options, methods=["POST"]),

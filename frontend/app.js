@@ -54,6 +54,8 @@ const aiFileSources = document.querySelector("#ai-file-sources");
 const aiMemoSources = document.querySelector("#ai-memo-sources");
 const aiFileStatus = document.querySelector("#ai-file-status");
 const aiMemoStatus = document.querySelector("#ai-memo-status");
+const pageIds = ["home", "files", "memos", "ai", "tools", "settings"];
+const defaultPage = "home";
 
 function escapeHtml(value = "") {
   return String(value)
@@ -96,6 +98,46 @@ function includesQuery(...values) {
   const query = values.pop().trim().toLowerCase();
   if (!query) return true;
   return values.some((value) => String(value || "").toLowerCase().includes(query));
+}
+
+function pageFromLocation() {
+  const path = window.location.pathname.replace(/^\/+/, "").split("/")[0];
+  if (pageIds.includes(path)) return path;
+  const hashPage = window.location.hash.replace("#", "");
+  return pageIds.includes(hashPage) ? hashPage : defaultPage;
+}
+
+function setActivePage(page = pageFromLocation(), options = {}) {
+  const nextPage = pageIds.includes(page) ? page : defaultPage;
+  document.querySelectorAll("[data-page]").forEach((section) => {
+    section.hidden = section.dataset.page !== nextPage;
+  });
+  document.querySelectorAll("[data-route]").forEach((link) => {
+    link.classList.toggle("is-active", link.dataset.route === nextPage);
+  });
+  if (!options.skipHistory) {
+    const targetPath = nextPage === defaultPage ? "/home" : `/${nextPage}`;
+    if (window.location.pathname !== targetPath) {
+      window.history.pushState({ page: nextPage }, "", targetPath);
+    }
+  }
+  if (nextPage === "settings") {
+    loadSettings();
+  }
+}
+
+function bindRoutes() {
+  document.addEventListener("click", (event) => {
+    const link = event.target.closest("[data-route]");
+    if (!link || link.target === "_blank" || event.metaKey || event.ctrlKey || event.shiftKey) {
+      return;
+    }
+    event.preventDefault();
+    setActivePage(link.dataset.route);
+  });
+  window.addEventListener("popstate", () => {
+    setActivePage(pageFromLocation(), { skipHistory: true });
+  });
 }
 
 function getFilteredFiles() {
@@ -416,12 +458,103 @@ async function loginWithAccountId() {
     const defaultId = session?.account_login_id || "jsbang01357@gmail.com";
     const accountId = window.prompt("계정 ID를 입력하세요.", defaultId);
     if (!accountId) return;
-    await postJson("/api/auth/account/login", { account_id: accountId });
-    await loadSession();
-    await Promise.all([loadFiles(), loadMemos()]);
+    await submitAccountIdLogin(accountId);
     showToast("계정 ID 로그인 완료");
   } catch (error) {
     showToast(error.message || "계정 ID 로그인에 실패했습니다.");
+  }
+}
+
+async function submitAccountIdLogin(accountId) {
+  await postJson("/api/auth/account/login", { account_id: accountId });
+  await loadSession();
+  await Promise.all([loadFiles(), loadMemos(), loadUsageSummary()]);
+  await loadSettings();
+}
+
+function renderSettingsAuth(session = state.session) {
+  const authMetrics = document.querySelector("#settings-auth-metrics");
+  const accountStatus = document.querySelector("#account-id-status");
+  if (!authMetrics) return;
+  accountStatus.textContent = session?.authorized ? "인증 완료" : "소유자 계정만 허용";
+  authMetrics.innerHTML = `
+    <article><span>상태</span><strong>${session?.authorized ? "인증됨" : "잠김"}</strong></article>
+    <article><span>방식</span><strong>${escapeHtml(session?.auth_method || "-")}</strong></article>
+    <article><span>Access</span><strong>${session?.cloudflare_access_required ? "필수" : "선택"}</strong></article>
+    <article><span>계정 ID</span><strong>${session?.account_id_fallback_allowed ? "ON" : "OFF"}</strong></article>
+  `;
+  const accountInput = document.querySelector("#account-id-input");
+  if (accountInput && !accountInput.value) {
+    accountInput.value = session?.account_login_id || "jsbang01357@gmail.com";
+  }
+}
+
+function renderAccessLogSettings(data) {
+  const metrics = document.querySelector("#access-log-metrics");
+  const list = document.querySelector("#access-log-list");
+  const status = document.querySelector("#access-log-status");
+  if (!metrics || !list || !status) return;
+  status.textContent = data.total ? `최근 ${data.total}건` : "접속 기록 없음";
+  metrics.innerHTML = `
+    <article><span>기록</span><strong>${data.total || 0}</strong></article>
+    <article><span>고유 IP</span><strong>${data.unique_ips || 0}</strong></article>
+    <article><span>최근 IP</span><strong>${escapeHtml(data.latest?.ip || "-")}</strong></article>
+    <article><span>최근 시간</span><strong>${escapeHtml(data.latest?.time || "-")}</strong></article>
+  `;
+  list.innerHTML = (data.logs || [])
+    .map(
+      (entry) => `
+        <article class="settings-row">
+          <strong>${escapeHtml(entry.time || "시간 없음")}</strong>
+          <span>${escapeHtml(entry.ip || "Unknown IP")}</span>
+          <small>${escapeHtml(entry.ua || "Unknown Browser")}</small>
+        </article>
+      `,
+    )
+    .join("") || `<p class="empty-state">접속 기록이 없습니다.</p>`;
+}
+
+function renderGeminiUsageSettings(data) {
+  const metrics = document.querySelector("#gemini-usage-metrics");
+  const list = document.querySelector("#gemini-usage-list");
+  const status = document.querySelector("#gemini-usage-status");
+  if (!metrics || !list || !status) return;
+  status.textContent = `${data.model || "Gemini"} · ${data.request_count || 0} 요청`;
+  metrics.innerHTML = `
+    <article><span>이번 달</span><strong>${escapeHtml(data.month_cost_label || "-")}</strong></article>
+    <article><span>전체 토큰</span><strong>${Number(data.total_tokens || 0).toLocaleString()}</strong></article>
+    <article><span>입력</span><strong>${Number(data.input_tokens || 0).toLocaleString()}</strong></article>
+    <article><span>출력</span><strong>${Number(data.output_tokens || 0).toLocaleString()}</strong></article>
+  `;
+  list.innerHTML = (data.daily || [])
+    .map(
+      (row) => `
+        <article class="settings-row">
+          <strong>${escapeHtml(row.date)}</strong>
+          <span>${Number(row.tokens || 0).toLocaleString()} tokens · ${row.requests || 0} requests</span>
+          <small>${escapeHtml(row.cost_label || "-")}</small>
+        </article>
+      `,
+    )
+    .join("") || `<p class="empty-state">Gemini 사용량 로그가 없습니다.</p>`;
+}
+
+async function loadSettings() {
+  renderSettingsAuth(state.session);
+  if (!state.session?.authorized) {
+    renderAccessLogSettings({ logs: [] });
+    renderGeminiUsageSettings({ daily: [] });
+    return;
+  }
+  try {
+    const [accessLogs, geminiUsage] = await Promise.all([
+      apiJson("/api/settings/access-logs"),
+      apiJson("/api/settings/gemini-usage"),
+    ]);
+    renderAccessLogSettings(accessLogs);
+    renderGeminiUsageSettings(geminiUsage);
+  } catch (error) {
+    showToast(error.message);
   }
 }
 
@@ -737,7 +870,27 @@ document.querySelector("#download-all").addEventListener("click", async () => {
 
 document.querySelector("#passkey-register").addEventListener("click", registerPasskey);
 document.querySelector("#passkey-login").addEventListener("click", loginWithPasskey);
-document.querySelector("#account-id-login").addEventListener("click", loginWithAccountId);
+document.querySelector("#account-id-login")?.addEventListener("click", loginWithAccountId);
+document.querySelector("#account-id-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const input = document.querySelector("#account-id-input");
+  const accountId = input.value.trim();
+  if (!accountId) {
+    showToast("계정 ID를 입력하세요.");
+    return;
+  }
+  try {
+    await submitAccountIdLogin(accountId);
+    showToast("계정 ID 로그인 완료");
+  } catch (error) {
+    showToast(error.message || "계정 ID 로그인에 실패했습니다.");
+  }
+});
+document.querySelector("#settings-refresh").addEventListener("click", async () => {
+  await loadSession();
+  await loadSettings();
+  showToast("설정을 새로고침했습니다.");
+});
 document.querySelector("#file-search").addEventListener("input", (event) => {
   state.fileQuery = event.target.value;
   renderFiles();
@@ -915,6 +1068,7 @@ document.querySelector(".tool-grid").addEventListener("click", (event) => {
 document.querySelector(".ai-source-grid").addEventListener("change", updateAiSourceStatus);
 
 async function bootstrap() {
+  bindRoutes();
   renderFiles();
   renderMemos();
   updateHeroPreview();
@@ -922,9 +1076,11 @@ async function bootstrap() {
   renderAiSources();
   renderTool("cleaner");
   const session = await loadSession();
+  renderSettingsAuth(session);
   if (session?.authorized) {
     await Promise.all([loadFiles(), loadMemos(), loadUsageSummary()]);
   }
+  setActivePage(pageFromLocation(), { skipHistory: true });
 }
 
 bootstrap();

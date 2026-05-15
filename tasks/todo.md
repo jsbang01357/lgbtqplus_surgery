@@ -827,3 +827,18 @@ Mark items as complete as you go.
 ## 요약
 - Cloudflare Access 헤더가 있으면 계속 인정하되, 이메일 OTP가 앱 진입을 막지 않도록 앱 자체 인증을 1차 경계로 바꾼다.
 - `py_compile`, `node --check`, unittest 25개, 로컬 계정 ID 로그인/세션/API 200 응답을 확인했다.
+
+---
+
+## 프론트엔드 화면 라우팅 및 설정 분리
+
+- [x] 홈/웹하드/메모장/AI/도구모음을 경로 기반 단일 화면으로 전환
+- [x] 설정 화면을 새 창에서 열 수 있게 추가
+- [x] 계정 ID 로그인 UI를 설정 화면으로 이동
+- [x] 접속 기록 분석 API와 설정 패널 추가
+- [x] Gemini 토큰/비용 분석 API와 설정 패널 추가
+- [x] 문법, 테스트, 로컬 HTTP 검증
+
+## 요약
+- 섹션 anchor 스크롤 대신 `/files`, `/memos`, `/ai`, `/tools`, `/settings` 경로로 화면을 전환한다.
+- `py_compile`, `node --check`, unittest 25개, 로컬 `/files`/`/settings` 200, 설정 분석 API 응답을 확인했다.
