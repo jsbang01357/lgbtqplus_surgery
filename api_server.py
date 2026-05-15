@@ -27,11 +27,15 @@ from app.memo import (
     save_memo_txt,
 )
 from app.ai import (
+    GEMINI_MODEL,
+    format_krw_cost,
     _get_gemini_api_key,
+    _load_gemini_usage_logs,
     _get_usage_limit_status,
     _postprocess_ai_result,
     _record_gemini_usage,
     _run_gemini_analysis,
+    _sum_usage_costs,
 )
 from app.gcs_helper import get_bucket
 from app.core_utils import get_now
@@ -113,6 +117,27 @@ async def session(request: Request):
             "auth_method": state["auth_method"],
         }
     )
+
+
+async def usage_summary(request: Request):
+    ok, message = _is_authorized(request)
+    if not ok:
+        return _json({"error": message}, status_code=401)
+    try:
+        logs = _load_gemini_usage_logs()
+        today_total, month_total = _sum_usage_costs(logs)
+        return _json(
+            {
+                "model": GEMINI_MODEL,
+                "today_cost": today_total,
+                "month_cost": month_total,
+                "today_cost_label": format_krw_cost(today_total),
+                "month_cost_label": format_krw_cost(month_total),
+                "request_count": len(logs),
+            }
+        )
+    except Exception as exc:
+        return _json({"error": str(exc)}, status_code=500)
 
 
 async def passkey_register_options(request: Request):
@@ -368,6 +393,7 @@ async def frontend(request: Request):
 routes = [
     Route("/api/health", health, methods=["GET"]),
     Route("/api/session", session, methods=["GET"]),
+    Route("/api/usage/summary", usage_summary, methods=["GET"]),
     Route("/api/auth/passkey/register/options", passkey_register_options, methods=["POST"]),
     Route("/api/auth/passkey/register/verify", passkey_register_verify, methods=["POST"]),
     Route("/api/auth/passkey/login/options", passkey_login_options, methods=["POST"]),

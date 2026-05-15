@@ -37,6 +37,9 @@ const fileList = document.querySelector("#file-list");
 const memoList = document.querySelector("#memo-list");
 const fileCount = document.querySelector("#file-count");
 const memoCount = document.querySelector("#memo-count");
+const aiMonthCost = document.querySelector("#ai-month-cost");
+const aiModelLabel = document.querySelector("#ai-model-label");
+const storageStatusLabel = document.querySelector("#storage-status-label");
 const toast = document.querySelector("#toast");
 const sessionChip = document.querySelector("#session-chip");
 const fileListStatus = document.querySelector("#file-list-status");
@@ -240,6 +243,19 @@ async function loadMemos() {
   }
   renderMemos();
   renderAiSources();
+}
+
+async function loadUsageSummary() {
+  try {
+    const usage = await apiJson("/api/usage/summary");
+    aiMonthCost.textContent = usage.month_cost_label || "-";
+    aiModelLabel.textContent = usage.model || "Gemini";
+    storageStatusLabel.textContent = `${usage.request_count || 0} AI 요청`;
+  } catch {
+    aiMonthCost.textContent = "-";
+    aiModelLabel.textContent = "인증 후 표시";
+    storageStatusLabel.textContent = "Cloud Run";
+  }
 }
 
 function fromBase64Url(value) {
@@ -812,6 +828,7 @@ document.querySelector("#run-ai").addEventListener("click", async () => {
     `;
     state.lastAiResult = data.result;
     saveAiMemoButton.disabled = false;
+    await loadUsageSummary();
     showToast("AI 분석이 완료됐습니다.");
   } catch (error) {
     state.lastAiResult = "";
@@ -871,7 +888,7 @@ async function bootstrap() {
   renderTool("cleaner");
   const session = await loadSession();
   if (session?.authorized) {
-    await Promise.all([loadFiles(), loadMemos()]);
+    await Promise.all([loadFiles(), loadMemos(), loadUsageSummary()]);
   }
 }
 

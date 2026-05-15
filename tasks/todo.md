@@ -770,3 +770,16 @@ Mark items as complete as you go.
 - 인증 후 로드된 GCS 파일과 메모를 AI 분석 소스로 선택할 수 있게 했다.
 - 선택된 GCS blob과 memo file name은 서버에서 다시 조회해 Gemini 분석 context로 전달한다.
 - `node --check`, `py_compile`, unittest 22개, 로컬 HTTP 200/401/owner session 응답을 확인했다.
+
+---
+
+## 프론트엔드 지표 실데이터 연결
+
+- [x] AI usage summary API 추가
+- [x] 상단 AI 비용/모델 표시를 usage summary에 연결
+- [x] AI 분석 완료 후 비용 지표 갱신
+- [x] 문법, 테스트, 로컬 HTTP 검증
+
+## 요약
+- 하드코딩된 이번 달 AI 비용 문구를 제거하고 Gemini usage 로그 기반 summary를 표시하도록 바꿨다.
+- `node --check`, `py_compile`, unittest 22개, 로컬 HTTP 200/401/owner session 응답을 확인했다.
