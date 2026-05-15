@@ -12,16 +12,10 @@
   <body>
     <header class="global-nav" aria-label="Global">
       <div class="nav-left">
-        <a class="brand-mark" href="/home" data-route="home" aria-label="Jisong Cloud home">
-          <span class="brand-glyph" aria-hidden="true"></span>
-          <span>Jisong Cloud</span>
-        </a>
-        <nav class="global-links" aria-label="Primary">
-          <a href="/files" data-route="files">Files</a>
-          <a href="/memos" data-route="memos">Memos</a>
-          <a href="/ai" data-route="ai">AI</a>
-          <a href="/tools" data-route="tools">Tools</a>
-        </nav>
+        <div class="system-info">
+          <span id="nav-time" class="info-item">00:00:00</span>
+          <span id="nav-ip" class="info-item">0.0.0.0</span>
+        </div>
       </div>
 
       <div class="nav-center">
@@ -35,23 +29,28 @@
       </div>
 
       <div class="nav-right">
-        <div class="system-info">
-          <span id="nav-time" class="info-item">00:00:00</span>
-          <span id="nav-ip" class="info-item">0.0.0.0</span>
-        </div>
         <div class="auth-status">
           <span class="status-indicator" id="nav-status-indicator"></span>
           <span id="nav-status-text">인증 대기</span>
         </div>
         <button class="nav-button nav-button-primary" id="nav-passkey-register" type="button" hidden>패스키 등록</button>
         <button class="nav-button nav-button-secondary" id="nav-login-button" type="button">로그인</button>
+        <button class="nav-button nav-button-danger" id="nav-logout-button" type="button" hidden>로그아웃</button>
       </div>
     </header>
 
     <div class="sub-nav">
       <div class="sub-left">
-        <a class="sub-title" href="/home" data-route="home">Jisong Cloud</a>
+        <a class="brand-mark" href="/home" data-route="home" aria-label="Jisong Cloud home">
+          <svg class="cloud-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17.5 19A5.5 5.5 0 0 0 17.5 8h-1.4a8 8 0 1 0-11.1 8.6"></path>
+            <path d="M22 19h-4.5"></path>
+            <path d="M11 19H5.5"></path>
+          </svg>
+          <span class="sub-title">Jisong Cloud</span>
+        </a>
         <nav class="sub-links" aria-label="Workspace">
+          <a href="/home" data-route="home">홈</a>
           <a href="/files" data-route="files">웹하드</a>
           <a href="/memos" data-route="memos">메모장</a>
           <a href="/ai" data-route="ai">AI</a>
@@ -59,8 +58,8 @@
         </nav>
       </div>
       <div class="sub-right">
-        <a class="icon-link" href="/settings" title="Settings" data-route="settings">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <a class="icon-link" href="/settings" title="설정" data-route="settings">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"></circle>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
           </svg>

@@ -433,6 +433,7 @@ async def passkey_register_verify(request: Request):
         result = passkeys.verify_registration(email, payload)
         return _json({"ok": True, **result})
     except Exception as exc:
+        print(f"DEBUG: Passkey registration error: {exc}")
         return _json({"error": str(exc)}, status_code=400)
 
 
@@ -446,8 +447,10 @@ async def passkey_login_options(request: Request):
     except ValueError as exc:
         if "등록된 passkey가 없습니다" in str(exc):
             return _json({"error": str(exc)}, status_code=404)
+        print(f"DEBUG: Passkey login options ValueError: {exc}")
         return _json({"error": str(exc)}, status_code=400)
     except Exception as exc:
+        print(f"DEBUG: Passkey login options error: {exc}")
         return _json({"error": str(exc)}, status_code=400)
 
 
@@ -470,6 +473,13 @@ async def passkey_login_verify(request: Request):
         secure=_should_secure_cookie(request),
         samesite="lax",
     )
+    return response
+
+
+async def auth_logout(request: Request):
+    response = JSONResponse({"ok": True})
+    response.delete_cookie("jisong_passkey_session")
+    response.delete_cookie(ACCOUNT_SESSION_COOKIE)
     return response
 
 
@@ -702,6 +712,7 @@ routes = [
     Route("/api/auth/passkey/register/verify", passkey_register_verify, methods=["POST"]),
     Route("/api/auth/passkey/login/options", passkey_login_options, methods=["POST"]),
     Route("/api/auth/passkey/login/verify", passkey_login_verify, methods=["POST"]),
+    Route("/api/auth/logout", auth_logout, methods=["POST"]),
     Route("/api/auth/account/login", account_login, methods=["POST"]),
     Route("/api/files", files_list, methods=["GET"]),
     Route("/api/files", files_upload, methods=["POST"]),

@@ -1,9 +1,7 @@
 import base64
 import hashlib
 import json
-import os
 import secrets
-from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 
@@ -17,12 +15,13 @@ from cryptography.hazmat.primitives.hashes import SHA256
 
 from app.core_utils import get_now
 from app.gcs_helper import get_bucket
+from app.config import get_config
 
 PASSKEY_CREDENTIALS_BLOB = "auth/passkeys.json"
 PASSKEY_CHALLENGE_BYTES = 32
 PASSKEY_SESSION_BYTES = 32
 PASSKEY_CHALLENGE_TTL_SECONDS = 300
-PASSKEY_SESSION_TTL_SECONDS = 60 * 60 * 12
+PASSKEY_SESSION_TTL_SECONDS = 60 * 60 * 24 * 30  # 30 days persistence
 
 
 def b64url_encode(data: bytes) -> str:
@@ -203,7 +202,6 @@ def _client_data(payload: dict[str, Any]) -> tuple[dict[str, Any], bytes]:
     return json.loads(client_data_json.decode("utf-8")), client_data_json
 
 
-from app.config import get_config
 
 # ... inside _rp_id, _rp_name, _origin ...
 def _rp_id() -> str:

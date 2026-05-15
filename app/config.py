@@ -1,26 +1,67 @@
 import os
 
+def _load_secrets_toml():
+    try:
+        import tomllib
+        path = os.path.join(".streamlit", "secrets.toml")
+        if os.path.exists(path):
+            with open(path, "rb") as f:
+                return tomllib.load(f)
+    except Exception:
+        pass
+    return {}
+
+_SECRETS_CACHE = None
+
 def get_config(key: str, default: str = "") -> str:
+    global _SECRETS_CACHE
     # 1. Environment Variable
     value = os.getenv(key)
     if value:
         return value
 
-    # 2. Local fallback or Streamlit secrets (for legacy compatibility)
-    # Note: st.secrets will fail if not in Streamlit, so we try-catch it
+    # 2. Local fallback or Streamlit secrets
     try:
         import streamlit as st
-        # Flattened access for simplicity
-        if key.lower() in st.secrets:
-            return str(st.secrets[key.lower()])
-        # Nested access (e.g., st.secrets["admin"]["admin_password"])
-        for section in st.secrets.values():
-            if isinstance(section, dict) and key.lower() in section:
-                return str(section[key.lower()])
+        # If we are in streamlit context, use st.secrets
+        if hasattr(st, "secrets") and st.secrets:
+            if key.lower() in st.secrets:
+                return str(st.secrets[key.lower()])
+            for section in st.secrets.values():
+                if isinstance(section, dict) and key.lower() in section:
+                    return str(section[key.lower()])
     except (ImportError, Exception):
         pass
 
+    # 3. Direct TOML reading for uvicorn/bare context
+    if _SECRETS_CACHE is None:
+        _SECRETS_CACHE = _load_secrets_toml()
+    
+    if key.lower() in _SECRETS_CACHE:
+        return str(_SECRETS_CACHE[key.lower()])
+    for section in _SECRETS_CACHE.values():
+        if isinstance(section, dict) and key.lower() in section:
+            return str(section[key.lower()])
+
     return default
+
+def get_secrets_dict() -> dict:
+    global _SECRETS_CACHE
+    if _SECRETS_CACHE is None:
+        _SECRETS_CACHE = _load_secrets_toml()
+    
+    combined = dict(_SECRETS_CACHE)
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets") and st.secrets:
+            for k, v in st.secrets.items():
+                if isinstance(v, dict):
+                    combined[k] = {**combined.get(k, {}), **v}
+                else:
+                    combined[k] = v
+    except Exception:
+        pass
+    return combined
 
 def get_admin_password() -> str:
     return get_config("ADMIN_PASSWORD", "cbd_07079")

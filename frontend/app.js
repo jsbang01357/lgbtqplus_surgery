@@ -42,6 +42,13 @@ const aiModelLabel = document.querySelector("#ai-model-label");
 const storageStatusLabel = document.querySelector("#storage-status-label");
 const toast = document.querySelector("#toast");
 const sessionChip = document.querySelector("#session-chip");
+const navStatusIndicator = document.querySelector("#nav-status-indicator");
+const navStatusText = document.querySelector("#nav-status-text");
+const navTime = document.querySelector("#nav-time");
+const navIp = document.querySelector("#nav-ip");
+const navPasskeyRegister = document.querySelector("#nav-passkey-register");
+const navLoginButton = document.querySelector("#nav-login-button");
+const navLogoutButton = document.querySelector("#nav-logout-button");
 const fileListStatus = document.querySelector("#file-list-status");
 const memoListStatus = document.querySelector("#memo-list-status");
 const memoSaveButton = document.querySelector("#memo-save-button");
@@ -57,8 +64,22 @@ const aiFileSources = document.querySelector("#ai-file-sources");
 const aiMemoSources = document.querySelector("#ai-memo-sources");
 const aiFileStatus = document.querySelector("#ai-file-status");
 const aiMemoStatus = document.querySelector("#ai-memo-status");
+
 const pageIds = ["login", "home", "files", "memos", "ai", "tools", "settings"];
 const defaultPage = "home";
+
+function updateClock() {
+  const now = new Date();
+  if (navTime) {
+    navTime.textContent = now.toLocaleTimeString("ko-KR", { 
+      hour12: true, 
+      hour: "2-digit", 
+      minute: "2-digit"
+    });
+  }
+}
+setInterval(updateClock, 1000);
+updateClock();
 
 function escapeHtml(value = "") {
   return String(value)
@@ -187,25 +208,34 @@ function resetMemoForm() {
 }
 
 function updateHeroPreview() {
-  heroFileSummary.textContent = `${state.files.length} files`;
-  heroFileList.innerHTML = state.files
-    .slice(0, 2)
-    .map(
-      (file) => `
-        <div class="file-row">
-          <span class="file-icon">${escapeHtml(file.type || fileTypeLabel(file.name))}</span>
-          <div>
-            <strong>${escapeHtml(file.name)}</strong>
-            <small>${escapeHtml(file.updated)} · ${escapeHtml(file.size)}</small>
+  const fileCount = document.querySelector("#file-count");
+  const memoCount = document.querySelector("#memo-count");
+  if (fileCount) fileCount.textContent = state.files.length;
+  if (memoCount) memoCount.textContent = state.memos.length;
+
+  if (heroFileList) {
+    heroFileList.innerHTML = state.files
+      .slice(0, 2)
+      .map(
+        (file) => `
+          <div class="file-row">
+            <span class="file-icon">${escapeHtml(file.type || fileTypeLabel(file.name))}</span>
+            <div>
+              <strong>${escapeHtml(file.name)}</strong>
+              <small>${escapeHtml(file.updated)} · ${escapeHtml(file.size)}</small>
+            </div>
           </div>
-        </div>
-      `,
-    )
-    .join("") || `<p class="source-empty">표시할 파일이 없습니다.</p>`;
-  const firstMemo = state.memos[0];
-  heroMemoPreview.textContent = firstMemo
-    ? `${firstMemo.title}: ${firstMemo.body}`
-    : "최근 메모가 없습니다.";
+        `,
+      )
+      .join("") || `<p class="source-empty">표시할 파일이 없습니다.</p>`;
+  }
+  
+  if (heroMemoPreview) {
+    const firstMemo = state.memos[0];
+    heroMemoPreview.textContent = firstMemo
+      ? `${firstMemo.title}: ${firstMemo.body}`
+      : "최근 메모가 없습니다.";
+  }
 }
 
 function selectedValues(selector) {
@@ -331,22 +361,56 @@ function markdownToHtml(markdown = "") {
 
 function setSessionChip(session) {
   state.session = session;
-  sessionChip.classList.remove("is-authorized", "is-locked");
-  if (session?.authorized) {
-    const authLabel =
-      session.auth_method === "passkey"
-        ? "Passkey 인증됨"
-        : session.auth_method === "account"
-          ? "계정 ID 인증됨"
-          : "Access 인증됨";
-    sessionChip.textContent = authLabel;
-    sessionChip.classList.add("is-authorized");
-    document.body.classList.add("is-authorized");
-    return;
+  const authorized = !!session?.authorized;
+
+  // Update top bar status
+  if (navStatusIndicator) {
+    navStatusIndicator.className = "status-indicator " + (authorized ? "is-authorized" : "is-locked");
   }
-  sessionChip.textContent = "인증 필요";
-  sessionChip.classList.add("is-locked");
-  document.body.classList.remove("is-authorized");
+  if (navStatusText) {
+    if (authorized) {
+      const methodLabel = session.auth_method === "passkey" ? "Passkey" : session.auth_method === "account" ? "Account" : "Google";
+      navStatusText.textContent = `${methodLabel} 인증됨`;
+    } else {
+      navStatusText.textContent = "인증 필요";
+    }
+  }
+  if (navIp && session?.client_ip) {
+    navIp.textContent = session.client_ip;
+  }
+
+  // Handle buttons visibility
+  if (navPasskeyRegister) navPasskeyRegister.hidden = !authorized;
+  if (navLoginButton) navLoginButton.hidden = authorized;
+  if (navLogoutButton) navLogoutButton.hidden = !authorized;
+
+  // Legacy chip update (if exists)
+  if (sessionChip) {
+    sessionChip.classList.remove("is-authorized", "is-locked");
+    if (authorized) {
+      sessionChip.textContent = navStatusText.textContent;
+      sessionChip.classList.add("is-authorized");
+    } else {
+      sessionChip.textContent = "인증 필요";
+      sessionChip.classList.add("is-locked");
+    }
+  }
+
+  if (authorized) {
+    document.body.classList.add("is-authorized");
+  } else {
+    document.body.classList.remove("is-authorized");
+  }
+}
+
+async function logout() {
+  if (!confirm("로그아웃 하시겠습니까?")) return;
+  try {
+    await postJson("/api/auth/logout");
+    window.location.reload();
+  } catch (error) {
+    showToast("로그아웃 실패: " + error.message);
+  }
 }
 
 async function loadSession() {
@@ -354,9 +418,10 @@ async function loadSession() {
     const session = await apiJson("/api/session");
     setSessionChip(session);
     return session;
-  } catch {
-    sessionChip.textContent = "오프라인 미리보기";
-    sessionChip.classList.add("is-locked");
+  } catch (error) {
+    console.error("Session load failed:", error);
+    if (navStatusText) navStatusText.textContent = "오프라인";
+    if (navStatusIndicator) navStatusIndicator.className = "status-indicator is-locked";
     return null;
   }
 }
@@ -1100,6 +1165,17 @@ async function bootstrap() {
     try { await downloadFromApi("/api/files/zip", "jisong-cloud-files.zip"); showToast("ZIP 다운로드 시작"); } 
     catch(err) { showToast(err.message); }
   });
+  navPasskeyRegister?.addEventListener("click", registerPasskey);
+  navLoginButton?.addEventListener("click", loginWithPasskey);
+  navLogoutButton?.addEventListener("click", logout);
+  document.querySelector("#global-search-input")?.addEventListener("input", (e) => {
+    const query = e.target.value;
+    state.fileQuery = query;
+    state.memoQuery = query;
+    renderFiles();
+    renderMemos();
+  });
+
   document.querySelector("#passkey-register")?.addEventListener("click", registerPasskey);
   document.querySelector("#passkey-login")?.addEventListener("click", loginWithPasskey);
   document.querySelector("#account-id-form")?.addEventListener("submit", async e => {
@@ -1120,6 +1196,30 @@ async function bootstrap() {
     try { await downloadFromApi("/api/memos/zip", "jisong-cloud-memos.zip"); showToast("ZIP 다운로드 시작"); } 
     catch(err) { showToast(err.message); }
   });
+  // Tools switching
+  document.addEventListener("click", (e) => {
+    const card = e.target.closest(".tool-card");
+    if (card) {
+      const tool = card.dataset.tool;
+      document.querySelectorAll(".tool-card").forEach(c => c.classList.remove("is-selected"));
+      card.classList.add("is-selected");
+      renderTool(tool);
+    }
+
+    const shortcut = e.target.closest("[data-tool-shortcut]");
+    if (shortcut) {
+      const tool = shortcut.dataset.toolShortcut;
+      setActivePage("tools");
+      // Wait for partial to render
+      setTimeout(() => {
+        const card = document.querySelector(`.tool-card[data-tool="${tool}"]`);
+        if (card) {
+          card.click();
+        }
+      }, 50);
+    }
+  });
+
   document.querySelector("#memo-form")?.addEventListener("submit", async e => {
     e.preventDefault();
     const t = document.querySelector("#memo-title").value;
