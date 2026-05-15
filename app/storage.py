@@ -11,7 +11,6 @@ from typing import Optional
 from urllib.parse import quote
 
 from app.core_utils import get_now, KST
-from app.blob_store import is_local_storage_backend
 from app.gcs_helper import get_bucket
 
 UPLOAD_PREFIX = "uploads"
@@ -346,30 +345,15 @@ def render_file_manager():
             col_download, col_delete = st.columns([1, 1])
 
             with col_download:
-                if is_local_storage_backend():
-                    try:
-                        st.download_button(
-                            "다운로드",
-                            data=download_file_bytes(file_info.blob_name),
-                            file_name=file_info.name,
-                            mime=file_info.content_type
-                            or guess_content_type(file_info.name),
-                            use_container_width=True,
-                            key=f"download_{file_info.blob_name}",
-                        )
-                    except Exception as e:
-                        st.button("다운로드", disabled=True, use_container_width=True)
-                        st.caption(f"다운로드 준비 실패: {e}")
-                else:
-                    try:
-                        st.link_button(
-                            "다운로드",
-                            create_file_download_url(file_info),
-                            use_container_width=True,
-                        )
-                    except Exception as e:
-                        st.button("다운로드", disabled=True, use_container_width=True)
-                        st.caption(f"다운로드 링크 생성 실패: {e}")
+                try:
+                    st.link_button(
+                        "다운로드",
+                        create_file_download_url(file_info),
+                        use_container_width=True,
+                    )
+                except Exception as e:
+                    st.button("다운로드", disabled=True, use_container_width=True)
+                    st.caption(f"다운로드 링크 생성 실패: {e}")
 
             with col_delete:
                 if st.button("삭제", key=f"del_{file_info.blob_name}", use_container_width=True):

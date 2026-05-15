@@ -26,4 +26,4 @@ COPY . .
 
 EXPOSE 8080
 
-CMD ["streamlit", "run", "jisong_cloud.py", "--server.address", "0.0.0.0", "--server.port", "8080"]
+CMD ["uvicorn", "api_server:app", "--host", "0.0.0.0", "--port", "8080"]

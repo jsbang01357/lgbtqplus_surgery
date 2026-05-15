@@ -1,0 +1,52 @@
+# GCP 보안 전환 계획
+
+Jisong Cloud의 운영 기준은 GCP 프로젝트입니다. Mac mini 로컬 Docker 호스팅과 로컬 LLM 경로는 제거하고, Cloud Run + GCS + Gemini + Cloudflare Access + 패스키 인증을 기본 경계로 둡니다.
+
+## 목표 구조
+
+```text
+User
+└── Cloudflare Access
+    └── Cloud Run
+        ├── Jisong Cloud API / UI
+        ├── GCS
+        ├── Gemini API
+        └── Secret Manager
+```
+
+## 인증 경계
+
+- Cloudflare Access: `cloud.jisong.dev` 앞단의 외부 접근 제어
+- 패스키 인증: 앱 내부 민감 작업 보호
+- 관리자 비밀번호: 패스키 전환 전까지만 유지할 임시 fallback
+
+## 패스키 구현 메모
+
+- 서버는 challenge를 발급하고 세션에 저장한다.
+- 브라우저는 WebAuthn `navigator.credentials.create()` / `navigator.credentials.get()`을 호출한다.
+- 서버는 credential public key, sign count, user handle을 저장한다.
+- 민감 작업은 Cloudflare Access 통과 여부와 패스키 세션을 모두 확인한다.
+
+## 제거된 경로
+
+- Mac mini Docker Compose 운영
+- launchd 로컬 자동 기동
+- local mirror 저장소 adapter
+- Ollama/local LLM provider와 fallback
+
+## 다음 구현 순서
+
+1. 새 프론트엔드용 Python API 경계 생성
+2. Cloudflare Access 헤더 검증 middleware 추가
+3. 패스키 등록/로그인 API 추가
+4. 관리자 비밀번호 fallback을 제한적으로 유지
+5. Cloud Run 배포 후 Access 정책과 앱 내부 인증을 함께 검증
+
+## 환경 변수
+
+- `REQUIRE_CLOUDFLARE_ACCESS=true`: Cloudflare Access 통과를 API 접근 조건으로 사용
+- `CLOUDFLARE_ACCESS_ALLOWED_EMAILS=jsbang01357@gmail.com`: 소유자 Google 계정만 허용한다. 값을 비워도 앱 기본값은 `jsbang01357@gmail.com`이다.
+- `ALLOW_GOOGLE_AUTH_FALLBACK=true`: 패스키를 쓸 수 없는 브라우저에서는 Cloudflare Access의 Google 인증 세션만으로 통과시킨다.
+- `PASSKEY_RP_ID=cloud.jisong.dev`
+- `PASSKEY_ORIGIN=https://cloud.jisong.dev`
+- `PASSKEY_RP_NAME=Jisong Cloud`

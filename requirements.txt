@@ -1,4 +1,7 @@
 streamlit
+starlette
+uvicorn
+python-multipart
 google-cloud-storage
 google-auth
 pandas

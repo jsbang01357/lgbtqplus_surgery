@@ -217,6 +217,58 @@ Mark items as complete as you go.
 
 ---
 
+## Apple 스타일 프론트엔드 전환
+
+- [x] `DESIGN.md`와 기존 Streamlit 진입점 확인
+- [x] 새 프론트엔드 구조와 Apple식 디자인 토큰 구현
+- [x] 웹하드/메모/AI/도구 주요 화면을 정적 앱으로 구성
+- [x] 실행 문서와 기본 검증 추가
+- [x] 변경 요약 작성
+
+## 요약
+- `frontend/` 아래에 Streamlit과 분리된 정적 프론트엔드 미리보기를 추가했다.
+- `DESIGN.md` 기준의 블랙 global nav, frosted sub-nav, light/dark full-bleed tile, 단일 파란 CTA, SF Pro 계열 typography 토큰을 적용했다.
+- 웹하드, 메모장, AI, 도구모음의 주요 화면과 버튼/폼 상호작용을 브라우저 로컬 상태로 구현했다.
+- 기존 Python/GCS/Gemini 로직은 유지하고, 다음 단계에서 API로 연결할 수 있도록 실행 문서를 남겼다.
+- `node --check frontend/app.js`, `python3 -m py_compile ...`, Safari 렌더링 확인을 완료했다.
+
+---
+
+## GCP 기준 운영 전환
+
+- [x] 로컬 Docker 호스팅 파일 제거
+- [x] Ollama/local LLM provider 제거
+- [x] local mirror 저장소 adapter 제거
+- [x] README와 프론트 문구를 GCP/Cloudflare Access/패스키 방향으로 수정
+- [x] 보안 전환 계획 문서 추가
+
+## 요약
+- `docker-compose.local.yml`, Mac mini 운영 문서, launchd 로컬 기동 파일, `.env.local.example`을 제거했다.
+- AI 분석은 Gemini-only 흐름으로 정리하고 Ollama/auto fallback 선택 UI와 호출 코드를 제거했다.
+- 저장소는 GCS 직접 사용 기준으로 정리하고 local mirror adapter와 관련 테스트를 제거했다.
+- `docs/gcp-security-plan.md`에 Cloudflare Access와 패스키 인증 전환 순서를 남겼다.
+
+---
+
+## API 서버 및 패스키 인증 1차 구현
+
+- [x] Starlette 기반 `api_server.py` 추가
+- [x] Cloudflare Access 헤더 검증 유틸 추가
+- [x] WebAuthn 패스키 등록/로그인 challenge 및 서명 검증 추가
+- [x] 새 프론트엔드에 패스키 등록/로그인 버튼 연결
+- [x] Cloud Run 진입점을 `uvicorn api_server:app`으로 변경
+- [x] 기본 테스트와 문법 검증 실행
+- [x] `jsbang01357@gmail.com`만 기본 허용 계정으로 제한
+- [x] 패스키 미지원 환경에서는 Cloudflare Access Google 인증으로 fallback 허용
+
+## 요약
+- 새 API 서버가 `frontend/` 정적 파일과 `/api/*` endpoint를 함께 제공하도록 했다.
+- 민감 API는 기본적으로 `jsbang01357@gmail.com` Cloudflare Access 통과를 확인하고, passkey session 또는 Google 인증 fallback 중 하나를 요구한다.
+- 패스키 credential과 session은 GCS의 `auth/passkeys.json`에 저장한다.
+- Docker/Cloud Build 환경변수는 `cloud.jisong.dev` 기준 passkey RP 설정을 포함하도록 바꿨다.
+
+---
+
 ## Jisong Cloud 리스트 UX 개선
 
 - [x] 파일 목록 가독성 개선
