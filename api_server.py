@@ -3,12 +3,13 @@ from pathlib import Path
 
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import FileResponse, JSONResponse, Response
+from starlette.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
 from app import passkeys
 from app.security import allow_google_auth_fallback, get_access_context, require_cloudflare_access
 from app.storage import (
+    create_zip_of_files,
     create_file_download_url,
     delete_uploaded_file,
     guess_content_type,
@@ -18,10 +19,18 @@ from app.storage import (
     UPLOAD_PREFIX,
 )
 from app.memo import (
+    create_zip_of_memos,
     delete_memo_txt,
     load_memo_list_cached,
     load_single_memo_content,
     save_memo_txt,
+)
+from app.ai import (
+    _get_gemini_api_key,
+    _get_usage_limit_status,
+    _postprocess_ai_result,
+    _record_gemini_usage,
+    _run_gemini_analysis,
 )
 from app.gcs_helper import get_bucket
 from app.core_utils import get_now
@@ -212,6 +221,20 @@ async def files_delete(request: Request):
     return _json({"ok": True})
 
 
+async def files_zip(request: Request):
+    ok, message = _is_authorized(request)
+    if not ok:
+        return _json({"error": message}, status_code=401)
+    zip_buffer = create_zip_of_files()
+    if not zip_buffer:
+        return _json({"error": "다운로드할 파일이 없습니다."}, status_code=404)
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="jisong-cloud-files.zip"'},
+    )
+
+
 async def memos_list(request: Request):
     ok, message = _is_authorized(request)
     if not ok:
@@ -248,6 +271,54 @@ async def memo_delete(request: Request):
     return _json({"ok": True})
 
 
+async def memos_zip(request: Request):
+    ok, message = _is_authorized(request)
+    if not ok:
+        return _json({"error": message}, status_code=401)
+    memos = load_memo_list_cached()
+    zip_buffer = create_zip_of_memos(memos)
+    if not zip_buffer:
+        return _json({"error": "다운로드할 메모가 없습니다."}, status_code=404)
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="jisong-cloud-memos.zip"'},
+    )
+
+
+async def ai_analyze(request: Request):
+    ok, message = _is_authorized(request)
+    if not ok:
+        return _json({"error": message}, status_code=401)
+    payload = await request.json()
+    prompt = (payload.get("prompt") or "").strip()
+    if not prompt:
+        return _json({"error": "분석할 요청을 입력하세요."}, status_code=400)
+    api_key = _get_gemini_api_key()
+    if not api_key:
+        return _json({"error": "Gemini API key가 설정되지 않았습니다."}, status_code=400)
+    try:
+        can_use, limit_message = _get_usage_limit_status()
+        if not can_use:
+            return _json({"error": limit_message}, status_code=429)
+        result, usage_record = _run_gemini_analysis(
+            api_key=api_key,
+            selected_files=[],
+            selected_memos=[],
+            extra_text=payload.get("extra_text", ""),
+            question=prompt,
+        )
+        _record_gemini_usage(usage_record)
+        return _json(
+            {
+                "result": _postprocess_ai_result(result),
+                "usage": usage_record,
+            }
+        )
+    except Exception as exc:
+        return _json({"error": str(exc)}, status_code=500)
+
+
 async def frontend(request: Request):
     path = request.path_params.get("path") or "index.html"
     target = (FRONTEND_DIR / path).resolve()
@@ -271,10 +342,13 @@ routes = [
     Route("/api/files", files_list, methods=["GET"]),
     Route("/api/files", files_upload, methods=["POST"]),
     Route("/api/files/delete", files_delete, methods=["POST"]),
+    Route("/api/files/zip", files_zip, methods=["GET"]),
     Route("/api/memos", memos_list, methods=["GET"]),
     Route("/api/memos", memo_save, methods=["POST"]),
     Route("/api/memos/delete", memo_delete, methods=["POST"]),
+    Route("/api/memos/zip", memos_zip, methods=["GET"]),
     Route("/api/memos/{file_name:str}", memo_detail, methods=["GET"]),
+    Route("/api/ai/analyze", ai_analyze, methods=["POST"]),
     Route("/", frontend, methods=["GET"]),
     Route("/{path:path}", frontend, methods=["GET"]),
 ]

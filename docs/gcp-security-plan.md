@@ -50,3 +50,9 @@ User
 - `PASSKEY_RP_ID=cloud.jisong.dev`
 - `PASSKEY_ORIGIN=https://cloud.jisong.dev`
 - `PASSKEY_RP_NAME=Jisong Cloud`
+
+## Cloudflare CLI 메모
+
+- 현재 로컬에는 `cloudflared`가 설치되어 있으며 Tunnel/Access 관련 확인에 사용할 수 있다.
+- `wrangler`는 현재 PATH에 없으므로 Workers/Pages 작업이 필요할 때 별도로 설치한다.
+- Cloud Run 앞단 Access 정책은 `jsbang01357@gmail.com`만 허용하도록 Cloudflare dashboard 또는 API에서 맞춘다.

@@ -41,6 +41,11 @@ textarea {
   font: inherit;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 a {
   color: inherit;
   text-decoration: none;
@@ -149,6 +154,30 @@ a {
 
 .auth-actions {
   gap: 8px;
+}
+
+.session-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 7px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.62);
+  color: #333333;
+  font-size: 12px;
+  letter-spacing: -0.12px;
+  white-space: nowrap;
+}
+
+.session-chip.is-authorized {
+  border-color: rgba(0, 102, 204, 0.24);
+  color: var(--color-primary);
+}
+
+.session-chip.is-locked {
+  color: var(--color-muted);
 }
 
 .button {
@@ -496,6 +525,10 @@ textarea {
   gap: 24px;
 }
 
+.memo-column {
+  min-width: 0;
+}
+
 .memo-editor {
   display: grid;
   gap: 14px;
@@ -522,6 +555,38 @@ textarea {
 .upload-card p {
   margin: 8px 0 0;
   color: #333333;
+}
+
+.memo-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.memo-actions small {
+  margin-right: auto;
+  color: var(--color-muted);
+  font-size: 12px;
+  letter-spacing: -0.12px;
+}
+
+.text-button {
+  border: 0;
+  background: transparent;
+  color: var(--color-primary);
+  font-size: 14px;
+  letter-spacing: -0.224px;
+  cursor: pointer;
+}
+
+.empty-state {
+  margin: 0;
+  padding: 22px;
+  border: 1px dashed var(--color-hairline);
+  border-radius: 18px;
+  color: var(--color-muted);
+  text-align: center;
 }
 
 .ai-workbench {
@@ -574,6 +639,7 @@ textarea {
 
 .ai-result p {
   color: #ffffff;
+  white-space: pre-wrap;
 }
 
 .tool-grid {
@@ -700,9 +766,13 @@ textarea {
 
   .auth-actions {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-column: 1 / -1;
     width: 100%;
+  }
+
+  .session-chip {
+    grid-column: 1 / -1;
   }
 
   .metric-strip,

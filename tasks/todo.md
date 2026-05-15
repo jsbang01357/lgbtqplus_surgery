@@ -707,3 +707,21 @@ Mark items as complete as you go.
 - 도구모음에 `AI 예상비용` 도구를 추가해 Gemini 사용량 로그를 최근 7일, 최근 30일, 전체 범위로 볼 수 있게 했다.
 - 총 예상 비용, 요청 수, 전체 토큰, 요청당 평균 비용을 지표로 보여주고 날짜별 예상 비용을 막대그래프로 표시한다.
 - 날짜별 요약 CSV와 상세 로그 CSV 다운로드를 추가하고, 날짜별 비용 집계 테스트를 보강했다.
+
+---
+
+## 새 프론트엔드 UI API 연결
+
+- [x] 세션 상태 표시를 상단 인증 영역에 추가
+- [x] 웹하드 목록, 업로드, 다운로드, 삭제를 API에 연결
+- [x] 메모 목록, 저장, 상세 보기, 삭제를 API에 연결
+- [x] 파일 ZIP, 메모 ZIP 다운로드 endpoint와 버튼 연결
+- [x] AI 분석 버튼을 Gemini API endpoint에 연결
+- [x] 모바일 인증 버튼 배치와 상태 문구 정리
+- [x] 문법, 테스트, 로컬 HTTP 검증
+
+## 요약
+- 새 프론트엔드는 `/api/session`, `/api/files`, `/api/memos`를 우선 사용하고, 인증 전에는 데모 데이터를 유지한다.
+- 패스키 또는 Google Access 인증 상태가 상단 chip에 표시되며, 파일/메모/AI 작업 실패는 toast로 안내한다.
+- 파일 ZIP, 메모 ZIP, 프롬프트 기반 Gemini 분석은 Starlette API endpoint로 연결했다.
+- Playwright 모듈이 없어 브라우저 screenshot 검증은 실행하지 못했고, 로컬 HTTP 응답과 JS 문법/유닛 테스트로 1차 확인했다.
