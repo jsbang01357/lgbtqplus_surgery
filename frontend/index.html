@@ -4,41 +4,67 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Jisong Cloud</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <header class="global-nav" aria-label="Global">
-      <a class="brand-mark" href="/home" data-route="home" aria-label="Jisong Cloud home">
-        <span class="brand-glyph" aria-hidden="true"></span>
-        <span>Jisong Cloud</span>
-      </a>
-      <nav class="global-links" aria-label="Primary">
-        <a href="/files" data-route="files">Files</a>
-        <a href="/memos" data-route="memos">Memos</a>
-        <a href="/ai" data-route="ai">AI</a>
-        <a href="/tools" data-route="tools">Tools</a>
-      </nav>
-      <button class="nav-icon" type="button" aria-label="Search">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="11" cy="11" r="6.2"></circle>
-          <path d="m16 16 4 4"></path>
-        </svg>
-      </button>
+      <div class="nav-left">
+        <a class="brand-mark" href="/home" data-route="home" aria-label="Jisong Cloud home">
+          <span class="brand-glyph" aria-hidden="true"></span>
+          <span>Jisong Cloud</span>
+        </a>
+        <nav class="global-links" aria-label="Primary">
+          <a href="/files" data-route="files">Files</a>
+          <a href="/memos" data-route="memos">Memos</a>
+          <a href="/ai" data-route="ai">AI</a>
+          <a href="/tools" data-route="tools">Tools</a>
+        </nav>
+      </div>
+
+      <div class="nav-center">
+        <div class="global-search">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <circle cx="11" cy="11" r="6.2"></circle>
+            <path d="m16 16 4 4"></path>
+          </svg>
+          <input type="text" id="global-search-input" placeholder="Search Jisong Cloud..." aria-label="Search">
+        </div>
+      </div>
+
+      <div class="nav-right">
+        <div class="system-info">
+          <span id="nav-time" class="info-item">00:00:00</span>
+          <span id="nav-ip" class="info-item">0.0.0.0</span>
+        </div>
+        <div class="auth-status">
+          <span class="status-indicator" id="nav-status-indicator"></span>
+          <span id="nav-status-text">인증 대기</span>
+        </div>
+        <button class="nav-button nav-button-primary" id="nav-passkey-register" type="button" hidden>패스키 등록</button>
+        <button class="nav-button nav-button-secondary" id="nav-login-button" type="button">로그인</button>
+      </div>
     </header>
 
     <div class="sub-nav">
-      <a class="sub-title" href="/home" data-route="home">Jisong Cloud</a>
-      <nav class="sub-links" aria-label="Workspace">
-        <a href="/files" data-route="files">웹하드</a>
-        <a href="/memos" data-route="memos">메모장</a>
-        <a href="/ai" data-route="ai">AI</a>
-        <a href="/tools" data-route="tools">도구모음</a>
-      </nav>
-      <div class="auth-actions" aria-label="Authentication">
-        <span class="session-chip" id="session-chip">인증 확인 중</span>
-        <button class="button button-secondary button-small" id="passkey-register" type="button">패스키 등록</button>
-        <button class="button button-primary button-small" id="passkey-login" type="button">로그인</button>
-        <a class="button button-secondary button-small" href="/settings" target="_blank" rel="noopener">설정</a>
+      <div class="sub-left">
+        <a class="sub-title" href="/home" data-route="home">Jisong Cloud</a>
+        <nav class="sub-links" aria-label="Workspace">
+          <a href="/files" data-route="files">웹하드</a>
+          <a href="/memos" data-route="memos">메모장</a>
+          <a href="/ai" data-route="ai">AI</a>
+          <a href="/tools" data-route="tools">도구모음</a>
+        </nav>
+      </div>
+      <div class="sub-right">
+        <a class="icon-link" href="/settings" title="Settings" data-route="settings">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </a>
       </div>
     </div>
 

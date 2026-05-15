@@ -877,3 +877,21 @@ Mark items as complete as you go.
 ## 요약
 - Cloud Build가 더 이상 Cloudflare OTP 필수/Google Access fallback 기준으로 배포하지 않게 정리한다.
 - `cloudbuild.yaml` YAML 파싱, `py_compile`, `node --check`, unittest 26개를 확인했다. 로컬 Docker build는 Docker daemon socket 부재로 보류했다.
+
+---
+
+## 프론트엔드 UI/UX 업그레이드 및 로그인 화면 분리
+
+- [x] 프로젝트 컨텍스트 및 디자인 시스템 분석
+- [x] 로그인 화면을 독립된 전체 화면으로 분리 (네비게이션/푸터 숨김)
+- [x] 패스키 및 계정 ID/PW 로그인 기능 유지 및 UI 개선
+- [x] 전역 디자인 시스템 고도화 (폰트, 그라데이션, 애니메이션)
+- [x] 각 화면별 레이아웃 및 컴포넌트 프리미엄 디자인 적용
+- [x] 최종 동작 검증 및 코드 정리
+
+## 요약
+- 로그인 화면을 SPA 내에서 독립된 페이지처럼 보이도록 구조를 개선했습니다. (네비게이션/푸터 조건부 숨김 적용)
+- Apple 스타일의 프리미엄 디자인을 강화하기 위해 Glassmorphism, Google Fonts(Outfit, Inter), 배경 그라데이션 및 애니메이션을 적용했습니다.
+- 기존의 패스키 및 ID/PW 인증 로직을 새로운 UI에 맞게 연동 완료했습니다.
+- `app.js`의 구문 오류(낸 금액 속성 접근)를 수정하여 안정성을 확보했습니다.
+

@@ -188,6 +188,7 @@ async def session(request: Request):
             "account_id_fallback_allowed": allow_account_id_fallback(),
             "google_auth_fallback_allowed": allow_google_auth_fallback(),
             "account_login_id": account_login_id(),
+            "client_ip": request.client.host if request.client else "Unknown",
             "cloudflare_access": {
                 "email": access_context.email,
                 "has_jwt": access_context.has_jwt,

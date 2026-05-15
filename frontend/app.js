@@ -120,6 +120,12 @@ function setActivePage(page = pageFromLocation(), options = {}) {
     nextPage = defaultPage;
   }
 
+  // Toggle global navigation and footer visibility
+  const isLoginPage = nextPage === "login";
+  document.querySelectorAll(".global-nav, .sub-nav, .footer").forEach((el) => {
+    el.hidden = isLoginPage;
+  });
+
   document.querySelectorAll("[data-page]").forEach((section) => {
     if (section.dataset.page === nextPage) {
       section.hidden = false;
@@ -973,7 +979,7 @@ function bindToolPanel(tool) {
         const container = document.querySelector("#tool-settlement-result-container");
         container.style.display = "block";
         document.querySelector("#tool-settlement-summary").textContent = data.summary_rows
-          .map(r => `${r.사람}: ${r.잔액 >= 0 ? "+" : ""}${r.잔액.toLocaleString()}원 (${r.낸 금액}원 냄)`)
+          .map(r => `${r.사람}: ${r.잔액 >= 0 ? "+" : ""}${r.잔액.toLocaleString()}원 (${r["낸 금액"]}원 냄)`)
           .join("\n");
         document.querySelector("#tool-settlement-transfers").textContent = data.transfer_rows.length 
           ? data.transfer_rows.map(t => `${t["보내는 사람"]} → ${t["받는 사람"]}: ${t["금액"].toLocaleString()}원`).join("\n")
@@ -1028,15 +1034,15 @@ async function bootstrap() {
 
   // Login page logic
   const loginTabs = document.querySelectorAll(".login-tab");
-  loginTabs.forEach(tab => {
+  loginTabs.forEach((tab) => {
     tab.addEventListener("click", () => {
-      loginTabs.forEach(t => t.classList.remove("is-active"));
+      loginTabs.forEach((t) => t.classList.remove("is-active"));
       tab.classList.add("is-active");
       const mode = tab.dataset.loginTab;
       const pPass = document.querySelector("#login-panel-passkey");
       const pAcc = document.querySelector("#login-panel-account");
-      if (pPass) pPass.style.display = mode === "passkey" ? "flex" : "none";
-      if (pAcc) pAcc.style.display = mode === "account" ? "flex" : "none";
+      if (pPass) pPass.classList.toggle("active", mode === "passkey");
+      if (pAcc) pAcc.classList.toggle("active", mode === "account");
     });
   });
 
