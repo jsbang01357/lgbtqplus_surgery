@@ -43,6 +43,7 @@ const fileListStatus = document.querySelector("#file-list-status");
 const memoListStatus = document.querySelector("#memo-list-status");
 const memoSaveButton = document.querySelector("#memo-save-button");
 const saveAiMemoButton = document.querySelector("#save-ai-memo");
+const toolOutput = document.querySelector("#tool-output");
 
 function escapeHtml(value = "") {
   return String(value)
@@ -130,6 +131,27 @@ async function apiJson(url, options = {}) {
 
 async function downloadFromApi(url, filename) {
   const response = await fetch(url);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || "다운로드에 실패했습니다.");
+  }
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
+async function downloadPostBlob(url, payload, filename) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     throw new Error(data.error || "다운로드에 실패했습니다.");
@@ -410,6 +432,140 @@ function renderPresets() {
     .join("");
 }
 
+function renderTool(tool) {
+  const templates = {
+    cleaner: `
+      <div class="tool-panel">
+        <h3>텍스트 클리너</h3>
+        <textarea id="tool-cleaner-input" rows="7" placeholder="정리할 텍스트를 붙여넣으세요."></textarea>
+        <div class="form-actions">
+          <button class="button button-primary" id="tool-cleaner-run" type="button">정리</button>
+          <button class="button button-secondary" id="tool-copy-output" type="button">결과 복사</button>
+        </div>
+        <pre id="tool-result">결과가 여기에 표시됩니다.</pre>
+      </div>
+    `,
+    "md-pdf": `
+      <div class="tool-panel">
+        <h3>MD to PDF</h3>
+        <textarea id="tool-md-input" rows="8" placeholder="# 제목&#10;&#10;마크다운 내용을 입력하세요."></textarea>
+        <button class="button button-primary" id="tool-md-run" type="button">PDF 다운로드</button>
+      </div>
+    `,
+    counter: `
+      <div class="tool-panel">
+        <h3>글자수 카운터</h3>
+        <textarea id="tool-counter-input" rows="7" placeholder="계산할 텍스트를 입력하세요."></textarea>
+        <div class="tool-metrics" id="tool-counter-result">
+          <article><span>공백 포함</span><strong>0</strong></article>
+          <article><span>공백 제외</span><strong>0</strong></article>
+          <article><span>단어</span><strong>0</strong></article>
+          <article><span>줄</span><strong>0</strong></article>
+        </div>
+      </div>
+    `,
+    settlement: `
+      <div class="tool-panel">
+        <h3>정산 계산기</h3>
+        <textarea id="tool-settlement-input" rows="7">지송 32000&#10;민수 18000&#10;서연 0</textarea>
+        <button class="button button-primary" id="tool-settlement-run" type="button">계산</button>
+        <pre id="tool-settlement-result">이름과 금액을 줄마다 입력하세요.</pre>
+      </div>
+    `,
+    storage: `
+      <div class="tool-panel">
+        <h3>저장소 상태</h3>
+        <div class="tool-metrics">
+          <article><span>파일</span><strong>${state.files.length}</strong></article>
+          <article><span>메모</span><strong>${state.memos.length}</strong></article>
+          <article><span>저장소</span><strong>GCS</strong></article>
+          <article><span>런타임</span><strong>Cloud Run</strong></article>
+        </div>
+      </div>
+    `,
+    access: `
+      <div class="tool-panel">
+        <h3>접속 상태</h3>
+        <pre>${escapeHtml(JSON.stringify(state.session || {}, null, 2))}</pre>
+      </div>
+    `,
+  };
+  toolOutput.innerHTML = templates[tool] || templates.cleaner;
+  bindToolPanel(tool);
+  toolOutput.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function bindToolPanel(tool) {
+  if (tool === "cleaner") {
+    document.querySelector("#tool-cleaner-run").addEventListener("click", () => {
+      const raw = document.querySelector("#tool-cleaner-input").value;
+      const cleaned = raw
+        .replace(/\r/g, "")
+        .split("\n")
+        .map((line) => line.replace(/\s+/g, " ").trim())
+        .filter(Boolean)
+        .join("\n");
+      document.querySelector("#tool-result").textContent = cleaned || "정리할 텍스트가 없습니다.";
+    });
+    document.querySelector("#tool-copy-output").addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(document.querySelector("#tool-result").textContent);
+        showToast("결과를 복사했습니다.");
+      } catch {
+        showToast("브라우저가 클립보드 복사를 허용하지 않았습니다.");
+      }
+    });
+  }
+  if (tool === "md-pdf") {
+    document.querySelector("#tool-md-run").addEventListener("click", async () => {
+      try {
+        await downloadPostBlob(
+          "/api/tools/markdown-pdf",
+          { markdown: document.querySelector("#tool-md-input").value },
+          "jisong-markdown.pdf",
+        );
+        showToast("PDF 다운로드를 시작합니다.");
+      } catch (error) {
+        showToast(error.message);
+      }
+    });
+  }
+  if (tool === "counter") {
+    const input = document.querySelector("#tool-counter-input");
+    const render = () => {
+      const text = input.value;
+      const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+      document.querySelector("#tool-counter-result").innerHTML = `
+        <article><span>공백 포함</span><strong>${text.length}</strong></article>
+        <article><span>공백 제외</span><strong>${text.replace(/\s/g, "").length}</strong></article>
+        <article><span>단어</span><strong>${words}</strong></article>
+        <article><span>줄</span><strong>${text ? text.split(/\n/).length : 0}</strong></article>
+      `;
+    };
+    input.addEventListener("input", render);
+  }
+  if (tool === "settlement") {
+    document.querySelector("#tool-settlement-run").addEventListener("click", () => {
+      const rows = document.querySelector("#tool-settlement-input").value
+        .split("\n")
+        .map((line) => line.trim().split(/\s+/))
+        .filter((parts) => parts.length >= 2)
+        .map(([name, amount]) => ({ name, amount: Number(amount.replace(/,/g, "")) || 0 }));
+      if (!rows.length) {
+        document.querySelector("#tool-settlement-result").textContent = "정산할 항목이 없습니다.";
+        return;
+      }
+      const total = rows.reduce((sum, row) => sum + row.amount, 0);
+      const share = Math.round(total / rows.length);
+      const result = rows
+        .map((row) => `${row.name}: ${row.amount - share >= 0 ? "+" : ""}${(row.amount - share).toLocaleString()}원`)
+        .join("\n");
+      document.querySelector("#tool-settlement-result").textContent =
+        `총액 ${total.toLocaleString()}원 · 1인 ${share.toLocaleString()}원\n\n${result}`;
+    });
+  }
+}
+
 document.querySelector("#upload-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const input = document.querySelector("#file-input");
@@ -640,10 +796,19 @@ saveAiMemoButton.addEventListener("click", async () => {
   }
 });
 
+document.querySelector(".tool-grid").addEventListener("click", (event) => {
+  const card = event.target.closest("[data-tool]");
+  if (!card) return;
+  document.querySelectorAll(".tool-card").forEach((item) => item.classList.remove("is-selected"));
+  card.classList.add("is-selected");
+  renderTool(card.dataset.tool);
+});
+
 async function bootstrap() {
   renderFiles();
   renderMemos();
   renderPresets();
+  renderTool("cleaner");
   const session = await loadSession();
   if (session?.authorized) {
     await Promise.all([loadFiles(), loadMemos()]);

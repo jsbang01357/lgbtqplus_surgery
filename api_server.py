@@ -1,4 +1,5 @@
 import mimetypes
+import io
 from pathlib import Path
 
 from starlette.applications import Starlette
@@ -34,6 +35,7 @@ from app.ai import (
 )
 from app.gcs_helper import get_bucket
 from app.core_utils import get_now
+from app.md_pdf import markdown_to_pdf_bytes
 
 FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
 
@@ -319,6 +321,25 @@ async def ai_analyze(request: Request):
         return _json({"error": str(exc)}, status_code=500)
 
 
+async def tool_markdown_pdf(request: Request):
+    ok, message = _is_authorized(request)
+    if not ok:
+        return _json({"error": message}, status_code=401)
+    payload = await request.json()
+    markdown = (payload.get("markdown") or "").strip()
+    if not markdown:
+        return _json({"error": "변환할 마크다운을 입력하세요."}, status_code=400)
+    try:
+        pdf_bytes = markdown_to_pdf_bytes(markdown)
+    except Exception as exc:
+        return _json({"error": str(exc)}, status_code=500)
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="jisong-markdown.pdf"'},
+    )
+
+
 async def frontend(request: Request):
     path = request.path_params.get("path") or "index.html"
     target = (FRONTEND_DIR / path).resolve()
@@ -349,6 +370,7 @@ routes = [
     Route("/api/memos/zip", memos_zip, methods=["GET"]),
     Route("/api/memos/{file_name:str}", memo_detail, methods=["GET"]),
     Route("/api/ai/analyze", ai_analyze, methods=["POST"]),
+    Route("/api/tools/markdown-pdf", tool_markdown_pdf, methods=["POST"]),
     Route("/", frontend, methods=["GET"]),
     Route("/{path:path}", frontend, methods=["GET"]),
 ]
