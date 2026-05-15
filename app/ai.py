@@ -10,7 +10,8 @@ from xml.etree import ElementTree
 import streamlit as st
 from google.api_core.exceptions import PreconditionFailed
 
-from app.core_utils import get_now
+from app.core_utils import get_now, ttl_cache
+from app.config import get_gemini_api_key, get_config
 from app.gcs_helper import get_bucket
 from app.md_pdf import markdown_to_pdf_bytes
 from app.memo import load_memo_list_cached, load_single_memo_content, save_memo_txt
@@ -138,19 +139,15 @@ PROMPT_PRESETS = [
 ]
 
 
+from app.config import get_gemini_api_key, get_config
+
+# ... inside _get_gemini_api_key ...
 def _get_gemini_api_key() -> str:
-    env_key = os.getenv("GEMINI_API_KEY")
-    if env_key:
-        return env_key
+    return get_gemini_api_key()
 
-    try:
-        key = st.secrets["gemini"]["api_key"]
-        if key:
-            return key
-    except Exception:
-        pass
+def _get_model_name() -> str:
+    return get_config("GEMINI_MODEL", "gemini-1.5-flash-latest")
 
-    return ""
 
 
 def _is_supported_file(filename: str) -> bool:
@@ -482,7 +479,7 @@ def _read_gemini_usage_blob() -> tuple[list[dict], int | None]:
     return data if isinstance(data, list) else [], generation
 
 
-@st.cache_data(ttl=30)
+@ttl_cache(seconds=30)
 def _load_gemini_usage_logs() -> list[dict]:
     logs, _ = _read_gemini_usage_blob()
     return logs

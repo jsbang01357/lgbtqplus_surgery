@@ -11,7 +11,7 @@ from pathlib import Path, PurePosixPath
 from typing import Optional
 from urllib.parse import quote
 
-from app.core_utils import get_now, KST
+from app.core_utils import get_now, KST, ttl_cache
 from app.gcs_helper import get_bucket
 
 UPLOAD_PREFIX = "uploads"
@@ -82,7 +82,7 @@ def _list_uploaded_files_from_gcs():
     return items
 
 
-@st.cache_data(ttl=30)
+@ttl_cache(seconds=30)
 def list_uploaded_files_cached():
     return _list_uploaded_files_from_gcs()
 
@@ -165,7 +165,7 @@ def clear_all_uploaded_files():
     create_zip_of_files.clear()
 
 
-@st.cache_data(ttl=300)
+@ttl_cache(seconds=300)
 def download_file_bytes(blob_name: str) -> bytes:
     bucket = get_bucket()
     blob = bucket.blob(blob_name)
@@ -188,7 +188,7 @@ def create_file_download_url(file_info: GCSFileInfo) -> str:
     )
 
 
-@st.cache_data(ttl=60)
+@ttl_cache(seconds=60)
 def create_zip_of_files():
     files = list_uploaded_files()
     if not files:
@@ -246,7 +246,7 @@ def _file_type_label(filename: str) -> str:
     return ext.upper()
 
 
-@st.cache_data(show_spinner=False)
+@ttl_cache(seconds=3600)
 def _load_file_icon_svg(icon_key: str) -> str:
     icon_path = FILE_ICON_DIR / f"{icon_key}.svg"
     if not icon_path.exists():

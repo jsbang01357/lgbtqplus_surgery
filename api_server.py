@@ -53,9 +53,19 @@ from app.ai import (
 from app.gcs_helper import get_bucket
 from app.core_utils import get_now
 from app.md_pdf import markdown_to_pdf_bytes
-from app.access_logger import get_access_logs
+from app.access_logger import get_access_logs, clear_access_logs
+from app.text_cleaner import (
+    _clean_ai_mode,
+    _apply_basic_cleaning_options,
+    _convert_markdown_to_plain_text,
+    _convert_markdown_to_word_text,
+)
+from app.settlement import calculate_settlement
+import random
+import json
 
 FRONTEND_DIR = (Path(__file__).resolve().parent / "frontend").resolve()
+MENU_JSON_PATH = Path(__file__).resolve().parent / "data" / "menu_list.json"
 INCLUDE_RE = re.compile(r"<!--\s*include:(?P<path>[^ ]+)\s*-->")
 ACCOUNT_SESSION_COOKIE = "jisong_account_session"
 ACCOUNT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 30
@@ -261,6 +271,107 @@ async def settings_access_logs(request: Request):
     )
 
 
+async def settings_access_logs_clear(request: Request):
+    ok, message = _is_authorized(request)
+    if not ok:
+        return _json({"error": message}, status_code=401)
+    try:
+        clear_access_logs()
+        return _json({"ok": True})
+    except Exception as exc:
+        return _json({"error": str(exc)}, status_code=500)
+
+
+async def tool_text_cleaner(request: Request):
+    # 도구는 비인증으로 열려있으되 민감기능만 제한할 수 있음. 
+    # 여기서는 전체 허용하되 필요시 _is_authorized 체크 추가 가능
+    payload = await request.json()
+    text = (payload.get("text") or "").strip()
+    if not text:
+        return _json({"error": "텍스트를 입력하세요."}, status_code=400)
+    
+    mode = payload.get("mode", "basic")
+    options = payload.get("options", {})
+    
+    cleaned = text
+    if mode == "basic":
+        if options.get("ai_mode"):
+            cleaned = _clean_ai_mode(
+                cleaned, 
+                convert_numbered_lists=options.get("ai_numbered_to_dash", False)
+            )
+        cleaned = _apply_basic_cleaning_options(
+            cleaned,
+            opt_tab=options.get("opt_tab", True),
+            opt_multi_space=options.get("opt_multi_space", True),
+            opt_empty_lines=options.get("opt_empty_lines", True),
+            opt_trim_lines=options.get("opt_trim_lines", True),
+            opt_line_numbers=options.get("opt_line_numbers", False),
+            opt_urls=options.get("opt_urls", False),
+            opt_special_chars=options.get("opt_special_chars", False),
+            opt_merge_lines=options.get("opt_merge_lines", False),
+        )
+    elif mode == "plain":
+        cleaned = _convert_markdown_to_plain_text(
+            text,
+            keep_link_urls=options.get("keep_link_urls", True),
+            keep_code_blocks=options.get("keep_code_blocks", True),
+            keep_lists=options.get("keep_lists", True),
+        )
+    elif mode == "word":
+        cleaned = _convert_markdown_to_word_text(
+            text,
+            keep_link_urls=options.get("keep_link_urls", True),
+            keep_code_blocks=options.get("keep_code_blocks", True),
+            keep_lists=options.get("keep_lists", True),
+        )
+    
+    return _json({
+        "original_len": len(text),
+        "cleaned_len": len(cleaned),
+        "cleaned": cleaned
+    })
+
+
+async def tool_settlement(request: Request):
+    payload = await request.json()
+    people = payload.get("people") or []
+    expenses = payload.get("expenses") or []
+    if not people:
+        return _json({"error": "사람 목록을 입력하세요."}, status_code=400)
+    
+    result = calculate_settlement(people, expenses)
+    return _json({
+        "summary_rows": result.summary_rows,
+        "transfer_rows": result.transfer_rows,
+        "errors": result.errors
+    })
+
+
+async def tool_menu_picker(request: Request):
+    try:
+        if MENU_JSON_PATH.exists():
+            menu_list = json.loads(MENU_JSON_PATH.read_text(encoding="utf-8"))
+        else:
+            menu_list = ["김치찌개", "제육볶음", "돈가스", "초밥", "짜장면"]
+        
+        return _json({"selected_menu": random.choice(menu_list)})
+    except Exception as exc:
+        return _json({"error": str(exc)}, status_code=500)
+
+
+async def tool_storage_status(request: Request):
+    try:
+        bucket = get_bucket()
+        remote_count = sum(1 for blob in bucket.list_blobs() if not blob.name.endswith("/"))
+        return _json({
+            "backend": "GCS",
+            "file_count": remote_count
+        })
+    except Exception as exc:
+        return _json({"error": str(exc)}, status_code=500)
+
+
 async def settings_gemini_usage(request: Request):
     ok, message = _is_authorized(request)
     if not ok:
@@ -331,6 +442,10 @@ async def passkey_login_options(request: Request):
     email = _request_email(request)
     try:
         return _json(passkeys.authentication_options(email))
+    except ValueError as exc:
+        if "등록된 passkey가 없습니다" in str(exc):
+            return _json({"error": str(exc)}, status_code=404)
+        return _json({"error": str(exc)}, status_code=400)
     except Exception as exc:
         return _json({"error": str(exc)}, status_code=400)
 
@@ -580,6 +695,7 @@ routes = [
     Route("/api/session", session, methods=["GET"]),
     Route("/api/usage/summary", usage_summary, methods=["GET"]),
     Route("/api/settings/access-logs", settings_access_logs, methods=["GET"]),
+    Route("/api/settings/access-logs/clear", settings_access_logs_clear, methods=["POST"]),
     Route("/api/settings/gemini-usage", settings_gemini_usage, methods=["GET"]),
     Route("/api/auth/passkey/register/options", passkey_register_options, methods=["POST"]),
     Route("/api/auth/passkey/register/verify", passkey_register_verify, methods=["POST"]),
@@ -598,6 +714,10 @@ routes = [
     Route("/api/memos/{file_name:str}", memo_detail, methods=["GET"]),
     Route("/api/ai/analyze", ai_analyze, methods=["POST"]),
     Route("/api/tools/markdown-pdf", tool_markdown_pdf, methods=["POST"]),
+    Route("/api/tools/text-cleaner", tool_text_cleaner, methods=["POST"]),
+    Route("/api/tools/settlement", tool_settlement, methods=["POST"]),
+    Route("/api/tools/menu-picker", tool_menu_picker, methods=["GET"]),
+    Route("/api/tools/storage-status", tool_storage_status, methods=["GET"]),
     Route("/", frontend, methods=["GET"]),
     Route("/{path:path}", frontend, methods=["GET"]),
 ]

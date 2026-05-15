@@ -203,16 +203,19 @@ def _client_data(payload: dict[str, Any]) -> tuple[dict[str, Any], bytes]:
     return json.loads(client_data_json.decode("utf-8")), client_data_json
 
 
+from app.config import get_config
+
+# ... inside _rp_id, _rp_name, _origin ...
 def _rp_id() -> str:
-    return os.getenv("PASSKEY_RP_ID", "cloud.jisong.dev")
+    return get_config("PASSKEY_RP_ID", "cloud.jisong.dev")
 
 
 def _rp_name() -> str:
-    return os.getenv("PASSKEY_RP_NAME", "Jisong Cloud")
+    return get_config("PASSKEY_RP_NAME", "Jisong Cloud")
 
 
 def _origin() -> str:
-    return os.getenv("PASSKEY_ORIGIN", f"https://{_rp_id()}")
+    return get_config("PASSKEY_ORIGIN", f"https://{_rp_id()}")
 
 
 def registration_options(email: str) -> dict[str, Any]:

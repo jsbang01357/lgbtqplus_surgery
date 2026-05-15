@@ -57,7 +57,7 @@ const aiFileSources = document.querySelector("#ai-file-sources");
 const aiMemoSources = document.querySelector("#ai-memo-sources");
 const aiFileStatus = document.querySelector("#ai-file-status");
 const aiMemoStatus = document.querySelector("#ai-memo-status");
-const pageIds = ["home", "files", "memos", "ai", "tools", "settings"];
+const pageIds = ["login", "home", "files", "memos", "ai", "tools", "settings"];
 const defaultPage = "home";
 
 function escapeHtml(value = "") {
@@ -111,9 +111,25 @@ function pageFromLocation() {
 }
 
 function setActivePage(page = pageFromLocation(), options = {}) {
-  const nextPage = pageIds.includes(page) ? page : defaultPage;
+  let nextPage = pageIds.includes(page) ? page : defaultPage;
+
+  // Force login if not authorized
+  if (state.session && !state.session.authorized && nextPage !== "login") {
+    nextPage = "login";
+  } else if (state.session?.authorized && nextPage === "login") {
+    nextPage = defaultPage;
+  }
+
   document.querySelectorAll("[data-page]").forEach((section) => {
-    section.hidden = section.dataset.page !== nextPage;
+    if (section.dataset.page === nextPage) {
+      section.hidden = false;
+      section.classList.remove("fade-in");
+      void section.offsetWidth;
+      section.classList.add("fade-in");
+    } else {
+      section.hidden = true;
+      section.classList.remove("fade-in");
+    }
   });
   document.querySelectorAll("[data-route]").forEach((link) => {
     link.classList.toggle("is-active", link.dataset.route === nextPage);
@@ -196,7 +212,7 @@ function setBusy(button, busyText, isBusy) {
   if (!button) return;
   if (isBusy) {
     button.dataset.idleText = button.textContent;
-    button.textContent = busyText;
+    button.innerHTML = `<span class="spinner"></span>${busyText}`;
     button.disabled = true;
     return;
   }
@@ -354,7 +370,6 @@ async function loadFiles() {
   } catch (error) {
     state.files = [...files];
     state.usesDemoData = true;
-    showToast(error.message);
   }
   renderFiles();
   updateHeroPreview();
@@ -472,14 +487,13 @@ function showToast(message) {
 
 async function registerPasskey() {
   if (!window.PublicKeyCredential) {
-    await loginWithAccountId();
+    showToast("브라우저가 패스키를 지원하지 않습니다.");
     return;
   }
   try {
     const session = state.session || await loadSession();
     if (!session?.authorized) {
-      showToast("먼저 설정에서 ID와 비밀번호로 로그인하세요.");
-      setActivePage("settings");
+      showToast("먼저 로그인이 필요합니다.");
       return;
     }
     const options = await postJson("/api/auth/passkey/register/options");
@@ -496,7 +510,7 @@ async function registerPasskey() {
 
 async function loginWithPasskey() {
   if (!window.PublicKeyCredential) {
-    await loginWithAccountId();
+    showToast("브라우저가 패스키를 지원하지 않습니다.");
     return;
   }
   try {
@@ -506,44 +520,37 @@ async function loginWithPasskey() {
     });
     await postJson("/api/auth/passkey/login/verify", serializeCredential(credential));
     await loadSession();
-    await Promise.all([loadFiles(), loadMemos()]);
-    showToast("패스키 로그인 완료");
+    if (state.session?.authorized) {
+      await Promise.all([loadFiles(), loadMemos(), loadUsageSummary()]);
+      showToast("패스키 로그인 완료");
+      setActivePage("home");
+    }
+  } catch (error) {
+    if (error.message.includes("등록된 passkey가 없습니다")) {
+      showToast("등록된 패스키가 없습니다. 계정 ID로 먼저 로그인 후 등록하세요.");
+    } else {
+      showToast(error.message);
+    }
+  }
+}
+
+async function loadSettings() {
+  renderSettingsAuth(state.session);
+  if (!state.session?.authorized) {
+    renderAccessLogSettings({ logs: [] });
+    renderGeminiUsageSettings({ daily: [] });
+    return;
+  }
+  try {
+    const [accessLogs, geminiUsage] = await Promise.all([
+      apiJson("/api/settings/access-logs"),
+      apiJson("/api/settings/gemini-usage"),
+    ]);
+    renderAccessLogSettings(accessLogs);
+    renderGeminiUsageSettings(geminiUsage);
   } catch (error) {
     showToast(error.message);
   }
-}
-
-async function loginWithAccountId() {
-  try {
-    const session = await loadSession();
-    if (session?.authorized) {
-      await Promise.all([loadFiles(), loadMemos()]);
-      showToast("이미 인증되어 있습니다.");
-      return;
-    }
-    const defaultId = session?.account_login_id || "jsbang01357@gmail.com";
-    const accountId = window.prompt("계정 ID를 입력하세요.", defaultId);
-    if (!accountId) return;
-    const password = window.prompt("비밀번호를 입력하세요.");
-    if (password === null) return;
-    const passwordInput = document.querySelector("#account-password-input");
-    if (passwordInput) passwordInput.value = password;
-    await submitAccountIdLogin(accountId);
-    showToast("계정 ID 로그인 완료");
-  } catch (error) {
-    showToast(error.message || "계정 ID 로그인에 실패했습니다.");
-  }
-}
-
-async function submitAccountIdLogin(accountId) {
-  const passwordInput = document.querySelector("#account-password-input");
-  await postJson("/api/auth/account/login", {
-    account_id: accountId,
-    password: passwordInput?.value || "",
-  });
-  await loadSession();
-  await Promise.all([loadFiles(), loadMemos(), loadUsageSummary()]);
-  await loadSettings();
 }
 
 function renderSettingsAuth(session = state.session) {
@@ -625,25 +632,6 @@ function renderGeminiUsageSettings(data) {
     .join("") || `<p class="empty-state">Gemini 사용량 로그가 없습니다.</p>`;
 }
 
-async function loadSettings() {
-  renderSettingsAuth(state.session);
-  if (!state.session?.authorized) {
-    renderAccessLogSettings({ logs: [] });
-    renderGeminiUsageSettings({ daily: [] });
-    return;
-  }
-  try {
-    const [accessLogs, geminiUsage] = await Promise.all([
-      apiJson("/api/settings/access-logs"),
-      apiJson("/api/settings/gemini-usage"),
-    ]);
-    renderAccessLogSettings(accessLogs);
-    renderGeminiUsageSettings(geminiUsage);
-  } catch (error) {
-    showToast(error.message);
-  }
-}
-
 function renderFiles() {
   const visibleFiles = getFilteredFiles();
   fileList.innerHTML = visibleFiles
@@ -670,7 +658,15 @@ function renderFiles() {
         </div>
       `,
     )
-    .join("") || `<p class="empty-state">아직 업로드된 파일이 없습니다.</p>`;
+    .join("") || `
+      <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+          <polyline points="13 2 13 9 20 9"></polyline>
+        </svg>
+        <p>아직 업로드된 파일이 없습니다.</p>
+      </div>
+    `;
   fileCount.textContent = String(state.files.length);
   fileListStatus.textContent = state.fileQuery
     ? `${visibleFiles.length}개 표시 · 전체 ${state.files.length}개`
@@ -698,7 +694,18 @@ function renderMemos() {
         </article>
       `,
     )
-    .join("") || `<p class="empty-state">아직 저장된 메모가 없습니다.</p>`;
+    .join("") || `
+      <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+        <p>아직 저장된 메모가 없습니다.</p>
+      </div>
+    `;
   memoCount.textContent = String(state.memos.length);
   memoListStatus.textContent = state.memoQuery
     ? `${visibleMemos.length}개 표시 · 전체 ${state.memos.length}개`
@@ -708,6 +715,7 @@ function renderMemos() {
 
 function renderPresets() {
   const row = document.querySelector("#preset-row");
+  if (!row) return;
   row.innerHTML = presets
     .map((preset) => `<button type="button" data-preset="${preset}">${preset}</button>`)
     .join("");
@@ -716,42 +724,46 @@ function renderPresets() {
 function renderAiSources() {
   const realFiles = state.files.filter((file) => file.blobName);
   const realMemos = state.memos.filter((memo) => memo.fileName);
-  aiFileSources.innerHTML = realFiles.length
-    ? realFiles
-        .slice(0, 8)
-        .map(
-          (file, index) => `
-            <label class="source-option">
-              <input type="checkbox" value="${escapeHtml(file.blobName)}" data-ai-file />
-              <span>${escapeHtml(file.name)}</span>
-              <small>${escapeHtml(file.size)}</small>
-            </label>
-          `,
-        )
-        .join("")
-    : `<p class="source-empty">인증 후 파일을 선택할 수 있습니다.</p>`;
-  aiMemoSources.innerHTML = realMemos.length
-    ? realMemos
-        .slice(0, 8)
-        .map(
-          (memo) => `
-            <label class="source-option">
-              <input type="checkbox" value="${escapeHtml(memo.fileName)}" data-ai-memo />
-              <span>${escapeHtml(memo.title)}</span>
-              <small>${escapeHtml(memo.updated || "메모")}</small>
-            </label>
-          `,
-        )
-        .join("")
-    : `<p class="source-empty">인증 후 메모를 선택할 수 있습니다.</p>`;
+  if (aiFileSources) {
+    aiFileSources.innerHTML = realFiles.length
+      ? realFiles
+          .slice(0, 8)
+          .map(
+            (file, index) => `
+              <label class="source-option">
+                <input type="checkbox" value="${escapeHtml(file.blobName)}" data-ai-file />
+                <span>${escapeHtml(file.name)}</span>
+                <small>${escapeHtml(file.size)}</small>
+              </label>
+            `,
+          )
+          .join("")
+      : `<p class="source-empty">인증 후 파일을 선택할 수 있습니다.</p>`;
+  }
+  if (aiMemoSources) {
+    aiMemoSources.innerHTML = realMemos.length
+      ? realMemos
+          .slice(0, 8)
+          .map(
+            (memo) => `
+              <label class="source-option">
+                <input type="checkbox" value="${escapeHtml(memo.fileName)}" data-ai-memo />
+                <span>${escapeHtml(memo.title)}</span>
+                <small>${escapeHtml(memo.updated || "메모")}</small>
+              </label>
+            `,
+          )
+          .join("")
+      : `<p class="source-empty">인증 후 메모를 선택할 수 있습니다.</p>`;
+  }
   updateAiSourceStatus();
 }
 
 function updateAiSourceStatus() {
-  const fileCount = selectedValues("[data-ai-file]").length;
-  const memoCount = selectedValues("[data-ai-memo]").length;
-  aiFileStatus.textContent = fileCount ? `${fileCount}개 선택` : "선택 없음";
-  aiMemoStatus.textContent = memoCount ? `${memoCount}개 선택` : "선택 없음";
+  const fCount = selectedValues("[data-ai-file]").length;
+  const mCount = selectedValues("[data-ai-memo]").length;
+  if (aiFileStatus) aiFileStatus.textContent = fCount ? `${fCount}개 선택` : "선택 없음";
+  if (aiMemoStatus) aiMemoStatus.textContent = mCount ? `${mCount}개 선택` : "선택 없음";
 }
 
 function renderTool(tool) {
@@ -760,9 +772,23 @@ function renderTool(tool) {
       <div class="tool-panel">
         <h3>텍스트 클리너</h3>
         <textarea id="tool-cleaner-input" rows="7" placeholder="정리할 텍스트를 붙여넣으세요."></textarea>
+        <div class="tool-options">
+          <label><input type="radio" name="cleaner-mode" value="basic" checked> 기본 정리</label>
+          <label><input type="radio" name="cleaner-mode" value="plain"> Markdown → Plain</label>
+          <label><input type="radio" name="cleaner-mode" value="word"> Markdown → Word</label>
+        </div>
+        <div id="cleaner-basic-options" class="tool-sub-options">
+          <label><input type="checkbox" id="cleaner-ai-mode" checked> AI 모드 (불릿/구분선)</label>
+          <label><input type="checkbox" id="cleaner-ai-dash"> 번호를 '- '로 변환</label>
+        </div>
         <div class="form-actions">
-          <button class="button button-primary" id="tool-cleaner-run" type="button">정리</button>
+          <button class="button button-primary" id="tool-cleaner-run" type="button">정리하기</button>
           <button class="button button-secondary" id="tool-copy-output" type="button">결과 복사</button>
+        </div>
+        <div id="tool-cleaner-metrics" class="tool-metrics" style="display:none; margin-top:1rem;">
+           <article><span>원본</span><strong id="cleaner-orig-len">0</strong></article>
+           <article><span>정리 후</span><strong id="cleaner-new-len">0</strong></article>
+           <article><span>변화</span><strong id="cleaner-diff-len">0</strong></article>
         </div>
         <pre id="tool-result">결과가 여기에 표시됩니다.</pre>
       </div>
@@ -782,42 +808,107 @@ function renderTool(tool) {
           <article><span>공백 포함</span><strong>0</strong></article>
           <article><span>공백 제외</span><strong>0</strong></article>
           <article><span>단어</span><strong>0</strong></article>
-          <article><span>줄</span><strong>0</strong></article>
+          <article><span>예상 A4</span><strong>0</strong></article>
         </div>
       </div>
     `,
     settlement: `
       <div class="tool-panel">
         <h3>정산 계산기</h3>
-        <textarea id="tool-settlement-input" rows="7">지송 32000&#10;민수 18000&#10;서연 0</textarea>
-        <button class="button button-primary" id="tool-settlement-run" type="button">계산</button>
-        <pre id="tool-settlement-result">이름과 금액을 줄마다 입력하세요.</pre>
+        <div class="tool-input-group">
+          <label>사람 목록 (쉼표 또는 줄바꿈)</label>
+          <input type="text" id="tool-settlement-people" placeholder="지송, 민수, 서연">
+        </div>
+        <div class="tool-input-group">
+          <label>지출 내역 (항목, 돈낸사람, 비용, n빵할사람 순서 무관 - 텍스트 기반 입력)</label>
+          <textarea id="tool-settlement-input" rows="5" placeholder="저녁 지송 50000&#10;택시 민수 12000"></textarea>
+        </div>
+        <button class="button button-primary" id="tool-settlement-run" type="button">정산 계산하기</button>
+        <div id="tool-settlement-result-container" style="display:none; margin-top:1rem;">
+          <h4>사람별 잔액</h4>
+          <pre id="tool-settlement-summary"></pre>
+          <h4>최소 송금 목록</h4>
+          <pre id="tool-settlement-transfers"></pre>
+        </div>
+      </div>
+    `,
+    "menu-picker": `
+      <div class="tool-panel">
+        <h3>오늘 뭐 먹지?</h3>
+        <p>고민을 멈추고 버튼을 눌러보세요.</p>
+        <div class="menu-result" id="menu-result-box" style="display:none;">
+          <strong id="selected-menu-label">메뉴</strong>
+        </div>
+        <button class="button button-primary" id="tool-menu-run" type="button">메뉴 추천받기</button>
+      </div>
+    `,
+    "storage-status": `
+      <div class="tool-panel">
+        <h3>저장소 상태</h3>
+        <p>GCS 버킷의 실시간 상태를 확인합니다.</p>
+        <div class="tool-metrics" id="storage-status-metrics">
+          <article><span>Backend</span><strong>-</strong></article>
+          <article><span>파일 수</span><strong>-</strong></article>
+        </div>
+        <button class="button button-secondary" id="tool-storage-refresh" type="button">새로고침</button>
       </div>
     `,
   };
-  toolOutput.innerHTML = templates[tool] || templates.cleaner;
-  bindToolPanel(tool);
-  toolOutput.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  if (toolOutput) {
+    toolOutput.innerHTML = templates[tool] || templates.cleaner;
+    bindToolPanel(tool);
+    toolOutput.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
 }
 
 function bindToolPanel(tool) {
   if (tool === "cleaner") {
-    document.querySelector("#tool-cleaner-run").addEventListener("click", () => {
-      const raw = document.querySelector("#tool-cleaner-input").value;
-      const cleaned = raw
-        .replace(/\r/g, "")
-        .split("\n")
-        .map((line) => line.replace(/\s+/g, " ").trim())
-        .filter(Boolean)
-        .join("\n");
-      document.querySelector("#tool-result").textContent = cleaned || "정리할 텍스트가 없습니다.";
+    const runBtn = document.querySelector("#tool-cleaner-run");
+    const modeInputs = document.querySelectorAll('input[name="cleaner-mode"]');
+    const basicOptions = document.querySelector("#cleaner-basic-options");
+
+    modeInputs.forEach((input) => {
+      input.addEventListener("change", (e) => {
+        basicOptions.style.display = e.target.value === "basic" ? "block" : "none";
+      });
     });
-    document.querySelector("#tool-copy-output").addEventListener("click", async () => {
+
+    runBtn.addEventListener("click", async () => {
+      const text = document.querySelector("#tool-cleaner-input").value;
+      if (!text.trim()) {
+        showToast("텍스트를 입력하세요.");
+        return;
+      }
+      const mode = document.querySelector('input[name="cleaner-mode"]:checked').value;
+      const options = {
+        ai_mode: document.querySelector("#cleaner-ai-mode").checked,
+        ai_numbered_to_dash: document.querySelector("#cleaner-ai-dash").checked,
+      };
+
+      setBusy(runBtn, "정리 중", true);
       try {
-        await navigator.clipboard.writeText(document.querySelector("#tool-result").textContent);
+        const data = await postJson("/api/tools/text-cleaner", { text, mode, options });
+        document.querySelector("#tool-result").textContent = data.cleaned;
+        document.querySelector("#tool-cleaner-metrics").style.display = "flex";
+        document.querySelector("#cleaner-orig-len").textContent = data.original_len;
+        document.querySelector("#cleaner-new-len").textContent = data.cleaned_len;
+        const diff = data.cleaned_len - data.original_len;
+        document.querySelector("#cleaner-diff-len").textContent = (diff >= 0 ? "+" : "") + diff;
+      } catch (error) {
+        showToast(error.message);
+      } finally {
+        setBusy(runBtn, "정리 중", false);
+      }
+    });
+
+    document.querySelector("#tool-copy-output").addEventListener("click", async () => {
+      const result = document.querySelector("#tool-result").textContent;
+      if (!result || result === "결과가 여기에 표시됩니다.") return;
+      try {
+        await navigator.clipboard.writeText(result);
         showToast("결과를 복사했습니다.");
       } catch {
-        showToast("브라우저가 클립보드 복사를 허용하지 않았습니다.");
+        showToast("복사에 실패했습니다.");
       }
     });
   }
@@ -840,370 +931,210 @@ function bindToolPanel(tool) {
     const render = () => {
       const text = input.value;
       const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+      const a4 = (text.length / 1500).toFixed(2);
       document.querySelector("#tool-counter-result").innerHTML = `
         <article><span>공백 포함</span><strong>${text.length}</strong></article>
         <article><span>공백 제외</span><strong>${text.replace(/\s/g, "").length}</strong></article>
         <article><span>단어</span><strong>${words}</strong></article>
-        <article><span>줄</span><strong>${text ? text.split(/\n/).length : 0}</strong></article>
+        <article><span>예상 A4</span><strong>${a4}쪽</strong></article>
       `;
     };
     input.addEventListener("input", render);
   }
   if (tool === "settlement") {
-    document.querySelector("#tool-settlement-run").addEventListener("click", () => {
-      const rows = document.querySelector("#tool-settlement-input").value
-        .split("\n")
-        .map((line) => line.trim().split(/\s+/))
-        .filter((parts) => parts.length >= 2)
-        .map(([name, amount]) => ({ name, amount: Number(amount.replace(/,/g, "")) || 0 }));
-      if (!rows.length) {
-        document.querySelector("#tool-settlement-result").textContent = "정산할 항목이 없습니다.";
+    const runBtn = document.querySelector("#tool-settlement-run");
+    runBtn.addEventListener("click", async () => {
+      const peopleText = document.querySelector("#tool-settlement-people").value;
+      const expenseText = document.querySelector("#tool-settlement-input").value;
+      if (!peopleText.trim()) {
+        showToast("사람 목록을 입력하세요.");
         return;
       }
-      const total = rows.reduce((sum, row) => sum + row.amount, 0);
-      const share = Math.round(total / rows.length);
-      const result = rows
-        .map((row) => `${row.name}: ${row.amount - share >= 0 ? "+" : ""}${(row.amount - share).toLocaleString()}원`)
-        .join("\n");
-      document.querySelector("#tool-settlement-result").textContent =
-        `총액 ${total.toLocaleString()}원 · 1인 ${share.toLocaleString()}원\n\n${result}`;
+      
+      const people = peopleText.split(/[,\n]/).map(p => p.trim()).filter(Boolean);
+      const lines = expenseText.split("\n").filter(l => l.trim());
+      const expenses = lines.map(line => {
+        const parts = line.trim().split(/\s+/);
+        let amount = 0;
+        let payer = "";
+        let item = "";
+        parts.forEach(p => {
+          const num = parseInt(p.replace(/,/g, ""));
+          if (!isNaN(num) && num > 100) amount = num;
+          else if (people.includes(p)) payer = p;
+          else item = p;
+        });
+        return { 항목: item, 돈낸사람: payer, 비용: amount };
+      });
+
+      setBusy(runBtn, "계산 중", true);
+      try {
+        const data = await postJson("/api/tools/settlement", { people, expenses });
+        const container = document.querySelector("#tool-settlement-result-container");
+        container.style.display = "block";
+        document.querySelector("#tool-settlement-summary").textContent = data.summary_rows
+          .map(r => `${r.사람}: ${r.잔액 >= 0 ? "+" : ""}${r.잔액.toLocaleString()}원 (${r.낸 금액}원 냄)`)
+          .join("\n");
+        document.querySelector("#tool-settlement-transfers").textContent = data.transfer_rows.length 
+          ? data.transfer_rows.map(t => `${t["보내는 사람"]} → ${t["받는 사람"]}: ${t["금액"].toLocaleString()}원`).join("\n")
+          : "추가 송금이 필요 없습니다.";
+        if (data.errors && data.errors.length) showToast(data.errors[0]);
+      } catch (error) {
+        showToast(error.message);
+      } finally {
+        setBusy(runBtn, "계산 중", false);
+      }
     });
+  }
+  if (tool === "menu-picker") {
+    const runBtn = document.querySelector("#tool-menu-run");
+    runBtn.addEventListener("click", async () => {
+      setBusy(runBtn, "추천 중", true);
+      try {
+        const data = await apiJson("/api/tools/menu-picker");
+        const box = document.querySelector("#menu-result-box");
+        box.style.display = "block";
+        document.querySelector("#selected-menu-label").textContent = data.selected_menu;
+      } catch (error) {
+        showToast(error.message);
+      } finally {
+        setBusy(runBtn, "추천 중", false);
+      }
+    });
+  }
+  if (tool === "storage-status") {
+    const refreshBtn = document.querySelector("#tool-storage-refresh");
+    const load = async () => {
+      setBusy(refreshBtn, "확인 중", true);
+      try {
+        const data = await apiJson("/api/tools/storage-status");
+        document.querySelector("#storage-status-metrics").innerHTML = `
+          <article><span>Backend</span><strong>${data.backend}</strong></article>
+          <article><span>파일 수</span><strong>${data.file_count}개</strong></article>
+        `;
+      } catch (error) {
+        showToast(error.message);
+      } finally {
+        setBusy(refreshBtn, "확인 중", false);
+      }
+    };
+    refreshBtn.addEventListener("click", load);
+    load();
   }
 }
-
-async function uploadSelectedFiles(input) {
-  const selected = Array.from(input.files || []);
-  if (!selected.length) {
-    showToast("추가할 파일을 먼저 선택하세요.");
-    return;
-  }
-
-  try {
-    const formData = new FormData();
-    selected.forEach((file) => formData.append("files", file));
-    await apiJson("/api/files", { method: "POST", body: formData });
-    input.value = "";
-    await loadFiles();
-    showToast(`${selected.length}개 파일이 업로드됐습니다.`);
-  } catch (error) {
-    showToast(error.message);
-  }
-}
-
-document.querySelector("#upload-form").addEventListener("submit", (event) => {
-  event.preventDefault();
-  uploadSelectedFiles(document.querySelector("#file-input"));
-});
-
-document.querySelector("#file-input").addEventListener("change", (event) => {
-  uploadSelectedFiles(event.target);
-});
-
-fileList.addEventListener("click", async (event) => {
-  const deleteButton = event.target.closest("[data-delete]");
-  const downloadButton = event.target.closest("[data-download]");
-
-  if (deleteButton) {
-    const index = Number(deleteButton.dataset.delete);
-    const removed = getFilteredFiles()[index];
-    if (!removed?.blobName) {
-      const originalIndex = state.files.indexOf(removed);
-      if (originalIndex >= 0) {
-        state.files.splice(originalIndex, 1);
-      }
-      renderFiles();
-      showToast(`${removed?.name || "파일"} 삭제됨`);
-      return;
-    }
-    try {
-      await postJson("/api/files/delete", { blob_name: removed.blobName });
-      await loadFiles();
-      showToast(`${removed.name} 삭제됨`);
-    } catch (error) {
-      showToast(error.message);
-    }
-  }
-
-  if (downloadButton) {
-    const index = Number(downloadButton.dataset.download);
-    const file = getFilteredFiles()[index];
-    if (file.downloadUrl) {
-      window.location.assign(file.downloadUrl);
-      return;
-    }
-    showToast(`${file.name} 다운로드 준비`);
-  }
-});
-
-document.querySelector("#download-all").addEventListener("click", async () => {
-  try {
-    await downloadFromApi("/api/files/zip", "jisong-cloud-files.zip");
-    showToast("전체 파일 ZIP 다운로드를 시작합니다.");
-  } catch (error) {
-    showToast(error.message);
-  }
-});
-
-document.querySelector("#passkey-register").addEventListener("click", registerPasskey);
-document.querySelector("#passkey-login").addEventListener("click", loginWithPasskey);
-document.querySelector("#account-id-login")?.addEventListener("click", loginWithAccountId);
-document.querySelector("#account-id-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const input = document.querySelector("#account-id-input");
-  const accountId = input.value.trim();
-  if (!accountId) {
-    showToast("계정 ID를 입력하세요.");
-    return;
-  }
-  try {
-    await submitAccountIdLogin(accountId);
-    showToast("계정 ID 로그인 완료");
-  } catch (error) {
-    showToast(error.message || "계정 ID 로그인에 실패했습니다.");
-  }
-});
-document.querySelector("#settings-refresh").addEventListener("click", async () => {
-  await loadSession();
-  await loadSettings();
-  showToast("설정을 새로고침했습니다.");
-});
-document.querySelector("#file-search").addEventListener("input", (event) => {
-  state.fileQuery = event.target.value;
-  renderFiles();
-});
-document.querySelector("#memo-search").addEventListener("input", (event) => {
-  state.memoQuery = event.target.value;
-  renderMemos();
-});
-document.querySelector("#download-memos").addEventListener("click", async () => {
-  try {
-    await downloadFromApi("/api/memos/zip", "jisong-cloud-memos.zip");
-    showToast("메모 ZIP 다운로드를 시작합니다.");
-  } catch (error) {
-    showToast(error.message);
-  }
-});
-
-memoList.addEventListener("click", async (event) => {
-  const openButton = event.target.closest("[data-memo-open]");
-  const deleteButton = event.target.closest("[data-memo-delete]");
-
-  if (openButton) {
-    const memo = getFilteredMemos()[Number(openButton.dataset.memoOpen)];
-    try {
-      const data = await apiJson(`/api/memos/${encodeURIComponent(memo.fileName)}`);
-      memo.title = data.memo.title;
-      memo.body = data.memo.content || "내용이 비어 있습니다.";
-      document.querySelector("#memo-title").value = memo.title;
-      document.querySelector("#memo-body").value = data.memo.content || "";
-      document.querySelector("#memo-file-name").value = memo.fileName;
-      state.editingMemoFileName = memo.fileName;
-      memoSaveButton.textContent = "메모 수정";
-      downloadCurrentMemoButton.disabled = false;
-      renderMemos();
-      showToast("메모를 불러왔습니다.");
-    } catch (error) {
-      showToast(error.message);
-    }
-  }
-
-  if (deleteButton) {
-    const memo = getFilteredMemos()[Number(deleteButton.dataset.memoDelete)];
-    try {
-      await postJson("/api/memos/delete", { file_name: memo.fileName });
-      if (state.editingMemoFileName === memo.fileName) {
-        resetMemoForm();
-      }
-      await loadMemos();
-      showToast("메모가 삭제됐습니다.");
-    } catch (error) {
-      showToast(error.message);
-    }
-  }
-});
-
-downloadCurrentMemoButton.addEventListener("click", async () => {
-  if (!state.editingMemoFileName) {
-    showToast("다운로드할 메모를 먼저 여세요.");
-    return;
-  }
-  try {
-    await downloadFromApi(
-      `/api/memos/${encodeURIComponent(state.editingMemoFileName)}/download`,
-      `${document.querySelector("#memo-title").value || "memo"}.txt`,
-    );
-    showToast("메모 TXT 다운로드를 시작합니다.");
-  } catch (error) {
-    showToast(error.message);
-  }
-});
-
-document.querySelector("#memo-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const titleInput = document.querySelector("#memo-title");
-  const bodyInput = document.querySelector("#memo-body");
-  const fileNameInput = document.querySelector("#memo-file-name");
-  const title = titleInput.value.trim();
-  const body = bodyInput.value.trim();
-
-  if (!title || !body) {
-    showToast("제목과 내용을 모두 입력하세요.");
-    return;
-  }
-
-  try {
-    const isEdit = Boolean(fileNameInput.value);
-    await postJson("/api/memos", {
-      title,
-      content: body,
-      file_name: fileNameInput.value || undefined,
-    });
-    resetMemoForm();
-    await loadMemos();
-    showToast(isEdit ? "메모가 수정됐습니다." : "메모가 저장됐습니다.");
-  } catch (error) {
-    showToast(error.message);
-  }
-});
-
-document.querySelector("#memo-reset-button").addEventListener("click", () => {
-  resetMemoForm();
-  renderMemos();
-});
-
-document.querySelector("#preset-row").addEventListener("click", (event) => {
-  const button = event.target.closest("[data-preset]");
-  if (!button) return;
-  const prompt = document.querySelector("#ai-prompt");
-  prompt.value = `${prompt.value.trim()}\n\n${button.dataset.preset} 형식으로 정리해줘.`;
-  prompt.focus();
-});
-
-document.querySelector("#run-ai").addEventListener("click", async () => {
-  const prompt = document.querySelector("#ai-prompt").value.trim();
-  const result = document.querySelector("#ai-result");
-  const button = document.querySelector("#run-ai");
-  if (!prompt) {
-    showToast("분석할 요청을 입력하세요.");
-    return;
-  }
-
-  setBusy(button, "분석 중", true);
-  saveAiMemoButton.disabled = true;
-  downloadAiMdButton.disabled = true;
-  downloadAiPdfButton.disabled = true;
-  result.innerHTML = `
-    <span>AI result</span>
-    <h3>분석 중</h3>
-    <p>Gemini가 요청을 정리하고 있습니다.</p>
-  `;
-  try {
-    const data = await postJson("/api/ai/analyze", {
-      prompt,
-      blob_names: selectedValues("[data-ai-file]"),
-      memo_file_names: selectedValues("[data-ai-memo]"),
-    });
-    result.innerHTML = `
-      <span>AI result</span>
-      <h3>분석 결과</h3>
-      <div>${markdownToHtml(data.result)}</div>
-    `;
-    state.lastAiResult = data.result;
-    saveAiMemoButton.disabled = false;
-    downloadAiMdButton.disabled = false;
-    downloadAiPdfButton.disabled = false;
-    await loadUsageSummary();
-    showToast("AI 분석이 완료됐습니다.");
-  } catch (error) {
-    state.lastAiResult = "";
-    saveAiMemoButton.disabled = true;
-    downloadAiMdButton.disabled = true;
-    downloadAiPdfButton.disabled = true;
-    result.innerHTML = `
-      <span>AI result</span>
-      <h3>분석 대기</h3>
-      <p>${escapeHtml(error.message)}</p>
-    `;
-    showToast(error.message);
-  } finally {
-    setBusy(button, "분석 중", false);
-  }
-});
-
-downloadAiMdButton.addEventListener("click", () => {
-  if (!state.lastAiResult) {
-    showToast("다운로드할 AI 결과가 없습니다.");
-    return;
-  }
-  downloadTextFile("jisong-ai-result.md", state.lastAiResult, "text/markdown;charset=utf-8");
-});
-
-downloadAiPdfButton.addEventListener("click", async () => {
-  if (!state.lastAiResult) {
-    showToast("다운로드할 AI 결과가 없습니다.");
-    return;
-  }
-  try {
-    await downloadPostBlob(
-      "/api/tools/markdown-pdf",
-      { markdown: state.lastAiResult },
-      "jisong-ai-result.pdf",
-    );
-    showToast("AI 결과 PDF 다운로드를 시작합니다.");
-  } catch (error) {
-    showToast(error.message);
-  }
-});
-
-saveAiMemoButton.addEventListener("click", async () => {
-  if (!state.lastAiResult) {
-    showToast("저장할 AI 결과가 없습니다.");
-    return;
-  }
-  setBusy(saveAiMemoButton, "저장 중", true);
-  try {
-    await postJson("/api/memos", {
-      title: `AI 분석 ${new Intl.DateTimeFormat("ko-KR", {
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      }).format(new Date())}`,
-      content: state.lastAiResult,
-    });
-    await loadMemos();
-    showToast("AI 결과를 메모로 저장했습니다.");
-  } catch (error) {
-    showToast(error.message);
-  } finally {
-    setBusy(saveAiMemoButton, "저장 중", false);
-    saveAiMemoButton.disabled = !state.lastAiResult;
-  }
-});
-
-document.querySelector(".tool-grid").addEventListener("click", (event) => {
-  const card = event.target.closest("[data-tool]");
-  if (!card) return;
-  document.querySelectorAll(".tool-card").forEach((item) => item.classList.remove("is-selected"));
-  card.classList.add("is-selected");
-  renderTool(card.dataset.tool);
-});
-
-document.querySelector(".ai-source-grid").addEventListener("change", updateAiSourceStatus);
 
 async function bootstrap() {
   bindRoutes();
+
+  // Login page logic
+  const loginTabs = document.querySelectorAll(".login-tab");
+  loginTabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+      loginTabs.forEach(t => t.classList.remove("is-active"));
+      tab.classList.add("is-active");
+      const mode = tab.dataset.loginTab;
+      const pPass = document.querySelector("#login-panel-passkey");
+      const pAcc = document.querySelector("#login-panel-account");
+      if (pPass) pPass.style.display = mode === "passkey" ? "flex" : "none";
+      if (pAcc) pAcc.style.display = mode === "account" ? "flex" : "none";
+    });
+  });
+
+  document.querySelector("#login-button-passkey")?.addEventListener("click", async () => {
+    const btn = document.querySelector("#login-button-passkey");
+    setBusy(btn, "인증 중", true);
+    try {
+      await loginWithPasskey();
+    } finally {
+      setBusy(btn, "인증 중", false);
+    }
+  });
+
+  document.querySelector("#login-form-account")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = document.querySelector("#login-button-account");
+    const email = document.querySelector("#login-email").value;
+    const password = document.querySelector("#login-password").value;
+    setBusy(btn, "로그인 중", true);
+    try {
+      await postJson("/api/auth/account/login", { account_id: email, password });
+      const session = await loadSession();
+      if (session?.authorized) {
+        showToast("로그인 성공");
+        await Promise.all([loadFiles(), loadMemos(), loadUsageSummary()]);
+        setActivePage("home");
+      }
+    } catch (error) {
+      showToast(error.message);
+    } finally {
+      setBusy(btn, "로그인 중", false);
+    }
+  });
+
+  const session = await loadSession();
   renderFiles();
   renderMemos();
   updateHeroPreview();
   renderPresets();
   renderAiSources();
   renderTool("cleaner");
-  const session = await loadSession();
   renderSettingsAuth(session);
+  
   if (session?.authorized) {
     await Promise.all([loadFiles(), loadMemos(), loadUsageSummary()]);
   }
+  
+  // Event listeners that require session
+  document.querySelector("#upload-form")?.addEventListener("submit", e => {
+    e.preventDefault();
+    uploadSelectedFiles(document.querySelector("#file-input"));
+  });
+  document.querySelector("#file-input")?.addEventListener("change", e => uploadSelectedFiles(e.target));
+  document.querySelector("#download-all")?.addEventListener("click", async () => {
+    try { await downloadFromApi("/api/files/zip", "jisong-cloud-files.zip"); showToast("ZIP 다운로드 시작"); } 
+    catch(err) { showToast(err.message); }
+  });
+  document.querySelector("#passkey-register")?.addEventListener("click", registerPasskey);
+  document.querySelector("#passkey-login")?.addEventListener("click", loginWithPasskey);
+  document.querySelector("#account-id-form")?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const email = document.querySelector("#account-id-input").value;
+    try { await submitAccountIdLogin(email); showToast("로그인 성공"); } catch(err) { showToast(err.message); }
+  });
+  document.querySelector("#settings-refresh")?.addEventListener("click", async () => {
+    await loadSession(); await loadSettings(); showToast("새로고침 완료");
+  });
+  document.querySelector("#access-log-clear")?.addEventListener("click", async () => {
+    if (!confirm("삭제하시겠습니까?")) return;
+    try { await postJson("/api/settings/access-logs/clear"); await loadSettings(); showToast("삭제 완료"); } catch(err) { showToast(err.message); }
+  });
+  document.querySelector("#file-search")?.addEventListener("input", e => { state.fileQuery = e.target.value; renderFiles(); });
+  document.querySelector("#memo-search")?.addEventListener("input", e => { state.memoQuery = e.target.value; renderMemos(); });
+  document.querySelector("#download-memos")?.addEventListener("click", async () => {
+    try { await downloadFromApi("/api/memos/zip", "jisong-cloud-memos.zip"); showToast("ZIP 다운로드 시작"); } 
+    catch(err) { showToast(err.message); }
+  });
+  document.querySelector("#memo-form")?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const t = document.querySelector("#memo-title").value;
+    const b = document.querySelector("#memo-body").value;
+    const f = document.querySelector("#memo-file-name").value;
+    try { await postJson("/api/memos", { title: t, content: b, file_name: f || undefined }); resetMemoForm(); await loadMemos(); showToast("저장 완료"); } catch(err) { showToast(err.message); }
+  });
+  document.querySelector("#memo-reset-button")?.addEventListener("click", () => { resetMemoForm(); renderMemos(); });
+  document.querySelector("#run-ai")?.addEventListener("click", async () => {
+    const prompt = document.querySelector("#ai-prompt").value;
+    const btn = document.querySelector("#run-ai");
+    setBusy(btn, "분석 중", true);
+    try {
+      const data = await postJson("/api/ai/analyze", { prompt, blob_names: selectedValues("[data-ai-file]"), memo_file_names: selectedValues("[data-ai-memo]") });
+      document.querySelector("#ai-result").innerHTML = `<span>AI result</span><h3>분석 결과</h3><div>${markdownToHtml(data.result)}</div>`;
+      state.lastAiResult = data.result;
+      saveAiMemoButton.disabled = false; downloadAiMdButton.disabled = false; downloadAiPdfButton.disabled = false;
+      await loadUsageSummary();
+    } catch(err) { showToast(err.message); } finally { setBusy(btn, "분석 중", false); }
+  });
+
   setActivePage(pageFromLocation(), { skipHistory: true });
 }
 

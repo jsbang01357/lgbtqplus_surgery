@@ -7,7 +7,7 @@ import time
 import random
 from pathlib import PurePosixPath
 
-from app.core_utils import get_now, safe_filename, slugify
+from app.core_utils import get_now, safe_filename, slugify, ttl_cache
 from app.streamlit_compat import render_inline_html
 from components.custom_copy_btn import copy_to_clipboard
 from app.gcs_helper import get_bucket
@@ -79,7 +79,7 @@ def _build_memo_payload(
     )
 
 
-@st.cache_data(ttl=30)
+@ttl_cache(seconds=30)
 def load_memo_list_cached():
     init_memos()
     bucket = get_bucket()
@@ -110,7 +110,7 @@ def load_memo_list_cached():
     return memos
 
 
-@st.cache_data(ttl=60)
+@ttl_cache(seconds=60)
 def load_single_memo_content(file_name: str):
     bucket = get_bucket()
     blob = bucket.blob(f"{MEMO_PREFIX}/{file_name}")
@@ -196,7 +196,7 @@ def clear_all_memos():
     create_zip_of_memos.clear()
 
 
-@st.cache_data(ttl=60)
+@ttl_cache(seconds=60)
 def create_zip_of_memos(memo_list):
     if not memo_list:
         return None

@@ -2,37 +2,20 @@ import os
 import time
 import streamlit as st
 
-from app.streamlit_compat import render_inline_html
+from app.config import get_admin_password
 
 MAX_LOGIN_FAILURES = 5
 LOGIN_LOCK_SECONDS = 600
 
-
-def get_admin_password() -> str:
-    # Cloud Run / environment variable first.
-    env_pwd = os.getenv("ADMIN_PASSWORD")
-    if env_pwd:
-        return env_pwd
-
-    # Local Streamlit secrets fallback.
-    try:
-        admin_section = st.secrets["admin"]
-        if "admin_password" in admin_section and admin_section["admin_password"]:
-            return admin_section["admin_password"]
-    except Exception:
-        pass
-
-    try:
-        root_pwd = st.secrets["admin_password"]
-        if root_pwd:
-            return root_pwd
-    except Exception:
-        pass
-    return ""
-
+# def get_admin_password(): ... (removed and moved to config.py)
 
 def is_authenticated() -> bool:
-    return st.session_state.get("authenticated", False)
+    # Streamlit version
+    try:
+        import streamlit as st
+        return st.session_state.get("authenticated", False)
+    except Exception:
+        return False
 
 
 def should_require_auth_for_all_pages() -> bool:
