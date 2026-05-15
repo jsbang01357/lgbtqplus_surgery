@@ -142,8 +142,14 @@
           </form>
           <div class="utility-card utility-card-large">
             <div class="card-toolbar">
-              <h3>최근 파일</h3>
-              <button class="button button-pearl" id="download-all" type="button">ZIP</button>
+              <div>
+                <h3>최근 파일</h3>
+                <small id="file-list-status">전체 파일</small>
+              </div>
+              <div class="toolbar-actions">
+                <input class="search-input" id="file-search" type="search" placeholder="파일 검색" autocomplete="off" />
+                <button class="button button-pearl" id="download-all" type="button">ZIP</button>
+              </div>
             </div>
             <div class="file-list" id="file-list"></div>
           </div>
@@ -159,12 +165,22 @@
           <form class="utility-card memo-editor" id="memo-form">
             <input id="memo-title" type="text" placeholder="메모 제목" autocomplete="off" />
             <textarea id="memo-body" rows="8" placeholder="메모 내용을 입력하세요."></textarea>
-            <button class="button button-primary" type="submit">메모 저장</button>
+            <input id="memo-file-name" type="hidden" />
+            <div class="form-actions">
+              <button class="button button-primary" id="memo-save-button" type="submit">메모 저장</button>
+              <button class="button button-secondary" id="memo-reset-button" type="button">새 메모</button>
+            </div>
           </form>
           <div class="memo-column">
             <div class="card-toolbar">
-              <h3>최근 메모</h3>
-              <button class="button button-pearl" id="download-memos" type="button">ZIP</button>
+              <div>
+                <h3>최근 메모</h3>
+                <small id="memo-list-status">전체 메모</small>
+              </div>
+              <div class="toolbar-actions">
+                <input class="search-input" id="memo-search" type="search" placeholder="메모 검색" autocomplete="off" />
+                <button class="button button-pearl" id="download-memos" type="button">ZIP</button>
+              </div>
             </div>
             <div class="memo-list" id="memo-list"></div>
           </div>
@@ -180,7 +196,10 @@
           <div class="prompt-panel">
             <div class="preset-row" id="preset-row"></div>
             <textarea id="ai-prompt" rows="7">SOAP 1분 발표용으로 핵심만 정리해줘.</textarea>
-            <button class="button button-primary" id="run-ai" type="button">분석 시작</button>
+            <div class="form-actions">
+              <button class="button button-primary" id="run-ai" type="button">분석 시작</button>
+              <button class="button button-secondary" id="save-ai-memo" type="button" disabled>메모로 저장</button>
+            </div>
           </div>
           <article class="ai-result" id="ai-result">
             <span>AI result</span>

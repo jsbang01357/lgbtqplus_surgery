@@ -355,6 +355,21 @@ a {
   margin-bottom: 18px;
 }
 
+.card-toolbar h3 + small {
+  display: block;
+  margin-top: 2px;
+  color: var(--color-muted);
+  font-size: 12px;
+  letter-spacing: -0.12px;
+}
+
+.toolbar-actions,
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .panel-heading span,
 .render-panel small,
 .metric-strip small,
@@ -484,6 +499,15 @@ input[type="file"] {
   background: var(--color-pearl);
 }
 
+.search-input {
+  width: min(220px, 34vw);
+  min-height: 36px;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 14px;
+  letter-spacing: -0.224px;
+}
+
 textarea {
   resize: vertical;
   min-height: 150px;
@@ -540,6 +564,11 @@ textarea {
   border: 1px solid var(--color-hairline);
   border-radius: 18px;
   background: var(--color-canvas);
+}
+
+.memo-card.is-selected {
+  border-color: rgba(0, 102, 204, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(0, 102, 204, 0.18);
 }
 
 .memo-card h3,
@@ -731,6 +760,10 @@ textarea {
     grid-template-columns: 1fr;
   }
 
+  .card-toolbar {
+    align-items: flex-start;
+  }
+
   .metric-strip,
   .tool-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -761,6 +794,16 @@ textarea {
   }
 
   .button {
+    width: 100%;
+  }
+
+  .toolbar-actions,
+  .form-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .search-input {
     width: 100%;
   }
 

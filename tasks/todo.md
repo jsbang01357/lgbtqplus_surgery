@@ -725,3 +725,19 @@ Mark items as complete as you go.
 - 패스키 또는 Google Access 인증 상태가 상단 chip에 표시되며, 파일/메모/AI 작업 실패는 toast로 안내한다.
 - 파일 ZIP, 메모 ZIP, 프롬프트 기반 Gemini 분석은 Starlette API endpoint로 연결했다.
 - Playwright 모듈이 없어 브라우저 screenshot 검증은 실행하지 못했고, 로컬 HTTP 응답과 JS 문법/유닛 테스트로 1차 확인했다.
+
+---
+
+## 새 프론트엔드 마감 개발
+
+- [x] 파일 검색과 표시 개수 상태 추가
+- [x] 메모 검색과 선택 메모 편집 흐름 추가
+- [x] AI 분석 결과를 메모로 저장하는 버튼 추가
+- [x] 인증 전/후 버튼 상태와 빈 화면 정리
+- [x] 문법, 테스트, 로컬 HTTP 검증
+
+## 요약
+- 파일/메모 검색 input과 표시 개수 상태를 추가했다.
+- 메모를 열면 작성 폼에 들어와 수정 저장할 수 있고, 현재 편집 중인 메모를 목록에서 강조한다.
+- AI 분석 결과를 바로 메모로 저장할 수 있게 했다.
+- `node --check`, `py_compile`, unittest 22개, 로컬 HTTP 200/401/owner session 응답을 확인했다.

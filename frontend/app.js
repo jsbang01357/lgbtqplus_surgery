@@ -27,6 +27,10 @@ const state = {
   memos: [...memos],
   session: null,
   usesDemoData: true,
+  fileQuery: "",
+  memoQuery: "",
+  editingMemoFileName: "",
+  lastAiResult: "",
 };
 
 const fileList = document.querySelector("#file-list");
@@ -35,6 +39,10 @@ const fileCount = document.querySelector("#file-count");
 const memoCount = document.querySelector("#memo-count");
 const toast = document.querySelector("#toast");
 const sessionChip = document.querySelector("#session-chip");
+const fileListStatus = document.querySelector("#file-list-status");
+const memoListStatus = document.querySelector("#memo-list-status");
+const memoSaveButton = document.querySelector("#memo-save-button");
+const saveAiMemoButton = document.querySelector("#save-ai-memo");
 
 function escapeHtml(value = "") {
   return String(value)
@@ -73,6 +81,44 @@ function fileTypeLabel(name = "") {
   return (name.split(".").pop() || "FILE").slice(0, 3).toUpperCase();
 }
 
+function includesQuery(...values) {
+  const query = values.pop().trim().toLowerCase();
+  if (!query) return true;
+  return values.some((value) => String(value || "").toLowerCase().includes(query));
+}
+
+function getFilteredFiles() {
+  return state.files.filter((file) =>
+    includesQuery(file.name, file.type, file.updated, state.fileQuery),
+  );
+}
+
+function getFilteredMemos() {
+  return state.memos.filter((memo) =>
+    includesQuery(memo.title, memo.body, memo.updated, state.memoQuery),
+  );
+}
+
+function resetMemoForm() {
+  document.querySelector("#memo-title").value = "";
+  document.querySelector("#memo-body").value = "";
+  document.querySelector("#memo-file-name").value = "";
+  state.editingMemoFileName = "";
+  memoSaveButton.textContent = "메모 저장";
+}
+
+function setBusy(button, busyText, isBusy) {
+  if (!button) return;
+  if (isBusy) {
+    button.dataset.idleText = button.textContent;
+    button.textContent = busyText;
+    button.disabled = true;
+    return;
+  }
+  button.textContent = button.dataset.idleText || button.textContent;
+  button.disabled = false;
+}
+
 async function apiJson(url, options = {}) {
   const response = await fetch(url, options);
   const data = await response.json().catch(() => ({}));
@@ -106,10 +152,12 @@ function setSessionChip(session) {
     sessionChip.textContent =
       session.auth_method === "passkey" ? "Passkey 인증됨" : "Google 인증됨";
     sessionChip.classList.add("is-authorized");
+    document.body.classList.add("is-authorized");
     return;
   }
   sessionChip.textContent = "인증 필요";
   sessionChip.classList.add("is-locked");
+  document.body.classList.remove("is-authorized");
 }
 
 async function loadSession() {
@@ -296,7 +344,8 @@ async function continueWithGoogleAuth() {
 }
 
 function renderFiles() {
-  fileList.innerHTML = state.files
+  const visibleFiles = getFilteredFiles();
+  fileList.innerHTML = visibleFiles
     .map(
       (file, index) => `
         <div class="data-row">
@@ -322,13 +371,17 @@ function renderFiles() {
     )
     .join("") || `<p class="empty-state">아직 업로드된 파일이 없습니다.</p>`;
   fileCount.textContent = String(state.files.length);
+  fileListStatus.textContent = state.fileQuery
+    ? `${visibleFiles.length}개 표시 · 전체 ${state.files.length}개`
+    : `전체 ${state.files.length}개`;
 }
 
 function renderMemos() {
-  memoList.innerHTML = state.memos
+  const visibleMemos = getFilteredMemos();
+  memoList.innerHTML = visibleMemos
     .map(
       (memo, index) => `
-        <article class="memo-card">
+        <article class="memo-card ${memo.fileName && memo.fileName === state.editingMemoFileName ? "is-selected" : ""}">
           <h3>${escapeHtml(memo.title)}</h3>
           <p>${escapeHtml(memo.body)}</p>
           <div class="memo-actions">
@@ -345,6 +398,9 @@ function renderMemos() {
     )
     .join("") || `<p class="empty-state">아직 저장된 메모가 없습니다.</p>`;
   memoCount.textContent = String(state.memos.length);
+  memoListStatus.textContent = state.memoQuery
+    ? `${visibleMemos.length}개 표시 · 전체 ${state.memos.length}개`
+    : `전체 ${state.memos.length}개`;
 }
 
 function renderPresets() {
@@ -381,9 +437,12 @@ fileList.addEventListener("click", async (event) => {
 
   if (deleteButton) {
     const index = Number(deleteButton.dataset.delete);
-    const removed = state.files[index];
+    const removed = getFilteredFiles()[index];
     if (!removed?.blobName) {
-      state.files.splice(index, 1);
+      const originalIndex = state.files.indexOf(removed);
+      if (originalIndex >= 0) {
+        state.files.splice(originalIndex, 1);
+      }
       renderFiles();
       showToast(`${removed?.name || "파일"} 삭제됨`);
       return;
@@ -399,7 +458,7 @@ fileList.addEventListener("click", async (event) => {
 
   if (downloadButton) {
     const index = Number(downloadButton.dataset.download);
-    const file = state.files[index];
+    const file = getFilteredFiles()[index];
     if (file.downloadUrl) {
       window.location.assign(file.downloadUrl);
       return;
@@ -420,6 +479,14 @@ document.querySelector("#download-all").addEventListener("click", async () => {
 document.querySelector("#passkey-register").addEventListener("click", registerPasskey);
 document.querySelector("#passkey-login").addEventListener("click", loginWithPasskey);
 document.querySelector("#google-auth-fallback").addEventListener("click", continueWithGoogleAuth);
+document.querySelector("#file-search").addEventListener("input", (event) => {
+  state.fileQuery = event.target.value;
+  renderFiles();
+});
+document.querySelector("#memo-search").addEventListener("input", (event) => {
+  state.memoQuery = event.target.value;
+  renderMemos();
+});
 document.querySelector("#download-memos").addEventListener("click", async () => {
   try {
     await downloadFromApi("/api/memos/zip", "jisong-cloud-memos.zip");
@@ -434,11 +501,16 @@ memoList.addEventListener("click", async (event) => {
   const deleteButton = event.target.closest("[data-memo-delete]");
 
   if (openButton) {
-    const memo = state.memos[Number(openButton.dataset.memoOpen)];
+    const memo = getFilteredMemos()[Number(openButton.dataset.memoOpen)];
     try {
       const data = await apiJson(`/api/memos/${encodeURIComponent(memo.fileName)}`);
       memo.title = data.memo.title;
       memo.body = data.memo.content || "내용이 비어 있습니다.";
+      document.querySelector("#memo-title").value = memo.title;
+      document.querySelector("#memo-body").value = data.memo.content || "";
+      document.querySelector("#memo-file-name").value = memo.fileName;
+      state.editingMemoFileName = memo.fileName;
+      memoSaveButton.textContent = "메모 수정";
       renderMemos();
       showToast("메모를 불러왔습니다.");
     } catch (error) {
@@ -447,9 +519,12 @@ memoList.addEventListener("click", async (event) => {
   }
 
   if (deleteButton) {
-    const memo = state.memos[Number(deleteButton.dataset.memoDelete)];
+    const memo = getFilteredMemos()[Number(deleteButton.dataset.memoDelete)];
     try {
       await postJson("/api/memos/delete", { file_name: memo.fileName });
+      if (state.editingMemoFileName === memo.fileName) {
+        resetMemoForm();
+      }
       await loadMemos();
       showToast("메모가 삭제됐습니다.");
     } catch (error) {
@@ -462,6 +537,7 @@ document.querySelector("#memo-form").addEventListener("submit", async (event) =>
   event.preventDefault();
   const titleInput = document.querySelector("#memo-title");
   const bodyInput = document.querySelector("#memo-body");
+  const fileNameInput = document.querySelector("#memo-file-name");
   const title = titleInput.value.trim();
   const body = bodyInput.value.trim();
 
@@ -471,14 +547,23 @@ document.querySelector("#memo-form").addEventListener("submit", async (event) =>
   }
 
   try {
-    await postJson("/api/memos", { title, content: body });
-    titleInput.value = "";
-    bodyInput.value = "";
+    const isEdit = Boolean(fileNameInput.value);
+    await postJson("/api/memos", {
+      title,
+      content: body,
+      file_name: fileNameInput.value || undefined,
+    });
+    resetMemoForm();
     await loadMemos();
-    showToast("메모가 저장됐습니다.");
+    showToast(isEdit ? "메모가 수정됐습니다." : "메모가 저장됐습니다.");
   } catch (error) {
     showToast(error.message);
   }
+});
+
+document.querySelector("#memo-reset-button").addEventListener("click", () => {
+  resetMemoForm();
+  renderMemos();
 });
 
 document.querySelector("#preset-row").addEventListener("click", (event) => {
@@ -498,8 +583,8 @@ document.querySelector("#run-ai").addEventListener("click", async () => {
     return;
   }
 
-  button.disabled = true;
-  button.textContent = "분석 중";
+  setBusy(button, "분석 중", true);
+  saveAiMemoButton.disabled = true;
   result.innerHTML = `
     <span>AI result</span>
     <h3>분석 중</h3>
@@ -512,8 +597,12 @@ document.querySelector("#run-ai").addEventListener("click", async () => {
       <h3>분석 결과</h3>
       <p>${escapeHtml(data.result)}</p>
     `;
+    state.lastAiResult = data.result;
+    saveAiMemoButton.disabled = false;
     showToast("AI 분석이 완료됐습니다.");
   } catch (error) {
+    state.lastAiResult = "";
+    saveAiMemoButton.disabled = true;
     result.innerHTML = `
       <span>AI result</span>
       <h3>분석 대기</h3>
@@ -521,8 +610,33 @@ document.querySelector("#run-ai").addEventListener("click", async () => {
     `;
     showToast(error.message);
   } finally {
-    button.disabled = false;
-    button.textContent = "분석 시작";
+    setBusy(button, "분석 중", false);
+  }
+});
+
+saveAiMemoButton.addEventListener("click", async () => {
+  if (!state.lastAiResult) {
+    showToast("저장할 AI 결과가 없습니다.");
+    return;
+  }
+  setBusy(saveAiMemoButton, "저장 중", true);
+  try {
+    await postJson("/api/memos", {
+      title: `AI 분석 ${new Intl.DateTimeFormat("ko-KR", {
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(new Date())}`,
+      content: state.lastAiResult,
+    });
+    await loadMemos();
+    showToast("AI 결과를 메모로 저장했습니다.");
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    setBusy(saveAiMemoButton, "저장 중", false);
+    saveAiMemoButton.disabled = !state.lastAiResult;
   }
 });
 
