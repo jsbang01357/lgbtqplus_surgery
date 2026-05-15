@@ -5,28 +5,25 @@
 파일 보관, 메모 관리, 텍스트 정리, 간단한 유틸리티를 한곳에 모아 둔 실사용 중심 프로젝트입니다.  
 UI보다 빠른 사용성과 단순한 운영을 우선하며, 데이터 저장소는 Google Cloud Storage(GCS)를 사용합니다.
 
-현재 코드 기준 버전 표기는 앱 푸터에 표시되는 `Ver 4.0 (260513)`를 따릅니다.
-
-`frontend/`에는 `DESIGN.md`의 Apple식 디자인 언어를 반영한 새 정적 프론트엔드 미리보기가 있습니다. 기존 Streamlit 앱은 운영 경로로 유지하고, 새 프론트는 이후 Python API를 붙여 GCS/Gemini 기능을 연결하는 구조입니다. 운영 기준은 GCP 프로젝트, Cloud Run, GCS, Gemini, Cloudflare Access, 앱 내부 패스키 인증입니다.
+현재 운영 진입점은 `api_server.py`입니다. `frontend/`의 Apple식 화면을 Starlette API가 정적 파일로 제공하고, GCS/Gemini 기능을 `/api/*` endpoint로 연결합니다. 운영 기준은 GCP 프로젝트, Cloud Run, GCS, Gemini, Cloudflare Access, 앱 내부 패스키 인증입니다.
 
 ---
 
 ## 프로젝트 개요
 
-현재 운영 앱은 하나의 Streamlit 앱에서 아래 네 가지 영역을 제공합니다. 새 Apple 스타일 프론트엔드 미리보기는 `frontend/`에서 별도로 확인할 수 있습니다.
+현재 운영 앱은 Apple 스타일 프론트엔드와 Starlette API에서 아래 네 가지 영역을 제공합니다.
 
 1. 웹하드
 2. 메모장
 3. AI
 4. 도구모음
 
-메인 진입점은 `jisong_cloud.py`이며, 사이드바 메뉴를 기준으로 각 기능 화면을 라우팅합니다.
+메인 진입점은 `api_server.py`이며, Cloud Run 컨테이너는 `uvicorn api_server:app`으로 실행됩니다.
 
-새 프론트엔드 미리보기는 아래처럼 실행합니다.
+로컬 API 서버는 아래처럼 실행합니다.
 
 ```bash
-cd frontend
-python3 -m http.server 5173
+uvicorn api_server:app --host 127.0.0.1 --port 8080
 ```
 
 ---
@@ -460,7 +457,7 @@ gcloud secrets add-iam-policy-binding gemini-api-key \
 
 ## 한계 및 주의사항
 
-- 현재 운영 API는 Cloudflare Access 헤더와 패스키 세션을 함께 확인하는 구조입니다. 기존 Streamlit 화면에는 패스키 전환 전 fallback용 관리자 비밀번호 코드가 남아 있습니다.
+- 현재 운영 API는 Cloudflare Access 헤더와 패스키 세션 또는 허용된 Google Access fallback을 확인하는 구조입니다.
 - 접속 로그는 JSON 파일 전체를 읽고 다시 쓰는 방식이라 동시성에 강한 구조는 아닙니다.
 - 파일 다운로드는 현재 서버 메모리를 일부 사용하는 방식입니다.
 - Gemini 분석은 API key와 외부 API 호출이 필요합니다.
@@ -473,9 +470,9 @@ gcloud secrets add-iam-policy-binding gemini-api-key \
 ## 빠른 시작 체크리스트
 
 1. GCS 버킷 준비
-2. 관리자 비밀번호 설정
+2. Cloudflare Access 허용 계정 설정
 3. 서비스 계정 또는 ADC 구성
 4. `pip install -r requirements.txt`
 5. `uvicorn api_server:app --host 127.0.0.1 --port 8080`
 
-이후 새 Apple 스타일 화면에서 패스키를 등록/로그인한 뒤 `웹하드`, `메모장`, `AI`, `도구모음` 흐름을 API와 연결합니다.
+이후 Apple 스타일 화면에서 패스키를 등록/로그인한 뒤 `웹하드`, `메모장`, `AI`, `도구모음` 흐름을 사용합니다.

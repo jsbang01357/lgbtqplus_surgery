@@ -783,3 +783,17 @@ Mark items as complete as you go.
 ## 요약
 - 하드코딩된 이번 달 AI 비용 문구를 제거하고 Gemini usage 로그 기반 summary를 표시하도록 바꿨다.
 - `node --check`, `py_compile`, unittest 22개, 로컬 HTTP 200/401/owner session 응답을 확인했다.
+
+---
+
+## 프론트엔드 문구 및 미리보기 정리
+
+- [x] hero 파일/메모 미리보기를 현재 상태 기반으로 갱신
+- [x] `Preview`, `Ver 5`, `최근 500건` 등 오래된 문구 제거
+- [x] README와 frontend README를 Starlette API 운영 기준으로 갱신
+- [x] 문법, 테스트, 로컬 HTTP 검증
+
+## 요약
+- 상단 hero mock count와 최근 항목이 실제 파일/메모 state를 따라가게 했다.
+- 프론트엔드 문서와 화면 문구를 Cloud Run, Cloudflare Access, Passkey, GCS, Gemini 기준으로 정리했다.
+- `node --check`, `py_compile`, unittest 22개, 로컬 HTTP 200/401, stale preview 문구 제거 확인을 완료했다.

@@ -47,6 +47,9 @@ const memoListStatus = document.querySelector("#memo-list-status");
 const memoSaveButton = document.querySelector("#memo-save-button");
 const saveAiMemoButton = document.querySelector("#save-ai-memo");
 const toolOutput = document.querySelector("#tool-output");
+const heroFileSummary = document.querySelector("#hero-file-summary");
+const heroFileList = document.querySelector("#hero-file-list");
+const heroMemoPreview = document.querySelector("#hero-memo-preview");
 const aiFileSources = document.querySelector("#ai-file-sources");
 const aiMemoSources = document.querySelector("#ai-memo-sources");
 const aiFileStatus = document.querySelector("#ai-file-status");
@@ -113,6 +116,28 @@ function resetMemoForm() {
   document.querySelector("#memo-file-name").value = "";
   state.editingMemoFileName = "";
   memoSaveButton.textContent = "메모 저장";
+}
+
+function updateHeroPreview() {
+  heroFileSummary.textContent = `${state.files.length} files`;
+  heroFileList.innerHTML = state.files
+    .slice(0, 2)
+    .map(
+      (file) => `
+        <div class="file-row">
+          <span class="file-icon">${escapeHtml(file.type || fileTypeLabel(file.name))}</span>
+          <div>
+            <strong>${escapeHtml(file.name)}</strong>
+            <small>${escapeHtml(file.updated)} · ${escapeHtml(file.size)}</small>
+          </div>
+        </div>
+      `,
+    )
+    .join("") || `<p class="source-empty">표시할 파일이 없습니다.</p>`;
+  const firstMemo = state.memos[0];
+  heroMemoPreview.textContent = firstMemo
+    ? `${firstMemo.title}: ${firstMemo.body}`
+    : "최근 메모가 없습니다.";
 }
 
 function selectedValues(selector) {
@@ -225,6 +250,7 @@ async function loadFiles() {
     showToast(error.message);
   }
   renderFiles();
+  updateHeroPreview();
   renderAiSources();
 }
 
@@ -242,6 +268,7 @@ async function loadMemos() {
     state.memos = [...memos];
   }
   renderMemos();
+  updateHeroPreview();
   renderAiSources();
 }
 
@@ -424,6 +451,7 @@ function renderFiles() {
   fileListStatus.textContent = state.fileQuery
     ? `${visibleFiles.length}개 표시 · 전체 ${state.files.length}개`
     : `전체 ${state.files.length}개`;
+  updateHeroPreview();
 }
 
 function renderMemos() {
@@ -451,6 +479,7 @@ function renderMemos() {
   memoListStatus.textContent = state.memoQuery
     ? `${visibleMemos.length}개 표시 · 전체 ${state.memos.length}개`
     : `전체 ${state.memos.length}개`;
+  updateHeroPreview();
 }
 
 function renderPresets() {
@@ -883,6 +912,7 @@ document.querySelector(".ai-source-grid").addEventListener("change", updateAiSou
 async function bootstrap() {
   renderFiles();
   renderMemos();
+  updateHeroPreview();
   renderPresets();
   renderAiSources();
   renderTool("cleaner");
