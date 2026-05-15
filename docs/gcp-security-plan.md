@@ -48,6 +48,7 @@ User
 - `CLOUDFLARE_ACCESS_ALLOWED_EMAILS=jsbang01357@gmail.com`: 소유자 Google 계정만 허용한다. 값을 비워도 앱 기본값은 `jsbang01357@gmail.com`이다.
 - `ALLOW_ACCOUNT_ID_FALLBACK=true`: 패스키를 쓸 수 없는 브라우저에서는 소유자 계정 ID 세션으로 통과시킨다.
 - `JISONG_ACCOUNT_LOGIN_ID=jsbang01357@gmail.com`
+- `JISONG_ACCOUNT_PASSWORD`: 계정 ID fallback 비밀번호
 - `PASSKEY_RP_ID=cloud.jisong.dev`
 - `PASSKEY_ORIGIN=https://cloud.jisong.dev`
 - `PASSKEY_RP_NAME=Jisong Cloud`

@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from app.passkeys import CborReader, b64url_decode, b64url_encode
 from app.security import (
+    account_login_password,
     account_login_id,
     allow_account_id_fallback,
     allow_google_auth_fallback,
@@ -64,6 +65,7 @@ class SecurityTests(unittest.TestCase):
         with patch.dict(os.environ, {}, clear=True):
             self.assertTrue(allow_account_id_fallback())
             self.assertEqual(account_login_id(), "jsbang01357@gmail.com")
+            self.assertEqual(account_login_password(), "cbd_07079")
 
     def test_base64url_round_trip(self):
         payload = b"\x00hello?\xff"

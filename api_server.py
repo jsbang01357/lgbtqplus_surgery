@@ -12,6 +12,7 @@ from starlette.routing import Route
 from app import passkeys
 from app.security import (
     account_login_id,
+    account_login_password,
     allow_account_id_fallback,
     allow_google_auth_fallback,
     get_access_context,
@@ -23,6 +24,7 @@ from app.storage import (
     create_file_download_url,
     delete_uploaded_file,
     guess_content_type,
+    list_uploaded_files_cached,
     list_uploaded_files,
     normalize_blob_name,
     MAX_UPLOAD_SIZE_BYTES,
@@ -110,6 +112,15 @@ def _should_secure_cookie(request: Request) -> bool:
     return request.url.scheme == "https" or forwarded_proto == "https"
 
 
+def _file_response_bytes(content: bytes, filename: str, media_type: str):
+    safe_name = filename.replace("\\", "_").replace('"', "'")
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
+    )
+
+
 def _access_context_allowed(request: Request) -> tuple[bool, str]:
     access_context = get_access_context(request.headers)
     if require_cloudflare_access() and not access_context.allowed:
@@ -185,8 +196,9 @@ async def account_login(request: Request):
         return _json({"error": "계정 ID fallback이 꺼져 있습니다."}, status_code=403)
     payload = await request.json()
     login_id = str(payload.get("account_id") or payload.get("email") or "").strip().lower()
-    if login_id != account_login_id():
-        return _json({"error": "허용된 계정 ID가 아닙니다."}, status_code=401)
+    password = str(payload.get("password") or "")
+    if login_id != account_login_id() or password != account_login_password():
+        return _json({"error": "계정 ID 또는 비밀번호가 올바르지 않습니다."}, status_code=401)
     email = owner_email()
     token = _create_account_session(email)
     response = _json({"ok": True, "email": email, "expires_in": ACCOUNT_SESSION_TTL_SECONDS})
@@ -289,7 +301,7 @@ async def settings_gemini_usage(request: Request):
 
 
 async def passkey_register_options(request: Request):
-    ok, message = _access_context_allowed(request)
+    ok, message = _is_authorized(request)
     if not ok:
         return _json({"error": message}, status_code=401)
     email = _request_email(request)
@@ -300,7 +312,7 @@ async def passkey_register_options(request: Request):
 
 
 async def passkey_register_verify(request: Request):
-    ok, message = _access_context_allowed(request)
+    ok, message = _is_authorized(request)
     if not ok:
         return _json({"error": message}, status_code=401)
     email = _request_email(request)
@@ -376,14 +388,24 @@ async def files_upload(request: Request):
         content = await upload.read()
         if len(content) > MAX_UPLOAD_SIZE_BYTES:
             return _json({"error": f"{upload.filename} 파일이 50MB 제한을 초과했습니다."}, status_code=413)
-        name = Path(upload.filename).stem
-        ext = Path(upload.filename).suffix
-        new_filename = f"{name}_{get_now().strftime('%Y%m%d_%H%M%S')}{ext}"
+        safe_original = Path(upload.filename).name.replace("\\", "_").replace("/", "_")
+        name = Path(safe_original).stem or "file"
+        ext = Path(safe_original).suffix
+        new_filename = safe_original
         blob_name = normalize_blob_name(UPLOAD_PREFIX, new_filename)
+        if bucket.blob(blob_name).exists():
+            new_filename = f"{name}-{secrets.token_hex(3)}{ext}"
+            blob_name = normalize_blob_name(UPLOAD_PREFIX, new_filename)
         blob = bucket.blob(blob_name)
         content_type = upload.content_type or guess_content_type(upload.filename)
+        blob.metadata = {
+            "original_name": safe_original,
+            "uploaded_at": get_now().isoformat(),
+        }
         blob.upload_from_string(content, content_type=content_type)
-        uploaded.append({"name": new_filename, "blob_name": blob_name})
+        uploaded.append({"name": safe_original, "blob_name": blob_name})
+    list_uploaded_files_cached.clear()
+    create_zip_of_files.clear()
     return _json({"uploaded": uploaded})
 
 
@@ -422,6 +444,19 @@ async def memo_detail(request: Request):
     if not ok:
         return _json({"error": message}, status_code=401)
     return _json({"memo": load_single_memo_content(request.path_params["file_name"])})
+
+
+async def memo_download(request: Request):
+    ok, message = _is_authorized(request)
+    if not ok:
+        return _json({"error": message}, status_code=401)
+    memo = load_single_memo_content(request.path_params["file_name"])
+    filename = f"{memo.get('title') or 'memo'}.txt"
+    return _file_response_bytes(
+        (memo.get("content") or "").encode("utf-8"),
+        filename,
+        "text/plain; charset=utf-8",
+    )
 
 
 async def memo_save(request: Request):
@@ -559,6 +594,7 @@ routes = [
     Route("/api/memos", memo_save, methods=["POST"]),
     Route("/api/memos/delete", memo_delete, methods=["POST"]),
     Route("/api/memos/zip", memos_zip, methods=["GET"]),
+    Route("/api/memos/{file_name:str}/download", memo_download, methods=["GET"]),
     Route("/api/memos/{file_name:str}", memo_detail, methods=["GET"]),
     Route("/api/ai/analyze", ai_analyze, methods=["POST"]),
     Route("/api/tools/markdown-pdf", tool_markdown_pdf, methods=["POST"]),

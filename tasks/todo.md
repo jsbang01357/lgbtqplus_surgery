@@ -842,3 +842,23 @@ Mark items as complete as you go.
 ## 요약
 - 섹션 anchor 스크롤 대신 `/files`, `/memos`, `/ai`, `/tools`, `/settings` 경로로 화면을 전환한다.
 - `py_compile`, `node --check`, unittest 25개, 로컬 `/files`/`/settings` 200, 설정 분석 API 응답을 확인했다.
+
+---
+
+## 실사용 UX 보강
+
+- [x] 계정 ID fallback을 ID + 비밀번호 로그인으로 변경
+- [x] 패스키 등록을 로그인 후 등록 흐름으로 제한
+- [x] AI 분석 결과를 마크다운으로 렌더링
+- [x] AI 결과 MD/PDF 다운로드 버튼 연결
+- [x] AI 파일 선택 제목 색상 수정
+- [x] 도구모음에서 저장소/접속 상태 제거 후 설정으로 이동
+- [x] 최근 메모 본문 스크롤과 현재 메모 TXT 다운로드 추가
+- [x] 웹하드 파일 선택 즉시 업로드
+- [x] 업로드 파일명에서 날짜/시간 suffix 제거 및 업로드 시각은 metadata로 저장
+- [x] 문법과 단위 테스트 검증
+- [ ] 제한 없는 로컬 HTTP 검증
+
+## 요약
+- 실사용 흐름 기준으로 인증, AI 결과물, 메모/파일 동작을 정리한다.
+- `node --check`, `py_compile`, unittest 26개를 확인했다. 로컬 HTTP 서버 실행은 현재 sandbox/승인 제한으로 보류했다.

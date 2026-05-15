@@ -4,6 +4,7 @@ import zipfile
 import io
 import mimetypes
 import html
+import re
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path, PurePosixPath
@@ -42,6 +43,20 @@ def normalize_blob_name(prefix: str, filename: str) -> str:
     return str(PurePosixPath(prefix) / safe_name)
 
 
+def _display_file_name(blob_name: str, metadata: dict | None = None) -> str:
+    metadata = metadata or {}
+    if metadata.get("original_name"):
+        return metadata["original_name"]
+    filename = PurePosixPath(blob_name).name
+    return _strip_timestamp_suffix(filename)
+
+
+def _strip_timestamp_suffix(filename: str) -> str:
+    path = PurePosixPath(filename)
+    stem = re.sub(r"_[0-9]{8}_[0-9]{6}$", "", path.stem)
+    return f"{stem}{path.suffix}"
+
+
 def _list_uploaded_files_from_gcs():
     bucket = get_bucket()
     blobs = bucket.list_blobs(prefix=f"{UPLOAD_PREFIX}/")
@@ -52,7 +67,7 @@ def _list_uploaded_files_from_gcs():
             continue
         items.append(
             GCSFileInfo(
-                name=PurePosixPath(blob.name).name,
+                name=_display_file_name(blob.name, blob.metadata),
                 blob_name=blob.name,
                 size=blob.size or 0,
                 updated=blob.updated,

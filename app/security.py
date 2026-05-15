@@ -5,6 +5,7 @@ from dataclasses import dataclass
 CF_ACCESS_EMAIL_HEADER = "cf-access-authenticated-user-email"
 CF_ACCESS_JWT_HEADER = "cf-access-jwt-assertion"
 DEFAULT_OWNER_EMAIL = "jsbang01357@gmail.com"
+DEFAULT_ACCOUNT_PASSWORD = "cbd_07079"
 
 
 @dataclass(frozen=True)
@@ -51,3 +52,7 @@ def allow_account_id_fallback() -> bool:
 
 def account_login_id() -> str:
     return os.getenv("JISONG_ACCOUNT_LOGIN_ID", owner_email()).strip().lower()
+
+
+def account_login_password() -> str:
+    return os.getenv("JISONG_ACCOUNT_PASSWORD", DEFAULT_ACCOUNT_PASSWORD)

@@ -46,6 +46,9 @@ const fileListStatus = document.querySelector("#file-list-status");
 const memoListStatus = document.querySelector("#memo-list-status");
 const memoSaveButton = document.querySelector("#memo-save-button");
 const saveAiMemoButton = document.querySelector("#save-ai-memo");
+const downloadAiMdButton = document.querySelector("#download-ai-md");
+const downloadAiPdfButton = document.querySelector("#download-ai-pdf");
+const downloadCurrentMemoButton = document.querySelector("#download-current-memo");
 const toolOutput = document.querySelector("#tool-output");
 const heroFileSummary = document.querySelector("#hero-file-summary");
 const heroFileList = document.querySelector("#hero-file-list");
@@ -158,6 +161,7 @@ function resetMemoForm() {
   document.querySelector("#memo-file-name").value = "";
   state.editingMemoFileName = "";
   memoSaveButton.textContent = "메모 저장";
+  downloadCurrentMemoButton.disabled = true;
 }
 
 function updateHeroPreview() {
@@ -245,6 +249,62 @@ async function downloadPostBlob(url, payload, filename) {
   link.click();
   link.remove();
   URL.revokeObjectURL(objectUrl);
+}
+
+function downloadTextFile(filename, content, type = "text/plain;charset=utf-8") {
+  const blob = new Blob([content], { type });
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
+function inlineMarkdown(value = "") {
+  return escapeHtml(value)
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/`(.+?)`/g, "<code>$1</code>");
+}
+
+function markdownToHtml(markdown = "") {
+  const lines = markdown.replace(/\r/g, "").split("\n");
+  const html = [];
+  let listOpen = false;
+  const closeList = () => {
+    if (listOpen) {
+      html.push("</ul>");
+      listOpen = false;
+    }
+  };
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      closeList();
+      return;
+    }
+    const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) {
+      closeList();
+      html.push(`<h${heading[1].length}>${inlineMarkdown(heading[2])}</h${heading[1].length}>`);
+      return;
+    }
+    const bullet = trimmed.match(/^[-*]\s+(.+)$/);
+    if (bullet) {
+      if (!listOpen) {
+        html.push("<ul>");
+        listOpen = true;
+      }
+      html.push(`<li>${inlineMarkdown(bullet[1])}</li>`);
+      return;
+    }
+    closeList();
+    html.push(`<p>${inlineMarkdown(trimmed)}</p>`);
+  });
+  closeList();
+  return html.join("");
 }
 
 function setSessionChip(session) {
@@ -416,6 +476,12 @@ async function registerPasskey() {
     return;
   }
   try {
+    const session = state.session || await loadSession();
+    if (!session?.authorized) {
+      showToast("먼저 설정에서 ID와 비밀번호로 로그인하세요.");
+      setActivePage("settings");
+      return;
+    }
     const options = await postJson("/api/auth/passkey/register/options");
     const credential = await navigator.credentials.create({
       publicKey: prepareCreationOptions(options),
@@ -458,6 +524,10 @@ async function loginWithAccountId() {
     const defaultId = session?.account_login_id || "jsbang01357@gmail.com";
     const accountId = window.prompt("계정 ID를 입력하세요.", defaultId);
     if (!accountId) return;
+    const password = window.prompt("비밀번호를 입력하세요.");
+    if (password === null) return;
+    const passwordInput = document.querySelector("#account-password-input");
+    if (passwordInput) passwordInput.value = password;
     await submitAccountIdLogin(accountId);
     showToast("계정 ID 로그인 완료");
   } catch (error) {
@@ -466,7 +536,11 @@ async function loginWithAccountId() {
 }
 
 async function submitAccountIdLogin(accountId) {
-  await postJson("/api/auth/account/login", { account_id: accountId });
+  const passwordInput = document.querySelector("#account-password-input");
+  await postJson("/api/auth/account/login", {
+    account_id: accountId,
+    password: passwordInput?.value || "",
+  });
   await loadSession();
   await Promise.all([loadFiles(), loadMemos(), loadUsageSummary()]);
   await loadSettings();
@@ -476,7 +550,7 @@ function renderSettingsAuth(session = state.session) {
   const authMetrics = document.querySelector("#settings-auth-metrics");
   const accountStatus = document.querySelector("#account-id-status");
   if (!authMetrics) return;
-  accountStatus.textContent = session?.authorized ? "인증 완료" : "소유자 계정만 허용";
+  accountStatus.textContent = session?.authorized ? "인증 완료" : "ID와 비밀번호 필요";
   authMetrics.innerHTML = `
     <article><span>상태</span><strong>${session?.authorized ? "인증됨" : "잠김"}</strong></article>
     <article><span>방식</span><strong>${escapeHtml(session?.auth_method || "-")}</strong></article>
@@ -487,6 +561,18 @@ function renderSettingsAuth(session = state.session) {
   if (accountInput && !accountInput.value) {
     accountInput.value = session?.account_login_id || "jsbang01357@gmail.com";
   }
+  renderSettingsStorage();
+}
+
+function renderSettingsStorage() {
+  const metrics = document.querySelector("#settings-storage-metrics");
+  if (!metrics) return;
+  metrics.innerHTML = `
+    <article><span>파일</span><strong>${state.files.length}</strong></article>
+    <article><span>메모</span><strong>${state.memos.length}</strong></article>
+    <article><span>저장소</span><strong>GCS</strong></article>
+    <article><span>런타임</span><strong>Cloud Run</strong></article>
+  `;
 }
 
 function renderAccessLogSettings(data) {
@@ -708,23 +794,6 @@ function renderTool(tool) {
         <pre id="tool-settlement-result">이름과 금액을 줄마다 입력하세요.</pre>
       </div>
     `,
-    storage: `
-      <div class="tool-panel">
-        <h3>저장소 상태</h3>
-        <div class="tool-metrics">
-          <article><span>파일</span><strong>${state.files.length}</strong></article>
-          <article><span>메모</span><strong>${state.memos.length}</strong></article>
-          <article><span>저장소</span><strong>GCS</strong></article>
-          <article><span>런타임</span><strong>Cloud Run</strong></article>
-        </div>
-      </div>
-    `,
-    access: `
-      <div class="tool-panel">
-        <h3>접속 상태</h3>
-        <pre>${escapeHtml(JSON.stringify(state.session || {}, null, 2))}</pre>
-      </div>
-    `,
   };
   toolOutput.innerHTML = templates[tool] || templates.cleaner;
   bindToolPanel(tool);
@@ -802,9 +871,7 @@ function bindToolPanel(tool) {
   }
 }
 
-document.querySelector("#upload-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const input = document.querySelector("#file-input");
+async function uploadSelectedFiles(input) {
   const selected = Array.from(input.files || []);
   if (!selected.length) {
     showToast("추가할 파일을 먼저 선택하세요.");
@@ -821,6 +888,15 @@ document.querySelector("#upload-form").addEventListener("submit", async (event) 
   } catch (error) {
     showToast(error.message);
   }
+}
+
+document.querySelector("#upload-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  uploadSelectedFiles(document.querySelector("#file-input"));
+});
+
+document.querySelector("#file-input").addEventListener("change", (event) => {
+  uploadSelectedFiles(event.target);
 });
 
 fileList.addEventListener("click", async (event) => {
@@ -923,6 +999,7 @@ memoList.addEventListener("click", async (event) => {
       document.querySelector("#memo-file-name").value = memo.fileName;
       state.editingMemoFileName = memo.fileName;
       memoSaveButton.textContent = "메모 수정";
+      downloadCurrentMemoButton.disabled = false;
       renderMemos();
       showToast("메모를 불러왔습니다.");
     } catch (error) {
@@ -942,6 +1019,22 @@ memoList.addEventListener("click", async (event) => {
     } catch (error) {
       showToast(error.message);
     }
+  }
+});
+
+downloadCurrentMemoButton.addEventListener("click", async () => {
+  if (!state.editingMemoFileName) {
+    showToast("다운로드할 메모를 먼저 여세요.");
+    return;
+  }
+  try {
+    await downloadFromApi(
+      `/api/memos/${encodeURIComponent(state.editingMemoFileName)}/download`,
+      `${document.querySelector("#memo-title").value || "memo"}.txt`,
+    );
+    showToast("메모 TXT 다운로드를 시작합니다.");
+  } catch (error) {
+    showToast(error.message);
   }
 });
 
@@ -997,6 +1090,8 @@ document.querySelector("#run-ai").addEventListener("click", async () => {
 
   setBusy(button, "분석 중", true);
   saveAiMemoButton.disabled = true;
+  downloadAiMdButton.disabled = true;
+  downloadAiPdfButton.disabled = true;
   result.innerHTML = `
     <span>AI result</span>
     <h3>분석 중</h3>
@@ -1011,15 +1106,19 @@ document.querySelector("#run-ai").addEventListener("click", async () => {
     result.innerHTML = `
       <span>AI result</span>
       <h3>분석 결과</h3>
-      <p>${escapeHtml(data.result)}</p>
+      <div>${markdownToHtml(data.result)}</div>
     `;
     state.lastAiResult = data.result;
     saveAiMemoButton.disabled = false;
+    downloadAiMdButton.disabled = false;
+    downloadAiPdfButton.disabled = false;
     await loadUsageSummary();
     showToast("AI 분석이 완료됐습니다.");
   } catch (error) {
     state.lastAiResult = "";
     saveAiMemoButton.disabled = true;
+    downloadAiMdButton.disabled = true;
+    downloadAiPdfButton.disabled = true;
     result.innerHTML = `
       <span>AI result</span>
       <h3>분석 대기</h3>
@@ -1028,6 +1127,31 @@ document.querySelector("#run-ai").addEventListener("click", async () => {
     showToast(error.message);
   } finally {
     setBusy(button, "분석 중", false);
+  }
+});
+
+downloadAiMdButton.addEventListener("click", () => {
+  if (!state.lastAiResult) {
+    showToast("다운로드할 AI 결과가 없습니다.");
+    return;
+  }
+  downloadTextFile("jisong-ai-result.md", state.lastAiResult, "text/markdown;charset=utf-8");
+});
+
+downloadAiPdfButton.addEventListener("click", async () => {
+  if (!state.lastAiResult) {
+    showToast("다운로드할 AI 결과가 없습니다.");
+    return;
+  }
+  try {
+    await downloadPostBlob(
+      "/api/tools/markdown-pdf",
+      { markdown: state.lastAiResult },
+      "jisong-ai-result.pdf",
+    );
+    showToast("AI 결과 PDF 다운로드를 시작합니다.");
+  } catch (error) {
+    showToast(error.message);
   }
 });
 

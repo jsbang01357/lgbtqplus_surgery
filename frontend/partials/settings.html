@@ -8,12 +8,14 @@
     <form class="utility-card settings-card" id="account-id-form">
       <div class="card-toolbar">
         <div>
-          <h3>계정 ID 로그인</h3>
-          <small id="account-id-status">소유자 계정만 허용</small>
+          <h3>계정 로그인</h3>
+          <small id="account-id-status">ID와 비밀번호 필요</small>
         </div>
       </div>
       <input id="account-id-input" type="email" autocomplete="username" placeholder="jsbang01357@gmail.com" />
-      <button class="button button-primary" type="submit">계정 ID로 로그인</button>
+      <input id="account-password-input" type="password" autocomplete="current-password" placeholder="비밀번호" />
+      <button class="button button-primary" type="submit">ID + 비밀번호로 로그인</button>
+      <p class="settings-note">패스키는 먼저 ID와 비밀번호로 로그인한 뒤 상단의 패스키 등록을 누르면 등록됩니다.</p>
     </form>
 
     <article class="utility-card settings-card">
@@ -25,6 +27,16 @@
         <button class="button button-pearl" id="settings-refresh" type="button">새로고침</button>
       </div>
       <div class="tool-metrics settings-metrics" id="settings-auth-metrics"></div>
+    </article>
+
+    <article class="utility-card settings-card settings-card-wide">
+      <div class="card-toolbar">
+        <div>
+          <h3>저장소 상태</h3>
+          <small>현재 앱 데이터</small>
+        </div>
+      </div>
+      <div class="tool-metrics settings-metrics" id="settings-storage-metrics"></div>
     </article>
 
     <article class="utility-card settings-card settings-card-wide">
