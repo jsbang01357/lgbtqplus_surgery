@@ -797,3 +797,19 @@ Mark items as complete as you go.
 - 상단 hero mock count와 최근 항목이 실제 파일/메모 state를 따라가게 했다.
 - 프론트엔드 문서와 화면 문구를 Cloud Run, Cloudflare Access, Passkey, GCS, Gemini 기준으로 정리했다.
 - `node --check`, `py_compile`, unittest 22개, 로컬 HTTP 200/401, stale preview 문구 제거 확인을 완료했다.
+
+---
+
+## 프론트엔드 HTML 분리
+
+- [x] 홈/지표 영역을 `frontend/partials/home.html`로 분리
+- [x] 웹하드 영역을 `frontend/partials/files.html`로 분리
+- [x] 메모장 영역을 `frontend/partials/memos.html`로 분리
+- [x] AI 영역을 `frontend/partials/ai.html`로 분리
+- [x] 도구모음 영역을 `frontend/partials/tools.html`로 분리
+- [x] `api_server.py`에서 include 주석 기반 HTML 조립 추가
+- [x] 문법, 테스트, 로컬 HTTP 검증
+
+## 요약
+- `index.html`은 shell 역할만 하도록 줄이고, 기능별 HTML partial을 서버에서 조립하도록 바꿨다.
+- `py_compile`, `node --check`, `unittest 22개`, 로컬 `/` HTTP 200 및 partial 조립을 확인했다.

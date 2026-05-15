@@ -15,8 +15,15 @@ uvicorn api_server:app --host 127.0.0.1 --port 8080
 ## 구조
 
 - `index.html`: 앱 마크업
+- `partials/home.html`: 홈 hero와 workspace 지표
+- `partials/files.html`: 웹하드 화면
+- `partials/memos.html`: 메모장 화면
+- `partials/ai.html`: AI 분석 화면
+- `partials/tools.html`: 도구모음 화면
 - `styles.css`: Apple 스타일 디자인 토큰과 반응형 레이아웃
 - `app.js`: 인증 상태, 파일/메모 CRUD, AI 분석, 도구모음 상호작용
+
+`index.html`에는 `<!-- include:partials/*.html -->` 주석이 있고, `api_server.py`가 요청 시 partial을 조립해 완성된 HTML을 내려줍니다.
 
 ## 연결 메모
 

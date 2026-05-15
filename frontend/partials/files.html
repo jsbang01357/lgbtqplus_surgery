@@ -1,0 +1,27 @@
+<section id="files" class="product-tile product-tile-parchment app-section" aria-labelledby="files-title">
+  <div class="section-head">
+    <h2 id="files-title">웹하드</h2>
+    <p>업로드, 다운로드, 삭제가 한 화면에서 끝나도록 가볍게 정리했습니다.</p>
+  </div>
+  <div class="utility-layout">
+    <form class="utility-card upload-card" id="upload-form">
+      <label for="file-input">파일 올리기</label>
+      <input id="file-input" name="file-input" type="file" multiple />
+      <button class="button button-primary" type="submit">선택 파일 추가</button>
+      <p>50MB 이하 파일을 GCS 웹하드에 바로 저장합니다.</p>
+    </form>
+    <div class="utility-card utility-card-large">
+      <div class="card-toolbar">
+        <div>
+          <h3>최근 파일</h3>
+          <small id="file-list-status">전체 파일</small>
+        </div>
+        <div class="toolbar-actions">
+          <input class="search-input" id="file-search" type="search" placeholder="파일 검색" autocomplete="off" />
+          <button class="button button-pearl" id="download-all" type="button">ZIP</button>
+        </div>
+      </div>
+      <div class="file-list" id="file-list"></div>
+    </div>
+  </div>
+</section>

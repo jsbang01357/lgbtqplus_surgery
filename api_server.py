@@ -1,5 +1,6 @@
 import mimetypes
 import io
+import re
 from pathlib import Path
 
 from starlette.applications import Starlette
@@ -41,11 +42,27 @@ from app.gcs_helper import get_bucket
 from app.core_utils import get_now
 from app.md_pdf import markdown_to_pdf_bytes
 
-FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
+FRONTEND_DIR = (Path(__file__).resolve().parent / "frontend").resolve()
+INCLUDE_RE = re.compile(r"<!--\s*include:(?P<path>[^ ]+)\s*-->")
 
 
 def _json(data, status_code=200):
     return JSONResponse(data, status_code=status_code)
+
+
+def _render_frontend_html() -> str:
+    template = (FRONTEND_DIR / "index.html").read_text(encoding="utf-8")
+
+    def replace_include(match: re.Match) -> str:
+        relative_path = match.group("path").strip()
+        include_path = (FRONTEND_DIR / relative_path).resolve()
+        if FRONTEND_DIR not in include_path.parents:
+            return ""
+        if not include_path.exists() or include_path.suffix != ".html":
+            return ""
+        return include_path.read_text(encoding="utf-8")
+
+    return INCLUDE_RE.sub(replace_include, template)
 
 
 def _request_email(request: Request) -> str:
@@ -386,6 +403,8 @@ async def frontend(request: Request):
         target = target / "index.html"
     if not target.exists():
         target = FRONTEND_DIR / "index.html"
+    if target == (FRONTEND_DIR / "index.html").resolve():
+        return Response(_render_frontend_html(), media_type="text/html")
     media_type = mimetypes.guess_type(target.name)[0]
     return FileResponse(target, media_type=media_type)
 

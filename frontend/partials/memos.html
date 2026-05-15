@@ -1,0 +1,30 @@
+<section id="memos" class="product-tile product-tile-light app-section" aria-labelledby="memos-title">
+  <div class="section-head">
+    <h2 id="memos-title">메모장</h2>
+    <p>짧은 기록을 남기고, AI 결과를 다시 작업 가능한 문장으로 보관합니다.</p>
+  </div>
+  <div class="memo-board">
+    <form class="utility-card memo-editor" id="memo-form">
+      <input id="memo-title" type="text" placeholder="메모 제목" autocomplete="off" />
+      <textarea id="memo-body" rows="8" placeholder="메모 내용을 입력하세요."></textarea>
+      <input id="memo-file-name" type="hidden" />
+      <div class="form-actions">
+        <button class="button button-primary" id="memo-save-button" type="submit">메모 저장</button>
+        <button class="button button-secondary" id="memo-reset-button" type="button">새 메모</button>
+      </div>
+    </form>
+    <div class="memo-column">
+      <div class="card-toolbar">
+        <div>
+          <h3>최근 메모</h3>
+          <small id="memo-list-status">전체 메모</small>
+        </div>
+        <div class="toolbar-actions">
+          <input class="search-input" id="memo-search" type="search" placeholder="메모 검색" autocomplete="off" />
+          <button class="button button-pearl" id="download-memos" type="button">ZIP</button>
+        </div>
+      </div>
+      <div class="memo-list" id="memo-list"></div>
+    </div>
+  </div>
+</section>
