@@ -468,13 +468,13 @@ async function loadMemos() {
 async function loadUsageSummary() {
   try {
     const usage = await apiJson("/api/usage/summary");
-    aiMonthCost.textContent = usage.month_cost_label || "-";
-    aiModelLabel.textContent = usage.model || "Gemini";
-    storageStatusLabel.textContent = `${usage.request_count || 0} AI 요청`;
+    if (aiMonthCost) aiMonthCost.textContent = usage.month_cost_label || "-";
+    if (aiModelLabel) aiModelLabel.textContent = usage.model || "Gemini";
+    if (storageStatusLabel) storageStatusLabel.textContent = `${usage.request_count || 0} AI 요청`;
   } catch {
-    aiMonthCost.textContent = "-";
-    aiModelLabel.textContent = "인증 후 표시";
-    storageStatusLabel.textContent = "Cloud Run";
+    if (aiMonthCost) aiMonthCost.textContent = "-";
+    if (aiModelLabel) aiModelLabel.textContent = "인증 후 표시";
+    if (storageStatusLabel) storageStatusLabel.textContent = "Cloud Run";
   }
 }
 
@@ -901,27 +901,6 @@ function renderTool(tool) {
           <h4>최소 송금 목록</h4>
           <pre id="tool-settlement-transfers"></pre>
         </div>
-      </div>
-    `,
-    "menu-picker": `
-      <div class="tool-panel">
-        <h3>오늘 뭐 먹지?</h3>
-        <p>고민을 멈추고 버튼을 눌러보세요.</p>
-        <div class="menu-result" id="menu-result-box" style="display:none;">
-          <strong id="selected-menu-label">메뉴</strong>
-        </div>
-        <button class="button button-primary" id="tool-menu-run" type="button">메뉴 추천받기</button>
-      </div>
-    `,
-    "storage-status": `
-      <div class="tool-panel">
-        <h3>저장소 상태</h3>
-        <p>GCS 버킷의 실시간 상태를 확인합니다.</p>
-        <div class="tool-metrics" id="storage-status-metrics">
-          <article><span>Backend</span><strong>-</strong></article>
-          <article><span>파일 수</span><strong>-</strong></article>
-        </div>
-        <button class="button button-secondary" id="tool-storage-refresh" type="button">새로고침</button>
       </div>
     `,
   };

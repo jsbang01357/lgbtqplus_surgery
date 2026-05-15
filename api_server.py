@@ -42,6 +42,7 @@ from app.ai import (
     format_krw_cost,
     _entry_cost_krw,
     _get_gemini_api_key,
+    _get_model_name,
     _load_gemini_usage_logs,
     _get_usage_limit_status,
     _parse_usage_time,
@@ -297,10 +298,32 @@ async def tool_text_cleaner(request: Request):
     cleaned = text
     if mode == "basic":
         if options.get("ai_mode"):
-            cleaned = _clean_ai_mode(
-                cleaned, 
-                convert_numbered_lists=options.get("ai_numbered_to_dash", False)
-            )
+            api_key = _get_gemini_api_key()
+            if api_key:
+                try:
+                    from google import genai
+                    client = genai.Client(api_key=api_key)
+                    clean_prompt = (
+                        "너는 텍스트를 정리하는 인공지능 비서야.\n"
+                        "입력받은 텍스트의 내용을 절대 수정하거나 요약하지 말고, 다음 규칙에 따라 형식만 깔끔하게 다듬어줘:\n"
+                        "1. 불필요한 줄바꿈 제거 및 문단 정렬\n"
+                        "2. 깨진 특수문자나 인코딩 오류 복구 (가능한 경우)\n"
+                        "3. 마크다운 형식을 유지하거나 적절히 적용하여 가독성 향상\n"
+                        "4. 불필요한 공백 제거\n"
+                        "정리된 텍스트만 출력해줘.\n\n"
+                        f"텍스트:\n{text}"
+                    )
+                    response = client.models.generate_content(
+                        model=_get_model_name(),
+                        contents=clean_prompt
+                    )
+                    cleaned = response.text or text
+                except Exception:
+                    # Fallback to regex if AI fails
+                    cleaned = _clean_ai_mode(text, convert_numbered_lists=options.get("ai_numbered_to_dash", False))
+            else:
+                cleaned = _clean_ai_mode(text, convert_numbered_lists=options.get("ai_numbered_to_dash", False))
+        
         cleaned = _apply_basic_cleaning_options(
             cleaned,
             opt_tab=options.get("opt_tab", True),
