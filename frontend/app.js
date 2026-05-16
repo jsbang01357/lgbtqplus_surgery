@@ -118,8 +118,21 @@ function formatUpdated(value) {
   }).format(date);
 }
 
-function fileTypeLabel(name = "") {
-  return (name.split(".").pop() || "FILE").slice(0, 3).toUpperCase();
+function getFileIconHtml(name = "") {
+  const ext = (name.split(".").pop() || "").toLowerCase();
+  let iconName = "generic";
+  
+  if (["zip", "tar", "gz", "rar", "7z"].includes(ext)) iconName = "archive";
+  else if (["xls", "xlsx", "csv"].includes(ext)) iconName = "excel";
+  else if (["jpg", "jpeg", "png", "gif", "svg", "webp"].includes(ext)) iconName = "image";
+  else if (["md"].includes(ext)) iconName = "markdown";
+  else if (["mp3", "mp4", "wav", "avi", "mov", "mkv"].includes(ext)) iconName = "media";
+  else if (["pdf"].includes(ext)) iconName = "pdf";
+  else if (["ppt", "pptx"].includes(ext)) iconName = "powerpoint";
+  else if (["txt", "log", "json"].includes(ext)) iconName = "text";
+  else if (["doc", "docx"].includes(ext)) iconName = "word";
+
+  return `<img src="/assets/icons/filetypes/${iconName}.svg" alt="${ext}" width="24" height="24" style="display:block;">`;
 }
 
 function includesQuery(...values) {
@@ -199,7 +212,7 @@ function bindRoutes() {
 
 function getFilteredFiles() {
   return state.files.filter((file) =>
-    includesQuery(file.name, file.type, file.updated, state.fileQuery),
+    includesQuery(file.name, file.ext, file.updated, state.fileQuery),
   );
 }
 
@@ -237,7 +250,7 @@ async function deleteFile(index) {
   const file = getFilteredFiles()[index];
   if (!file || !confirm(`'${file.name}' 파일을 삭제하시겠습니까?`)) return;
   try {
-    await postJson("/api/files/delete", { blob_name: file.blob_name });
+    await postJson("/api/files/delete", { blob_name: file.blobName });
     showToast("삭제 완료");
     await loadFiles();
   } catch (error) {
@@ -249,7 +262,7 @@ async function downloadFile(index) {
   const file = getFilteredFiles()[index];
   if (!file) return;
   try {
-    await downloadFromApi(`/api/files/download?blob_name=${encodeURIComponent(file.blob_name)}`, file.name);
+    await downloadFromApi(`/api/files/download?blob_name=${encodeURIComponent(file.blobName)}`, file.name);
   } catch (error) {
     showToast("다운로드 실패: " + error.message);
   }
@@ -305,7 +318,7 @@ function updateHeroPreview() {
       .map(
         (file) => `
           <div class="file-row">
-            <span class="file-icon">${escapeHtml(file.type || fileTypeLabel(file.name))}</span>
+            <span class="file-icon" style="padding:0;background:transparent;border:none;">${getFileIconHtml(file.name)}</span>
             <div>
               <strong>${escapeHtml(file.name)}</strong>
               <small>${escapeHtml(file.updated)} · ${escapeHtml(file.size)}</small>
@@ -518,7 +531,7 @@ async function loadFiles() {
     state.files = data.files.map((file) => ({
       name: file.name,
       blobName: file.blob_name,
-      type: fileTypeLabel(file.name),
+      ext: (file.name.split(".").pop() || "").toLowerCase(),
       size: formatBytes(file.size),
       updated: formatUpdated(file.updated),
       downloadUrl: file.download_url,
@@ -809,7 +822,7 @@ function renderFiles() {
     .map(
       (file, index) => `
         <div class="data-row">
-          <span class="file-icon">${escapeHtml(file.type)}</span>
+          <span class="file-icon" style="padding:0;background:transparent;border:none;">${getFileIconHtml(file.name)}</span>
           <div>
             <strong>${highlightMatch(file.name, state.fileQuery)}</strong>
             <small>${escapeHtml(file.updated)} · ${escapeHtml(file.size)}</small>

@@ -205,6 +205,9 @@ def _client_data(payload: dict[str, Any]) -> tuple[dict[str, Any], bytes]:
 
 # ... inside _rp_id, _rp_name, _origin ...
 def _rp_id() -> str:
+    import os
+    if not os.getenv("K_SERVICE"):
+        return get_config("PASSKEY_RP_ID", "localhost")
     return get_config("PASSKEY_RP_ID", "cloud.jisong.dev")
 
 
@@ -213,6 +216,9 @@ def _rp_name() -> str:
 
 
 def _origin() -> str:
+    import os
+    if not os.getenv("K_SERVICE"):
+        return get_config("PASSKEY_ORIGIN", "http://localhost:8080")
     return get_config("PASSKEY_ORIGIN", f"https://{_rp_id()}")
 
 
