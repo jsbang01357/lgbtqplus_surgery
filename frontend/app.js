@@ -1251,7 +1251,33 @@ async function bootstrap() {
   document.querySelector("#account-id-form")?.addEventListener("submit", async e => {
     e.preventDefault();
     const email = document.querySelector("#account-id-input").value;
-    try { await submitAccountIdLogin(email); showToast("로그인 성공"); } catch(err) { showToast(err.message); }
+    const password = document.querySelector("#account-password-input").value;
+    const btn = e.target.querySelector("button");
+    setBusy(btn, "로그인 중", true);
+    try { 
+      await postJson("/api/auth/account/login", { account_id: email, password });
+      await loadSession();
+      showToast("로그인 성공"); 
+    } catch(err) { 
+      showToast(err.message); 
+    } finally {
+      setBusy(btn, "로그인 중", false);
+    }
+  });
+  document.querySelector("#password-update-form")?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const newPassword = document.querySelector("#new-password-input").value;
+    const btn = e.target.querySelector("button");
+    setBusy(btn, "저장 중", true);
+    try {
+      await postJson("/api/settings/password", { new_password: newPassword });
+      showToast("비밀번호가 변경되었습니다.");
+      document.querySelector("#new-password-input").value = "";
+    } catch(err) {
+      showToast(err.message);
+    } finally {
+      setBusy(btn, "저장 중", false);
+    }
   });
   document.querySelector("#settings-refresh")?.addEventListener("click", async () => {
     await loadSession(); await loadSettings(); showToast("새로고침 완료");
@@ -1342,6 +1368,17 @@ async function bootstrap() {
       themeToggle.textContent = newTheme === "dark" ? "라이트 모드 전환" : "다크 모드 전환";
     });
   }
+
+  document.querySelector("#preset-row")?.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-preset]");
+    if (!btn) return;
+    const promptInput = document.querySelector("#ai-prompt");
+    if (promptInput) {
+      const presetText = btn.getAttribute("data-preset");
+      const baseText = promptInput.value.trim();
+      promptInput.value = baseText ? `${baseText}\n\n${presetText}` : presetText;
+    }
+  });
 
   document.querySelector("#run-ai")?.addEventListener("click", async () => {
     const prompt = document.querySelector("#ai-prompt").value;

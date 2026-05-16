@@ -643,7 +643,6 @@ a {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  align-self: start;
 }
 
 .upload-card label,
@@ -725,7 +724,6 @@ textarea {
 .memo-editor {
   display: grid;
   gap: 14px;
-  align-self: start;
 }
 
 .memo-card {
@@ -834,8 +832,8 @@ textarea {
 }
 
 .ai-workbench {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 24px;
 }
 
@@ -851,6 +849,7 @@ textarea {
 }
 
 .preset-row {
+  display: flex;
   flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 14px;

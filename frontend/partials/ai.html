@@ -25,9 +25,6 @@
       <textarea id="ai-prompt" rows="7">SOAP 1분 발표용으로 핵심만 정리해줘.</textarea>
       <div class="form-actions">
         <button class="button button-primary" id="run-ai" type="button">분석 시작</button>
-        <button class="button button-secondary" id="save-ai-memo" type="button" disabled>메모로 저장</button>
-        <button class="button button-secondary" id="download-ai-md" type="button" disabled>MD 다운로드</button>
-        <button class="button button-secondary" id="download-ai-pdf" type="button" disabled>PDF 다운로드</button>
       </div>
     </div>
     <article class="ai-result markdown-body" id="ai-result">
@@ -35,5 +32,10 @@
       <h3>발표 흐름 초안</h3>
       
     </article>
+    <div class="form-actions ai-result-actions" style="margin-top: -12px;">
+      <button class="button button-secondary" id="save-ai-memo" type="button" disabled>메모로 저장</button>
+      <button class="button button-secondary" id="download-ai-md" type="button" disabled>MD 다운로드</button>
+      <button class="button button-secondary" id="download-ai-pdf" type="button" disabled>PDF 다운로드</button>
+    </div>
   </div>
 </section>

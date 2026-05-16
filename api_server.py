@@ -281,6 +281,23 @@ async def usage_summary(request: Request):
         return _json({"error": str(exc)}, status_code=500)
 
 
+async def settings_password_update(request: Request):
+    ok, message = _is_authorized(request)
+    if not ok:
+        return _json({"error": message}, status_code=401)
+    payload = await request.json()
+    new_password = payload.get("new_password", "").strip()
+    if len(new_password) < 4:
+        return _json({"error": "비밀번호는 4자리 이상이어야 합니다."}, status_code=400)
+    
+    from app.security import update_account_password
+    try:
+        update_account_password(new_password)
+        return _json({"ok": True})
+    except Exception as exc:
+        return _json({"error": f"비밀번호 변경 실패: {exc}"}, status_code=500)
+
+
 async def settings_access_logs(request: Request):
     ok, message = _is_authorized(request)
     if not ok:
@@ -776,6 +793,7 @@ routes = [
     Route("/api/usage/summary", usage_summary, methods=["GET"]),
     Route("/api/settings/access-logs", settings_access_logs, methods=["GET"]),
     Route("/api/settings/access-logs/clear", settings_access_logs_clear, methods=["POST"]),
+    Route("/api/settings/password", settings_password_update, methods=["POST"]),
     Route("/api/settings/gemini-usage", settings_gemini_usage, methods=["GET"]),
     Route("/api/auth/passkey/register/options", passkey_register_options, methods=["POST"]),
     Route("/api/auth/passkey/register/verify", passkey_register_verify, methods=["POST"]),

@@ -55,4 +55,18 @@ def account_login_id() -> str:
 
 
 def account_login_password() -> str:
+    from app.gcs_helper import get_bucket
+    try:
+        bucket = get_bucket()
+        blob = bucket.blob("auth/account_password.txt")
+        if blob.exists():
+            return blob.download_as_text(encoding="utf-8").strip()
+    except Exception:
+        pass
     return os.getenv("JISONG_ACCOUNT_PASSWORD", DEFAULT_ACCOUNT_PASSWORD)
+
+def update_account_password(new_password: str):
+    from app.gcs_helper import get_bucket
+    bucket = get_bucket()
+    blob = bucket.blob("auth/account_password.txt")
+    blob.upload_from_string(new_password, content_type="text/plain")
