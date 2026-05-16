@@ -1,9 +1,11 @@
 import json
+import logging
 from google.cloud import storage
 from google.oauth2 import service_account
 from app.config import get_config, get_bucket_name as config_bucket_name
 
 _GCS_CLIENT_CACHE = None
+logger = logging.getLogger(__name__)
 
 def get_gcs_client() -> storage.Client:
     global _GCS_CLIENT_CACHE
@@ -32,8 +34,7 @@ def get_gcs_client() -> storage.Client:
             _GCS_CLIENT_CACHE = storage.Client(credentials=credentials, project=info["project_id"])
             return _GCS_CLIENT_CACHE
         except Exception as e:
-            print(f"DEBUG: Failed to load GCS client from SA JSON: {e}")
-            pass
+            logger.warning("GCS service account JSON 로드 실패: %s", e, exc_info=True)
 
     # Cloud Run/ADC fallback
     _GCS_CLIENT_CACHE = storage.Client()

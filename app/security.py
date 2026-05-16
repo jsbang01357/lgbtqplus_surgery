@@ -1,11 +1,12 @@
 import os
+import logging
 from dataclasses import dataclass
 
+logger = logging.getLogger(__name__)
 
 CF_ACCESS_EMAIL_HEADER = "cf-access-authenticated-user-email"
 CF_ACCESS_JWT_HEADER = "cf-access-jwt-assertion"
 DEFAULT_OWNER_EMAIL = "jsbang01357@gmail.com"
-DEFAULT_ACCOUNT_PASSWORD = "cbd_07079"
 
 
 @dataclass(frozen=True)
@@ -62,8 +63,8 @@ def account_login_password() -> str:
         if blob.exists():
             return blob.download_as_text(encoding="utf-8").strip()
     except Exception:
-        pass
-    return os.getenv("JISONG_ACCOUNT_PASSWORD", DEFAULT_ACCOUNT_PASSWORD)
+        logger.exception("계정 비밀번호를 GCS에서 읽지 못했습니다.")
+    return ""
 
 def update_account_password(new_password: str):
     from app.gcs_helper import get_bucket

@@ -1,25 +1,18 @@
-import streamlit as st
 import json
+import logging
+import streamlit as st
 from app.core_utils import get_now
 from app.gcs_helper import get_bucket, get_logs_blob_name
+from app.request_utils import get_client_ip
 
-ACCESS_LOG_BLOB = "logs/access_log.json"
 MAX_LOGS = 500
+logger = logging.getLogger(__name__)
 
 def get_visitor_info():
     """방문자의 IP와 브라우저 정보를 가져옵니다."""
     try:
-        # Streamlit 1.34+ headers
         headers = st.context.headers
-        
-        # IP 추출 (프록시 고려)
-        ip = headers.get("X-Forwarded-For")
-        if ip:
-            ip = ip.split(",")[0].strip()
-        else:
-            ip = headers.get("Remote-Addr", "Unknown")
-            
-        # 브라우저 정보 추출
+        ip = get_client_ip(headers)
         ua = headers.get("User-Agent", "Unknown Browser")
         return ip, ua
     except Exception:
@@ -32,7 +25,7 @@ def log_access():
         return
     
     bucket = get_bucket()
-    blob = bucket.blob(ACCESS_LOG_BLOB)
+    blob = bucket.blob(get_logs_blob_name())
     
     logs = []
     if blob.exists():
@@ -66,8 +59,8 @@ def log_access():
             content_type="application/json"
         )
         st.session_state.access_logged = True
-    except Exception as e:
-        print(f"Logging error: {e}")
+    except Exception:
+        logger.exception("접속 로그 저장에 실패했습니다.")
 
 
 
@@ -97,7 +90,7 @@ def save_access_logs(logs):
 def clear_access_logs():
     """접속 기록을 모두 삭제합니다."""
     bucket = get_bucket()
-    blob = bucket.blob(ACCESS_LOG_BLOB)
+    blob = bucket.blob(get_logs_blob_name())
     if blob.exists():
         blob.delete()
     

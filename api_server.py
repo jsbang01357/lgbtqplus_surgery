@@ -2,6 +2,7 @@ import mimetypes
 import io
 import re
 import secrets
+import logging
 from pathlib import Path
 
 from starlette.applications import Starlette
@@ -53,6 +54,7 @@ from app.ai import (
 )
 from app.gcs_helper import get_bucket
 from app.core_utils import get_now
+from app.request_utils import get_client_ip
 from app.md_pdf import markdown_to_pdf_bytes
 from app.access_logger import get_access_logs, clear_access_logs
 from app.text_cleaner import (
@@ -63,6 +65,8 @@ from app.text_cleaner import (
 )
 from app.settlement import calculate_settlement
 import json
+
+logger = logging.getLogger(__name__)
 
 FRONTEND_DIR = (Path(__file__).resolve().parent / "frontend").resolve()
 MENU_JSON_PATH = Path(__file__).resolve().parent / "data" / "menu_list.json"
@@ -210,7 +214,7 @@ async def session(request: Request):
             "account_id_fallback_allowed": allow_account_id_fallback(),
             "google_auth_fallback_allowed": allow_google_auth_fallback(),
             "account_login_id": account_login_id(),
-            "client_ip": request.client.host if request.client else "Unknown",
+            "client_ip": get_client_ip(request.headers, request.client.host if request.client else None),
             "cloudflare_access": {
                 "email": access_context.email,
                 "has_jwt": access_context.has_jwt,
@@ -497,7 +501,7 @@ async def passkey_register_verify(request: Request):
         result = passkeys.verify_registration(email, payload)
         return _json({"ok": True, **result})
     except Exception as exc:
-        print(f"DEBUG: Passkey registration error: {exc}")
+        logger.exception("Passkey registration error")
         return _json({"error": str(exc)}, status_code=400)
 
 
@@ -511,10 +515,10 @@ async def passkey_login_options(request: Request):
     except ValueError as exc:
         if "등록된 passkey가 없습니다" in str(exc):
             return _json({"error": str(exc)}, status_code=404)
-        print(f"DEBUG: Passkey login options ValueError: {exc}")
+        logger.exception("Passkey login options ValueError")
         return _json({"error": str(exc)}, status_code=400)
     except Exception as exc:
-        print(f"DEBUG: Passkey login options error: {exc}")
+        logger.exception("Passkey login options error")
         return _json({"error": str(exc)}, status_code=400)
 
 

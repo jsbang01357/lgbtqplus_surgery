@@ -551,6 +551,12 @@ def _entry_cost_usd(entry: dict) -> float:
         return float(entry.get("estimated_cost_krw") or 0) / USD_TO_KRW_RATE
     return 0.0
 
+
+def _entry_cost_krw(entry: dict) -> float:
+    if "estimated_cost_krw" in entry:
+        return float(entry.get("estimated_cost_krw") or 0)
+    return _entry_cost_usd(entry) * USD_TO_KRW_RATE
+
 def _sum_usage_costs(logs: list[dict]) -> tuple[float, float, float, float]:
     now = get_now()
     today_key = now.strftime("%Y-%m-%d")

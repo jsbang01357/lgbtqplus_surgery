@@ -61,11 +61,22 @@ class SecurityTests(unittest.TestCase):
         with patch.dict(os.environ, {"ALLOW_GOOGLE_AUTH_FALLBACK": "false"}):
             self.assertFalse(allow_google_auth_fallback())
 
-    def test_account_id_fallback_defaults_to_owner_email(self):
-        with patch.dict(os.environ, {}, clear=True):
+    def test_account_id_fallback_uses_gcs_password_blob(self):
+        class DummyBlob:
+            def exists(self):
+                return True
+
+            def download_as_text(self, encoding="utf-8"):
+                return "gcs-secret"
+
+        class DummyBucket:
+            def blob(self, _name):
+                return DummyBlob()
+
+        with patch.dict(os.environ, {}, clear=True), patch("app.gcs_helper.get_bucket", return_value=DummyBucket()):
             self.assertTrue(allow_account_id_fallback())
             self.assertEqual(account_login_id(), "jsbang01357@gmail.com")
-            self.assertEqual(account_login_password(), "cbd_07079")
+            self.assertEqual(account_login_password(), "gcs-secret")
 
     def test_base64url_round_trip(self):
         payload = b"\x00hello?\xff"

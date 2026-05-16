@@ -1,7 +1,4 @@
-import json
-import random
 from datetime import timedelta
-from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -19,9 +16,6 @@ from app.gcs_helper import get_bucket
 from app.md_pdf import render_md_pdf_tool
 from app.settlement import render_settlement_tool
 from app.text_cleaner import render_text_cleaner
-
-BASE_DIR = Path(__file__).resolve().parent.parent
-MENU_JSON_PATH = BASE_DIR / "data" / "menu_list.json"
 
 TOOLS = [
     {
@@ -61,12 +55,6 @@ TOOLS = [
         "summary": "GCS 버킷 상태와 저장된 객체 수를 확인합니다.",
     },
     {
-        "id": "menu_picker",
-        "label": "오늘 뭐 먹지?",
-        "icon": "🍴",
-        "summary": "고민할 때 바로 결정을 내려주는 랜덤 메뉴 추천기입니다.",
-    },
-    {
         "id": "access_logs",
         "label": "접속 기록 관리",
         "icon": "🔐",
@@ -76,33 +64,11 @@ TOOLS = [
 TOOL_INDEX = {tool["id"]: tool for tool in TOOLS}
 
 
-def init_tools():
-    """도구 모음 초기화 로직"""
-    if not MENU_JSON_PATH.exists():
-        default_menu = [
-            "김치찌개",
-            "제육볶음",
-            "돈가스",
-            "초밥",
-            "짜장면",
-            "삼겹살",
-            "치킨",
-            "햄버거",
-            "파스타",
-            "샌드위치",
-        ]
-        MENU_JSON_PATH.write_text(
-            json.dumps(default_menu, ensure_ascii=False, indent=4),
-            encoding="utf-8",
-        )
-
-
 def _select_tool(tool_id: str):
     if st.session_state.get("selected_tool_id") == tool_id:
         return
     st.session_state.selected_tool_id = tool_id
     st.rerun()
-
 
 
 def _render_tool_picker():
@@ -189,22 +155,6 @@ def _render_counter_tool():
             st.caption("공백 포함 1,500자를 A4 1쪽으로 계산했습니다.")
         else:
             st.warning("텍스트를 입력해주세요.")
-
-
-def _render_menu_picker_tool():
-    st.info("고민을 오래 끌지 않도록 등록된 메뉴 중 하나를 바로 골라드립니다.")
-
-    if st.button("메뉴 추천받기", type="primary", use_container_width=True):
-        if MENU_JSON_PATH.exists():
-            try:
-                menu_list = json.loads(MENU_JSON_PATH.read_text(encoding="utf-8"))
-                selected_menu = random.choice(menu_list)
-                st.success(f"오늘의 메뉴는 **{selected_menu}** 어떠세요?")
-                st.caption("조금 더 단단한 결정이 필요하면 한 번 더 눌러도 됩니다.")
-            except Exception as exc:
-                st.error(f"메뉴를 불러오는 중 오류가 발생했습니다: {exc}")
-        else:
-            st.error("menu_list.json 파일이 없습니다.")
 
 
 def _build_ai_cost_rows(logs: list[dict]) -> tuple[list[dict], list[dict]]:
@@ -422,7 +372,6 @@ def _render_access_logs_tool():
 
 def render_tools():
     """도구모음 UI 메인 렌더링"""
-    init_tools()
     selected_tool = _render_tool_picker()
     _render_tool_header(selected_tool)
 
@@ -438,7 +387,5 @@ def render_tools():
         _render_ai_costs_tool()
     elif selected_tool["id"] == "storage_status":
         _render_storage_status_tool()
-    elif selected_tool["id"] == "menu_picker":
-        _render_menu_picker_tool()
     elif selected_tool["id"] == "access_logs":
         _render_access_logs_tool()
