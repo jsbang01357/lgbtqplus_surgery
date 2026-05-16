@@ -40,7 +40,7 @@ from app.memo import (
 from app.ai import (
     GEMINI_MODEL,
     format_krw_cost,
-    _entry_cost_krw,
+    USD_TO_KRW_RATE,
     _get_gemini_api_key,
     _get_model_name,
     _load_gemini_usage_logs,
@@ -250,16 +250,30 @@ async def usage_summary(request: Request):
     ok, message = _is_authorized(request)
     if not ok:
         return _json({"error": message}, status_code=401)
+    
+    try:
+        multiplier = float(request.query_params.get("multiplier", 1.0))
+        exchange_rate = float(request.query_params.get("exchange_rate", USD_TO_KRW_RATE))
+    except ValueError:
+        multiplier = 1.0
+        exchange_rate = USD_TO_KRW_RATE
+
     try:
         logs = _load_gemini_usage_logs()
-        today_total, month_total = _sum_usage_costs(logs)
+        today_krw, month_krw, today_usd, month_usd = _sum_usage_costs(logs)
+        
+        today_adjusted = today_usd * exchange_rate * multiplier
+        month_adjusted = month_usd * exchange_rate * multiplier
+
         return _json(
             {
                 "model": GEMINI_MODEL,
-                "today_cost": today_total,
-                "month_cost": month_total,
-                "today_cost_label": format_krw_cost(today_total),
-                "month_cost_label": format_krw_cost(month_total),
+                "today_cost": today_adjusted,
+                "month_cost": month_adjusted,
+                "today_cost_usd": today_usd,
+                "month_cost_usd": month_usd,
+                "today_cost_label": format_krw_cost(today_adjusted),
+                "month_cost_label": format_krw_cost(month_adjusted),
                 "request_count": len(logs),
             }
         )
@@ -398,11 +412,18 @@ async def settings_gemini_usage(request: Request):
     if not ok:
         return _json({"error": message}, status_code=401)
     try:
+        multiplier = float(request.query_params.get("multiplier", 1.0))
+        exchange_rate = float(request.query_params.get("exchange_rate", USD_TO_KRW_RATE))
+    except ValueError:
+        multiplier = 1.0
+        exchange_rate = USD_TO_KRW_RATE
+
+    try:
         logs = _load_gemini_usage_logs()
     except Exception as exc:
         return _json({"error": str(exc)}, status_code=500)
 
-    today_total, month_total = _sum_usage_costs(logs)
+    today_krw, month_krw, today_usd, month_usd = _sum_usage_costs(logs)
     total_tokens = sum(int(entry.get("total_tokens") or 0) for entry in logs)
     input_tokens = sum(int(entry.get("input_tokens") or 0) for entry in logs)
     output_tokens = sum(int(entry.get("output_tokens") or 0) for entry in logs)
@@ -410,20 +431,26 @@ async def settings_gemini_usage(request: Request):
     for entry in logs:
         entry_time = _parse_usage_time(entry.get("time", ""))
         day = entry_time.strftime("%Y-%m-%d") if entry_time else "unknown"
-        row = daily.setdefault(day, {"date": day, "requests": 0, "tokens": 0, "cost": 0.0})
+        row = daily.setdefault(day, {"date": day, "requests": 0, "tokens": 0, "cost_usd": 0.0})
         row["requests"] += 1
         row["tokens"] += int(entry.get("total_tokens") or 0)
-        row["cost"] += _entry_cost_krw(entry)
+        from app.ai import _entry_cost_usd
+        row["cost_usd"] += _entry_cost_usd(entry)
 
     daily_rows = sorted(daily.values(), key=lambda row: row["date"], reverse=True)[:10]
     for row in daily_rows:
-        row["cost_label"] = format_krw_cost(row["cost"])
+        adjusted_cost = row["cost_usd"] * exchange_rate * multiplier
+        row["cost_label"] = format_krw_cost(adjusted_cost)
+
+    today_adjusted = today_usd * exchange_rate * multiplier
+    month_adjusted = month_usd * exchange_rate * multiplier
+
     return _json(
         {
             "model": GEMINI_MODEL,
             "request_count": len(logs),
-            "today_cost_label": format_krw_cost(today_total),
-            "month_cost_label": format_krw_cost(month_total),
+            "today_cost_label": format_krw_cost(today_adjusted),
+            "month_cost_label": format_krw_cost(month_adjusted),
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
             "total_tokens": total_tokens,

@@ -60,6 +60,10 @@ const toolOutput = document.querySelector("#tool-output");
 const heroFileSummary = document.querySelector("#hero-file-summary");
 const heroFileList = document.querySelector("#hero-file-list");
 const heroMemoPreview = document.querySelector("#hero-memo-preview");
+const heroMemoSummary = document.querySelector("#hero-memo-summary");
+const geminiExchangeRateInput = document.querySelector("#gemini-exchange-rate");
+const geminiCostMultiplierInput = document.querySelector("#gemini-cost-multiplier");
+const geminiSettingsSaveBtn = document.querySelector("#gemini-settings-save");
 const aiFileSources = document.querySelector("#ai-file-sources");
 const aiMemoSources = document.querySelector("#ai-memo-sources");
 const aiFileStatus = document.querySelector("#ai-file-status");
@@ -549,7 +553,13 @@ async function loadMemos() {
 
 async function loadUsageSummary() {
   try {
-    const usage = await apiJson("/api/usage/summary");
+    const exchangeRate = localStorage.getItem("geminiExchangeRate") || "";
+    const multiplier = localStorage.getItem("geminiCostMultiplier") || "";
+    const query = new URLSearchParams();
+    if (exchangeRate) query.append("exchange_rate", exchangeRate);
+    if (multiplier) query.append("multiplier", multiplier);
+
+    const usage = await apiJson(`/api/usage/summary?${query.toString()}`);
     if (aiMonthCost) aiMonthCost.textContent = usage.month_cost_label || "-";
     if (aiModelLabel) aiModelLabel.textContent = usage.model || "Gemini";
     if (storageStatusLabel) storageStatusLabel.textContent = `${usage.request_count || 0} AI 요청`;
@@ -695,9 +705,15 @@ async function loadSettings() {
     return;
   }
   try {
+    const exchangeRate = localStorage.getItem("geminiExchangeRate") || "";
+    const multiplier = localStorage.getItem("geminiCostMultiplier") || "";
+    const query = new URLSearchParams();
+    if (exchangeRate) query.append("exchange_rate", exchangeRate);
+    if (multiplier) query.append("multiplier", multiplier);
+
     const [accessLogs, geminiUsage] = await Promise.all([
       apiJson("/api/settings/access-logs"),
-      apiJson("/api/settings/gemini-usage"),
+      apiJson(`/api/settings/gemini-usage?${query.toString()}`),
     ]);
     renderAccessLogSettings(accessLogs);
     renderGeminiUsageSettings(geminiUsage);
@@ -1378,5 +1394,22 @@ async function bootstrap() {
       saveMemo(true); // silent save
     }, 2000);
   });
+
+  if (geminiSettingsSaveBtn) {
+    if (geminiExchangeRateInput) geminiExchangeRateInput.value = localStorage.getItem("geminiExchangeRate") || "1400";
+    if (geminiCostMultiplierInput) geminiCostMultiplierInput.value = localStorage.getItem("geminiCostMultiplier") || "1.0";
+
+    geminiSettingsSaveBtn.addEventListener("click", () => {
+      if (geminiExchangeRateInput && geminiExchangeRateInput.value) {
+        localStorage.setItem("geminiExchangeRate", geminiExchangeRateInput.value);
+      }
+      if (geminiCostMultiplierInput && geminiCostMultiplierInput.value) {
+        localStorage.setItem("geminiCostMultiplier", geminiCostMultiplierInput.value);
+      }
+      showToast("Gemini 요금 설정이 저장되었습니다.");
+      loadUsageSummary();
+      loadSettingsUsage();
+    });
+  }
 }
 bootstrap();

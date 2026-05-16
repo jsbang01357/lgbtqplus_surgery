@@ -39,11 +39,15 @@
     <div class="sub-nav">
       <div class="sub-left">
         <a class="brand-mark" href="/home" data-route="home" aria-label="jCloud home">
-          <svg class="cloud-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 20h0a5 5 0 0 1-5-5V14.3a4.5 4.5 0 0 1 1.2-8.9 7 7 0 0 1 12.6 4.1A3 3 0 0 1 18 15h-1"></path>
-            <path d="M12 20a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z" fill="currentColor"></path>
-            <path d="M22 19h-2.5" opacity="0.5"></path>
-            <path d="M4.5 19H2" opacity="0.5"></path>
+          <svg class="cloud-icon" viewBox="0 0 100 100" width="28" height="28" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="nav-cloud-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#0071e3" />
+                <stop offset="100%" stop-color="#42a5f5" />
+              </linearGradient>
+            </defs>
+            <path fill="url(#nav-cloud-gradient)" d="M72,80H28c-12.15,0-22-9.85-22-22c0-11.82,9.33-21.46,21.05-21.96C29.62,21.13,42.45,10,58,10
+            c15.93,0,29.07,11.51,31.62,26.79C95.53,38.31,100,43.76,100,50C100,66.57,88.57,80,72,80z" />
           </svg>
           <span class="sub-title">jCloud</span>
         </a>

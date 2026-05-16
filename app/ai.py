@@ -543,29 +543,36 @@ def _parse_usage_time(value: str) -> datetime | None:
         return None
 
 
-def _entry_cost_krw(entry: dict) -> float:
+def _entry_cost_usd(entry: dict) -> float:
+    if "estimated_cost_usd" in entry:
+        return float(entry.get("estimated_cost_usd") or 0)
+    # Fallback for old logs
     if "estimated_cost_krw" in entry:
-        return float(entry.get("estimated_cost_krw") or 0)
-    return float(entry.get("estimated_cost_usd") or 0) * USD_TO_KRW_RATE
+        return float(entry.get("estimated_cost_krw") or 0) / USD_TO_KRW_RATE
+    return 0.0
 
-
-def _sum_usage_costs(logs: list[dict]) -> tuple[float, float]:
+def _sum_usage_costs(logs: list[dict]) -> tuple[float, float, float, float]:
     now = get_now()
     today_key = now.strftime("%Y-%m-%d")
     month_key = now.strftime("%Y-%m")
-    today_total = 0.0
-    month_total = 0.0
+    today_krw = 0.0
+    month_krw = 0.0
+    today_usd = 0.0
+    month_usd = 0.0
 
     for entry in logs:
         entry_time = _parse_usage_time(entry.get("time", ""))
         if entry_time is None:
             continue
-        cost = _entry_cost_krw(entry)
+        usd = _entry_cost_usd(entry)
+        krw = usd * USD_TO_KRW_RATE
         if entry_time.strftime("%Y-%m") == month_key:
-            month_total += cost
+            month_krw += krw
+            month_usd += usd
         if entry_time.strftime("%Y-%m-%d") == today_key:
-            today_total += cost
-    return today_total, month_total
+            today_krw += krw
+            today_usd += usd
+    return today_krw, month_krw, today_usd, month_usd
 
 
 def format_krw_cost(cost: float) -> str:
@@ -575,27 +582,27 @@ def format_krw_cost(cost: float) -> str:
 
 def get_monthly_gemini_cost_label() -> str:
     logs = _load_gemini_usage_logs()
-    _, month_total = _sum_usage_costs(logs)
-    return format_krw_cost(month_total)
+    _, month_krw, _, _ = _sum_usage_costs(logs)
+    return format_krw_cost(month_krw)
 
 
 def _get_usage_limit_status() -> tuple[bool, str]:
     logs = _load_gemini_usage_logs()
-    today_total, month_total = _sum_usage_costs(logs)
+    today_krw, month_krw, _, _ = _sum_usage_costs(logs)
 
-    if today_total >= GEMINI_DAILY_LIMIT_KRW:
+    if today_krw >= GEMINI_DAILY_LIMIT_KRW:
         return (
             False,
             "오늘 Gemini 예상 비용이 "
-            f"{format_krw_cost(today_total)}로 일일 한도 "
+            f"{format_krw_cost(today_krw)}로 일일 한도 "
             f"{format_krw_cost(GEMINI_DAILY_LIMIT_KRW)}를 넘었습니다.",
         )
 
-    if month_total >= GEMINI_MONTHLY_LIMIT_KRW:
+    if month_krw >= GEMINI_MONTHLY_LIMIT_KRW:
         return (
             False,
             "이번 달 Gemini 예상 비용이 "
-            f"{format_krw_cost(month_total)}로 월 한도 "
+            f"{format_krw_cost(month_krw)}로 월 한도 "
             f"{format_krw_cost(GEMINI_MONTHLY_LIMIT_KRW)}를 넘었습니다.",
         )
 
