@@ -62,7 +62,6 @@ from app.text_cleaner import (
     _convert_markdown_to_word_text,
 )
 from app.settlement import calculate_settlement
-import random
 import json
 
 FRONTEND_DIR = (Path(__file__).resolve().parent / "frontend").resolve()
@@ -70,7 +69,25 @@ MENU_JSON_PATH = Path(__file__).resolve().parent / "data" / "menu_list.json"
 INCLUDE_RE = re.compile(r"<!--\s*include:(?P<path>[^ ]+)\s*-->")
 ACCOUNT_SESSION_COOKIE = "jisong_account_session"
 ACCOUNT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 30
-ACCOUNT_SESSIONS: dict[str, str] = {}
+ACCOUNT_SESSIONS_BLOB = "auth/account_sessions.json"
+
+def _load_account_sessions() -> dict[str, str]:
+    try:
+        bucket = get_bucket()
+        blob = bucket.blob(ACCOUNT_SESSIONS_BLOB)
+        if blob.exists():
+            return json.loads(blob.download_as_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+def _save_account_sessions(sessions: dict[str, str]):
+    try:
+        bucket = get_bucket()
+        blob = bucket.blob(ACCOUNT_SESSIONS_BLOB)
+        blob.upload_from_string(json.dumps(sessions), content_type="application/json")
+    except Exception:
+        pass
 
 
 def _json(data, status_code=200):
@@ -109,12 +126,16 @@ def _account_token(request: Request) -> str:
 
 def _verify_account_session(request: Request, email: str) -> bool:
     token = _account_token(request)
-    return bool(token and ACCOUNT_SESSIONS.get(token) == email)
-
+    if not token:
+        return False
+    sessions = _load_account_sessions()
+    return sessions.get(token) == email
 
 def _create_account_session(email: str) -> str:
     token = secrets.token_urlsafe(32)
-    ACCOUNT_SESSIONS[token] = email
+    sessions = _load_account_sessions()
+    sessions[token] = email
+    _save_account_sessions(sessions)
     return token
 
 
@@ -372,30 +393,6 @@ async def tool_settlement(request: Request):
     })
 
 
-async def tool_menu_picker(request: Request):
-    try:
-        if MENU_JSON_PATH.exists():
-            menu_list = json.loads(MENU_JSON_PATH.read_text(encoding="utf-8"))
-        else:
-            menu_list = ["김치찌개", "제육볶음", "돈가스", "초밥", "짜장면"]
-        
-        return _json({"selected_menu": random.choice(menu_list)})
-    except Exception as exc:
-        return _json({"error": str(exc)}, status_code=500)
-
-
-async def tool_storage_status(request: Request):
-    try:
-        bucket = get_bucket()
-        remote_count = sum(1 for blob in bucket.list_blobs() if not blob.name.endswith("/"))
-        return _json({
-            "backend": "GCS",
-            "file_count": remote_count
-        })
-    except Exception as exc:
-        return _json({"error": str(exc)}, status_code=500)
-
-
 async def settings_gemini_usage(request: Request):
     ok, message = _is_authorized(request)
     if not ok:
@@ -501,7 +498,16 @@ async def passkey_login_verify(request: Request):
 
 async def auth_logout(request: Request):
     response = JSONResponse({"ok": True})
+    # Remove passkey cookie
     response.delete_cookie("jisong_passkey_session")
+    
+    # Remove account session from store and cookie
+    token = _account_token(request)
+    if token:
+        sessions = _load_account_sessions()
+        if token in sessions:
+            del sessions[token]
+            _save_account_sessions(sessions)
     response.delete_cookie(ACCOUNT_SESSION_COOKIE)
     return response
 
@@ -522,6 +528,19 @@ async def files_list(request: Request):
         for item in list_uploaded_files()
     ]
     return _json({"files": files})
+
+
+async def files_download(request: Request):
+    ok, message = _is_authorized(request)
+    if not ok:
+        return _json({"error": message}, status_code=401)
+    blob_name = request.query_params.get("blob_name")
+    if not blob_name:
+        return _json({"error": "blob_name is required"}, status_code=400)
+    
+    from app.storage import download_file_bytes
+    content, content_type, original_name = download_file_bytes(blob_name)
+    return _file_response_bytes(content, original_name or blob_name, content_type)
 
 
 async def files_upload(request: Request):
@@ -739,6 +758,7 @@ routes = [
     Route("/api/auth/account/login", account_login, methods=["POST"]),
     Route("/api/files", files_list, methods=["GET"]),
     Route("/api/files", files_upload, methods=["POST"]),
+    Route("/api/files/download", files_download, methods=["GET"]),
     Route("/api/files/delete", files_delete, methods=["POST"]),
     Route("/api/files/zip", files_zip, methods=["GET"]),
     Route("/api/memos", memos_list, methods=["GET"]),
@@ -751,10 +771,9 @@ routes = [
     Route("/api/tools/markdown-pdf", tool_markdown_pdf, methods=["POST"]),
     Route("/api/tools/text-cleaner", tool_text_cleaner, methods=["POST"]),
     Route("/api/tools/settlement", tool_settlement, methods=["POST"]),
-    Route("/api/tools/menu-picker", tool_menu_picker, methods=["GET"]),
-    Route("/api/tools/storage-status", tool_storage_status, methods=["GET"]),
     Route("/", frontend, methods=["GET"]),
     Route("/{path:path}", frontend, methods=["GET"]),
 ]
+
 
 app = Starlette(debug=False, routes=routes)

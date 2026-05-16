@@ -13,8 +13,46 @@
   --color-muted: #7a7a7a;
   --color-hairline: #e0e0e0;
   --shadow-product: rgba(0, 0, 0, 0.22) 3px 5px 30px 0;
-  --font-display: "Outfit", "SF Pro Display", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-text: "Inter", "SF Pro Text", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-text: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  
+  /* Skeleton pulse */
+  --skeleton-bg: #e1e1e3;
+  --skeleton-highlight: #f2f2f4;
+}
+
+[data-theme="dark"] {
+  --color-canvas: #1c1c1e;
+  --color-parchment: #2c2c2e;
+  --color-pearl: #3a3a3c;
+  --color-ink: #f5f5f7;
+  --color-muted: #8e8e93;
+  --color-hairline: #38383a;
+  --skeleton-bg: #3a3a3c;
+  --skeleton-highlight: #48484a;
+}
+
+@keyframes skeleton-pulse {
+  0% { background-color: var(--skeleton-bg); }
+  50% { background-color: var(--skeleton-highlight); }
+  100% { background-color: var(--skeleton-bg); }
+}
+
+.skeleton {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  border-radius: 4px;
+}
+
+.highlight {
+  background: rgba(255, 235, 59, 0.4);
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+.drag-over {
+  border: 2px dashed var(--color-primary) !important;
+  background: rgba(0, 102, 204, 0.05) !important;
 }
 
 * {
@@ -246,7 +284,6 @@ a {
 }
 
 .sub-title {
-  font-family: var(--font-display);
   font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.6px;
@@ -1185,7 +1222,6 @@ textarea {
 }
 
 .login-brand h1 {
-  font-family: var(--font-display);
   font-size: 42px;
   font-weight: 700;
   margin: 0;

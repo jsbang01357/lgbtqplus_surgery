@@ -39,9 +39,19 @@ def get_config(key: str, default: str = "") -> str:
     
     if key.lower() in _SECRETS_CACHE:
         return str(_SECRETS_CACHE[key.lower()])
-    for section in _SECRETS_CACHE.values():
-        if isinstance(section, dict) and key.lower() in section:
-            return str(section[key.lower()])
+    
+    # Section check (e.g. [gemini] api_key="...")
+    for section_name, section in _SECRETS_CACHE.items():
+        if isinstance(section, dict):
+            # Case 1: Exactly key.lower() in section
+            if key.lower() in section:
+                return str(section[key.lower()])
+            
+            # Case 2: key starts with section_name + "_"
+            if key.lower().startswith(section_name.lower() + "_"):
+                short_key = key.lower()[len(section_name) + 1 :]
+                if short_key in section:
+                    return str(section[short_key])
 
     return default
 

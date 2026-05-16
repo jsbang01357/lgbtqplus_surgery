@@ -3,26 +3,34 @@
   <div class="login-container">
     <div class="login-brand">
       <div class="brand-logo-large">
-        <svg class="cloud-icon" viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 20h0a5 5 0 0 1-5-5V14.3a4.5 4.5 0 0 1 1.2-8.9 7 7 0 0 1 12.6 4.1A3 3 0 0 1 18 15h-1"></path>
-          <path d="M12 20a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z" fill="currentColor"></path>
-          <path d="M22 19h-2.5" opacity="0.5"></path>
-          <path d="M4.5 19H2" opacity="0.5"></path>
+        <svg class="cloud-icon" viewBox="0 0 100 100" width="64" height="64" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="cloud-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#0071e3" />
+              <stop offset="100%" stop-color="#42a5f5" />
+            </linearGradient>
+            <filter id="cloud-glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="8" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+          </defs>
+          <path fill="url(#cloud-gradient)" filter="url(#cloud-glow)" d="M72,80H28c-12.15,0-22-9.85-22-22c0-11.82,9.33-21.46,21.05-21.96C29.62,21.13,42.45,10,58,10
+          c15.93,0,29.07,11.51,31.62,26.79C95.53,38.31,100,43.76,100,50C100,66.57,88.57,80,72,80z" />
         </svg>
       </div>
-      <h1 id="login-title">Jisong Cloud</h1>
+      <h1 id="login-title">jCloud</h1>
     </div>
 
     <div class="login-card glass-card">
       <div class="login-tabs">
-        <button class="login-tab is-active" data-login-tab="passkey">
+        <button class="login-tab" data-login-tab="passkey">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
             <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
           </svg>
           패스키
         </button>
-        <button class="login-tab" data-login-tab="account">
+        <button class="login-tab is-active" data-login-tab="account">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
             <circle cx="12" cy="7" r="4"></circle>
@@ -32,7 +40,7 @@
       </div>
 
       <div class="login-content">
-        <div id="login-panel-passkey" class="login-panel active">
+        <div id="login-panel-passkey" class="login-panel">
           <div class="login-illustration">
             <div class="pulse-ring"></div>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -44,7 +52,7 @@
           <button class="button button-primary button-large full-width" id="login-button-passkey">패스키로 계속하기</button>
         </div>
 
-        <div id="login-panel-account" class="login-panel">
+        <div id="login-panel-account" class="login-panel active">
           <h3>계정 ID 로그인</h3>
           <p>이메일과 비밀번호를 입력하여 접속하세요.</p>
           <form id="login-form-account" class="login-form">
@@ -63,7 +71,7 @@
     </div>
 
     <p class="login-footer">
-      Jisong Cloud &middot; Premium Personal Cloud Service
+      jCloud &middot; Premium Personal Cloud Service
     </p>
   </div>
 </section>

@@ -908,3 +908,6 @@ Mark items as complete as you go.
 - `uvicorn` 환경에서도 설정을 정확히 읽어올 수 있도록 `config.py`에 TOML 직접 파싱 로직을 추가했습니다.
 - 패스키 로그인 시 발생하던 400 오류의 원인을 파악하기 위해 상세 디버그 로그를 추가했습니다.
 
+- [x] Gemini 모델을 `gemini-3-flash-preview`로 변경
+- [x] 프론트엔드 영문 폰트(Inter/Outfit)를 제거하고 Apple SD Gothic Neo 등의 시스템 폰트로 일괄 적용
+- [x] 프론트엔드 CRUD의 더미 데이터 Fallback 로직을 완전히 제거하여 실제 데이터를 정상적으로 불러오도록 개선

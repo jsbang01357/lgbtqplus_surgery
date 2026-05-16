@@ -1,6 +1,5 @@
 import io
 import json
-import os
 import re
 import zipfile
 from datetime import datetime
@@ -44,29 +43,13 @@ GEMINI_DAILY_LIMIT_KRW = 5000
 GEMINI_MONTHLY_LIMIT_KRW = 15000
 
 
-def _get_config_value(env_name: str, secret_name: str, default):
-    env_value = os.getenv(env_name)
-    if env_value not in (None, ""):
-        return env_value
-
-    try:
-        value = st.secrets["gemini"].get(secret_name)
-        if value not in (None, ""):
-            return value
-    except Exception:
-        pass
-
-    return default
-
-
 def _get_float_config(env_name: str, secret_name: str, default: float) -> float:
     try:
-        return float(_get_config_value(env_name, secret_name, default))
+        return float(get_config(env_name, str(default)))
     except (TypeError, ValueError):
         return default
 
 
-GEMINI_MODEL = str(_get_config_value("GEMINI_MODEL", "model", "gemini-3-flash-preview"))
 GEMINI_INPUT_PRICE_PER_1M = _get_float_config(
     "GEMINI_INPUT_PRICE_PER_1M", "input_price_per_1m", 0.50
 )
@@ -139,14 +122,15 @@ PROMPT_PRESETS = [
 ]
 
 
-from app.config import get_gemini_api_key, get_config
 
-# ... inside _get_gemini_api_key ...
+
 def _get_gemini_api_key() -> str:
     return get_gemini_api_key()
 
 def _get_model_name() -> str:
-    return get_config("GEMINI_MODEL", "gemini-1.5-flash-latest")
+    return get_config("GEMINI_MODEL", "gemini-3-flash-preview")
+
+GEMINI_MODEL = _get_model_name()
 
 
 

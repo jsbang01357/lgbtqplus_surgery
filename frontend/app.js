@@ -124,6 +124,13 @@ function includesQuery(...values) {
   return values.some((value) => String(value || "").toLowerCase().includes(query));
 }
 
+function highlightMatch(text, query) {
+  if (!query) return escapeHtml(text);
+  const escaped = escapeHtml(text);
+  const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, "gi");
+  return escaped.replace(regex, '<mark class="highlight">$1</mark>');
+}
+
 function pageFromLocation() {
   const path = window.location.pathname.replace(/^\/+/, "").split("/")[0];
   if (pageIds.includes(path)) return path;
@@ -198,13 +205,88 @@ function getFilteredMemos() {
   );
 }
 
+async function uploadSelectedFiles(input) {
+  const files = input.files;
+  if (!files.length) return;
+  const formData = new FormData();
+  for (let i = 0; i < files.length; i++) {
+    formData.append(`file${i}`, files[i]);
+  }
+  const btn = document.querySelector("#upload-form button") || { textContent: "" };
+  setBusy(btn, "업로드 중", true);
+  try {
+    await fetch("/api/files", {
+      method: "POST",
+      body: formData,
+    });
+    showToast("업로드 완료");
+    await loadFiles();
+  } catch (error) {
+    showToast("업로드 실패: " + error.message);
+  } finally {
+    setBusy(btn, "", false);
+    input.value = "";
+  }
+}
+
+async function deleteFile(index) {
+  const file = getFilteredFiles()[index];
+  if (!file || !confirm(`'${file.name}' 파일을 삭제하시겠습니까?`)) return;
+  try {
+    await postJson("/api/files/delete", { blob_name: file.blob_name });
+    showToast("삭제 완료");
+    await loadFiles();
+  } catch (error) {
+    showToast("삭제 실패: " + error.message);
+  }
+}
+
+async function downloadFile(index) {
+  const file = getFilteredFiles()[index];
+  if (!file) return;
+  try {
+    await downloadFromApi(`/api/files/download?blob_name=${encodeURIComponent(file.blob_name)}`, file.name);
+  } catch (error) {
+    showToast("다운로드 실패: " + error.message);
+  }
+}
+
+async function saveMemo(silent = false) {
+  const t = document.querySelector("#memo-title").value;
+  const b = document.querySelector("#memo-body").value;
+  const f = document.querySelector("#memo-file-name").value;
+  if (!t.trim() || !b.trim()) return;
+  try {
+    await postJson("/api/memos", { title: t, content: b, file_name: f || undefined });
+    if (!silent) {
+      resetMemoForm();
+      showToast("저장 완료");
+    }
+    await loadMemos();
+  } catch (error) {
+    if (!silent) showToast(error.message);
+  }
+}
+
+async function deleteMemo(index) {
+  const memo = getFilteredMemos()[index];
+  if (!memo || !confirm(`'${memo.title}' 메모를 삭제하시겠습니까?`)) return;
+  try {
+    await postJson("/api/memos/delete", { file_name: memo.fileName });
+    showToast("삭제 완료");
+    await loadMemos();
+  } catch (error) {
+    showToast("삭제 실패: " + error.message);
+  }
+}
+
 function resetMemoForm() {
   document.querySelector("#memo-title").value = "";
   document.querySelector("#memo-body").value = "";
   document.querySelector("#memo-file-name").value = "";
   state.editingMemoFileName = "";
-  memoSaveButton.textContent = "메모 저장";
-  downloadCurrentMemoButton.disabled = true;
+  if (memoSaveButton) memoSaveButton.textContent = "메모 저장";
+  if (downloadCurrentMemoButton) downloadCurrentMemoButton.disabled = true;
 }
 
 function updateHeroPreview() {
@@ -439,8 +521,8 @@ async function loadFiles() {
     }));
     state.usesDemoData = false;
   } catch (error) {
-    state.files = [...files];
-    state.usesDemoData = true;
+    state.files = [];
+    state.usesDemoData = false;
   }
   renderFiles();
   updateHeroPreview();
@@ -458,7 +540,7 @@ async function loadMemos() {
     }));
     state.usesDemoData = false;
   } catch {
-    state.memos = [...memos];
+    state.memos = [];
   }
   renderMemos();
   updateHeroPreview();
@@ -704,14 +786,16 @@ function renderGeminiUsageSettings(data) {
 }
 
 function renderFiles() {
-  const visibleFiles = getFilteredFiles();
+  const visibleFiles = getFilteredFiles().sort((a, b) => {
+    return new Date(b.updated || 0) - new Date(a.updated || 0);
+  });
   fileList.innerHTML = visibleFiles
     .map(
       (file, index) => `
         <div class="data-row">
           <span class="file-icon">${escapeHtml(file.type)}</span>
           <div>
-            <strong>${escapeHtml(file.name)}</strong>
+            <strong>${highlightMatch(file.name, state.fileQuery)}</strong>
             <small>${escapeHtml(file.updated)} · ${escapeHtml(file.size)}</small>
           </div>
           <div class="row-actions">
@@ -746,13 +830,15 @@ function renderFiles() {
 }
 
 function renderMemos() {
-  const visibleMemos = getFilteredMemos();
+  const visibleMemos = getFilteredMemos().sort((a, b) => {
+    return new Date(b.updated || 0) - new Date(a.updated || 0);
+  });
   memoList.innerHTML = visibleMemos
     .map(
       (memo, index) => `
         <article class="memo-card ${memo.fileName && memo.fileName === state.editingMemoFileName ? "is-selected" : ""}">
-          <h3>${escapeHtml(memo.title)}</h3>
-          <p>${escapeHtml(memo.body)}</p>
+          <h3>${highlightMatch(memo.title, state.memoQuery)}</h3>
+          <p>${highlightMatch(memo.body, state.memoQuery)}</p>
           <div class="memo-actions">
             ${memo.updated ? `<small>${escapeHtml(memo.updated)}</small>` : "<small>미리보기</small>"}
             ${
@@ -1036,41 +1122,6 @@ function bindToolPanel(tool) {
       }
     });
   }
-  if (tool === "menu-picker") {
-    const runBtn = document.querySelector("#tool-menu-run");
-    runBtn.addEventListener("click", async () => {
-      setBusy(runBtn, "추천 중", true);
-      try {
-        const data = await apiJson("/api/tools/menu-picker");
-        const box = document.querySelector("#menu-result-box");
-        box.style.display = "block";
-        document.querySelector("#selected-menu-label").textContent = data.selected_menu;
-      } catch (error) {
-        showToast(error.message);
-      } finally {
-        setBusy(runBtn, "추천 중", false);
-      }
-    });
-  }
-  if (tool === "storage-status") {
-    const refreshBtn = document.querySelector("#tool-storage-refresh");
-    const load = async () => {
-      setBusy(refreshBtn, "확인 중", true);
-      try {
-        const data = await apiJson("/api/tools/storage-status");
-        document.querySelector("#storage-status-metrics").innerHTML = `
-          <article><span>Backend</span><strong>${data.backend}</strong></article>
-          <article><span>파일 수</span><strong>${data.file_count}개</strong></article>
-        `;
-      } catch (error) {
-        showToast(error.message);
-      } finally {
-        setBusy(refreshBtn, "확인 중", false);
-      }
-    };
-    refreshBtn.addEventListener("click", load);
-    load();
-  }
 }
 
 async function bootstrap() {
@@ -1132,6 +1183,11 @@ async function bootstrap() {
   
   if (session?.authorized) {
     await Promise.all([loadFiles(), loadMemos(), loadUsageSummary()]);
+    
+    // Auto polling for stale data
+    setInterval(async () => {
+      await Promise.all([loadFiles(), loadMemos(), loadUsageSummary(), loadSettings()]);
+    }, 60000);
   }
   
   // Event listeners that require session
@@ -1153,6 +1209,12 @@ async function bootstrap() {
     state.memoQuery = query;
     renderFiles();
     renderMemos();
+    
+    // Auto-navigate to files if searching from dashboard
+    const current = document.documentElement.getAttribute("data-active-page");
+    if (query && !["files", "memos"].includes(current)) {
+      setActivePage("files");
+    }
   });
 
   document.querySelector("#passkey-register")?.addEventListener("click", registerPasskey);
@@ -1196,17 +1258,62 @@ async function bootstrap() {
           card.click();
         }
       }, 50);
+      return;
+    }
+
+    const dlBtn = e.target.closest("[data-download]");
+    if (dlBtn) {
+      downloadFile(parseInt(dlBtn.dataset.download));
+      return;
+    }
+
+    const delBtn = e.target.closest("[data-delete]");
+    if (delBtn) {
+      deleteFile(parseInt(delBtn.dataset.delete));
+      return;
+    }
+
+    const memoOpen = e.target.closest("[data-memo-open]");
+    if (memoOpen) {
+      const memo = getFilteredMemos()[parseInt(memoOpen.dataset.memoOpen)];
+      if (memo) {
+        document.querySelector("#memo-title").value = memo.title;
+        document.querySelector("#memo-body").value = memo.body;
+        document.querySelector("#memo-file-name").value = memo.fileName;
+        state.editingMemoFileName = memo.fileName;
+        if (memoSaveButton) memoSaveButton.textContent = "메모 수정";
+        if (downloadCurrentMemoButton) downloadCurrentMemoButton.disabled = false;
+        renderMemos();
+      }
+      return;
+    }
+
+    const memoDelete = e.target.closest("[data-memo-delete]");
+    if (memoDelete) {
+      deleteMemo(parseInt(memoDelete.dataset.memoDelete));
+      return;
     }
   });
 
   document.querySelector("#memo-form")?.addEventListener("submit", async e => {
     e.preventDefault();
-    const t = document.querySelector("#memo-title").value;
-    const b = document.querySelector("#memo-body").value;
-    const f = document.querySelector("#memo-file-name").value;
-    try { await postJson("/api/memos", { title: t, content: b, file_name: f || undefined }); resetMemoForm(); await loadMemos(); showToast("저장 완료"); } catch(err) { showToast(err.message); }
+    await saveMemo();
   });
   document.querySelector("#memo-reset-button")?.addEventListener("click", () => { resetMemoForm(); renderMemos(); });
+
+  const themeToggle = document.querySelector("#theme-toggle");
+  const currentTheme = localStorage.getItem("theme") || "light";
+  document.documentElement.setAttribute("data-theme", currentTheme);
+  if (themeToggle) {
+    themeToggle.textContent = currentTheme === "dark" ? "라이트 모드 전환" : "다크 모드 전환";
+    themeToggle.addEventListener("click", () => {
+      const newTheme = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", newTheme);
+      localStorage.setItem("theme", newTheme);
+      themeToggle.textContent = newTheme === "dark" ? "라이트 모드 전환" : "다크 모드 전환";
+    });
+  }
+
   document.querySelector("#run-ai")?.addEventListener("click", async () => {
     const prompt = document.querySelector("#ai-prompt").value;
     const btn = document.querySelector("#run-ai");
@@ -1220,7 +1327,56 @@ async function bootstrap() {
     } catch(err) { showToast(err.message); } finally { setBusy(btn, "분석 중", false); }
   });
 
-  setActivePage(pageFromLocation(), { skipHistory: true });
-}
+  saveAiMemoButton?.addEventListener("click", async () => {
+    if (!state.lastAiResult) return;
+    try { await postJson("/api/memos", { title: "AI 분석 결과", content: state.lastAiResult }); await loadMemos(); showToast("메모로 저장되었습니다."); }
+    catch(err) { showToast(err.message); }
+  });
+  downloadAiMdButton?.addEventListener("click", () => {
+    const blob = new Blob([state.lastAiResult], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "ai-result.md"; a.click();
+  });
+  downloadAiPdfButton?.addEventListener("click", async () => {
+    try { await downloadPostBlob("/api/tools/markdown-pdf", { markdown: state.lastAiResult }, "ai-result.pdf"); showToast("PDF 다운로드 시작"); }
+    catch(err) { showToast(err.message); }
+  });
+  downloadCurrentMemoButton?.addEventListener("click", async () => {
+    const fileName = document.querySelector("#memo-file-name").value;
+    if (!fileName) return;
+    try { await downloadFromApi(`/api/memos/${fileName}/download`, "memo.txt"); }
+    catch(err) { showToast(err.message); }
+  });
 
+  setActivePage(pageFromLocation(), { skipHistory: true });
+
+  // Drag & Drop
+  const filesSection = document.querySelector("#files");
+  if (filesSection) {
+    filesSection.addEventListener("dragover", e => {
+      e.preventDefault();
+      filesSection.classList.add("drag-over");
+    });
+    filesSection.addEventListener("dragleave", () => {
+      filesSection.classList.remove("drag-over");
+    });
+    filesSection.addEventListener("drop", e => {
+      e.preventDefault();
+      filesSection.classList.remove("drag-over");
+      if (e.dataTransfer.files.length) {
+        uploadSelectedFiles({ files: e.dataTransfer.files });
+      }
+    });
+  }
+
+  // Memo Auto-save (Debounced)
+  let autoSaveTimeout;
+  document.querySelector("#memo-body")?.addEventListener("input", () => {
+    if (!state.editingMemoFileName) return;
+    clearTimeout(autoSaveTimeout);
+    autoSaveTimeout = setTimeout(() => {
+      saveMemo(true); // silent save
+    }, 2000);
+  });
+}
 bootstrap();
