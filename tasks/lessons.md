@@ -22,3 +22,5 @@ Reuse these lessons in future tasks to avoid repeating the same mistakes.
 * UI 저장 버튼처럼 즉시 반응하는 콜백은 존재하지 않는 후속 함수를 부르면 화면은 살아 보여도 콘솔 에러가 난다. 저장 직후 갱신 경로는 실제 정의된 함수만 연결한다.
 * 화면에서 사라진 레거시 DOM 셀렉터는 바인딩만 남겨도 실제 동작은 안 바뀌지만 유지보수 잡음을 만든다. 존재하지 않는 `querySelector`는 같이 제거한다.
 * 큰 프론트엔드 파일을 나눌 때는 렌더링 템플릿만 빼는 것으로 끝내지 말고, 호출부의 deps 전달도 함께 정리해야 분리 효과가 유지된다.
+* 런타임 호환 컴포넌트(`streamlit_compat.py` 등)를 새로 사용하도록 코드를 리팩토링할 때는 호출부 파일(`auth.py` 등)에서 해당 함수(`render_inline_html`)가 올바르게 임포트되었는지 꼼꼼하게 교차 검증해야 한다.
+

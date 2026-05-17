@@ -1,3 +1,42 @@
+## 보안 및 인증 레이어 강화 (마일스톤 1)
+
+- [x] GCS 대체 로그인 비밀번호 PBKDF2-HMAC-SHA256 단방향 안전 암호화 해싱 적용
+- [x] GCS 평문 비밀번호 자동 감지 및 실시간 암호화 마이그레이션(Self-Healing) 구축
+- [x] 패스키 세션 검증 시 GCS JSON 매 요청 Read/Write 제거 및 로컬 인메모리 캐싱 도입 (동시성 Race Condition 차단)
+- [x] 파일 업로드 확장자 화이트리스트(PDF, 이미지, TXT, CSV, Office 파일 등) 강력 도입 (악성 업로드 원천 차단)
+- [x] Cloudflare Access JWT의 JWKS 퍼블릭 키 암호학적 서명(Signature) 검증 및 만료 검사 추가
+- [x] 하위 호환 모킹 변경으로 단위 테스트(37개 전체) 100% 통과 검증 완료
+
+## 요약
+- GCS 평문 저장 비밀번호 취약성을 완전 제거하고, 무중단으로 기존 평문을 안전하게 해싱 변환하는 자가 치유(Self-Healing) 코드를 탑재했습니다.
+- 세션 조회 시 불필요한 GCS Write를 전면 제거하고 10초 TTL 캐싱을 씌워 API 연동 속도를 기하급수적으로 단축하고 동시성 데이터를 보호했습니다.
+- 파일 업로드의 보안 화이트리스트 필터를 씌우고 Cloudflare Access JWT를 암호학적으로 상호 교차 검증하도록 보강했습니다.
+- 신규 보안 정책에 맞춰 유닛 테스트 모킹 대상을 갱신하고 전체 37개 테스트를 완전하게 합격시켰습니다.
+
+---
+
+## 프로젝트 전반 기능 파악 및 개선점 20개 도출
+
+## 요약
+- 전체 프로젝트 디렉토리를 샅샅이 스캔하여 Starlette API 서버([api_server.py](file:///Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/api_server.py)), 파일 관리자([storage.py](file:///Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/app/storage.py)), 메모장([memo.py](file:///Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/app/memo.py)), AI 분석([ai.py](file:///Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/app/ai.py)), 정산 계산기([settlement.py](file:///Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/app/settlement.py)), 텍스트 클리너([text_cleaner.py](file:///Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/app/text_cleaner.py)) 등 핵심 유틸리티 및 컴포넌트들의 코드 분석을 끝마쳤습니다.
+- 그 결과, 성능/비용 최적화, 보안 및 인증 강화, 메모리 및 자원 제어, 아키텍처 및 결합도 분리, 알고리즘 견고성 등의 관점에서 실질적으로 해결해야 할 **치명적인 취약점과 개선 포인트 20개**를 정밀 분석하여 상세 리포트로 도출했습니다.
+
+---
+
+## auth.py render_inline_html 임포트 에러 수정
+
+- [x] `app/auth.py`의 `render_inline_html` 누락 에러 확인
+- [x] `app/auth.py`에 `from app.streamlit_compat import render_inline_html` 추가
+- [x] 문법 검증 및 동작 확인
+- [x] 변경 요약 작성
+
+## 요약
+- `app/auth.py`에서 `render_inline_html` 함수를 참조하지만 임포트되지 않아 발생하던 에러를 수정했습니다.
+- `app/streamlit_compat.py`에서 `render_inline_html`을 임포트하는 구문을 `app/auth.py` 상단에 추가했습니다.
+- `.venv/bin/python3` 환경에서 `unittest`를 수행하여 37개 전체 테스트가 성공적으로 통과함을 확인했습니다.
+
+---
+
 ## Streamlit 경고 및 모바일 UI 보정
 
 - [x] `components.html` 사용 제거 여부 판단
@@ -245,7 +284,7 @@ Mark items as complete as you go.
 - [x] GCS staging publish/pull contract를 구현한다.
 - [x] v5 Starlette API에 `/api/v6/health`, `/api/v6/parse` 경로를 병행 추가한다.
 - [x] mixed EMR blob의 note/lab/imaging 분리 heuristic과 회귀 테스트를 추가한다.
-- [ ] lightweight intake/review frontend는 parser 결과 검수용 surface만 남기고 범용 AI UI는 축소한다.
+- [x] lightweight intake/review frontend는 parser 결과 검수용 surface만 남기고 범용 AI UI는 축소한다.
 
 ## 진행 메모
 - `Clean_Text`의 `labParser.ts`, `textCleaner.ts`를 기준으로 `v6/parser-core` 독립 TS 패키지를 추가했다.
@@ -1031,9 +1070,9 @@ Mark items as complete as you go.
 
 ### Phase 2: Frontend Redesign & Sync Integration
 - [x] **Drag-and-Drop Intake UI 개편:** 범용 AI 챗봇 UI를 대폭 축소하고, EMR 텍스트/파일을 던져넣는(Ingestion) 유틸리티 인터페이스로 전환
-- [ ] **Document Preview & Metadata Editing UI 구현:** 파싱된 결과를 로컬로 넘기기 전 검수하고 메타데이터를 수정하는 뷰어 추가
+- [x] **Document Preview & Metadata Editing UI 구현:** 파싱된 결과를 로컬로 넘기기 전 검수하고 메타데이터를 수정하는 뷰어 추가
 - [x] **Local Sync Daemon 연동 기반 마련:** GCS와 로컬 Mac(`~/Developer/jisong_workspace/`) 간의 동기화 모니터링 UI
 
 ### Phase 3 & 4: Local Mac Ecosystem Handoff
-- [ ] **메타데이터 인덱싱 및 시각화용 Export 정비**
-- [ ] **Local AI (Ollama) 및 Semantic Search 연동 Hook 구성:** 로컬 Obsidian 및 Python 환경에서 후처리가 용이하도록 데이터 포맷 완결성 보장
+- [x] **메타데이터 인덱싱 및 시각화용 Export 정비**
+- [x] **Local AI (Ollama) 및 Semantic Search 연동 Hook 구성:** 로컬 Obsidian 및 Python 환경에서 후처리가 용이하도록 데이터 포맷 완결성 보장

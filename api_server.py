@@ -7,13 +7,15 @@ from pathlib import Path
 
 from starlette.applications import Starlette
 from starlette.requests import Request
+import os
 from starlette.responses import FileResponse, JSONResponse, Response, StreamingResponse
+from starlette.background import BackgroundTask
 from starlette.routing import Route
 
 from app import passkeys
 from app.security import (
     account_login_id,
-    account_login_password,
+    verify_account_password,
     allow_account_id_fallback,
     allow_google_auth_fallback,
     get_access_context,
@@ -76,6 +78,7 @@ ACCOUNT_SESSION_COOKIE = "jisong_account_session"
 ACCOUNT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 30
 ACCOUNT_SESSIONS_BLOB = "auth/account_sessions.json"
 
+
 def _load_account_sessions() -> dict[str, str]:
     try:
         bucket = get_bucket()
@@ -85,6 +88,7 @@ def _load_account_sessions() -> dict[str, str]:
     except Exception:
         pass
     return {}
+
 
 def _save_account_sessions(sessions: dict[str, str]):
     try:
@@ -136,6 +140,7 @@ def _verify_account_session(request: Request, email: str) -> bool:
     sessions = _load_account_sessions()
     return sessions.get(token) == email
 
+
 def _create_account_session(email: str) -> str:
     token = secrets.token_urlsafe(32)
     sessions = _load_account_sessions()
@@ -169,7 +174,9 @@ def _auth_state(request: Request) -> dict:
     access_context = get_access_context(request.headers)
     email = _request_email(request)
     passkey_ok = passkeys.verify_session(_passkey_token(request), email=email)
-    account_id_ok = allow_account_id_fallback() and _verify_account_session(request, email)
+    account_id_ok = allow_account_id_fallback() and _verify_account_session(
+        request, email
+    )
     access_ok = access_context.allowed or not require_cloudflare_access()
     google_fallback_ok = allow_google_auth_fallback() and access_context.allowed
     authorized = access_ok and (passkey_ok or account_id_ok or google_fallback_ok)
@@ -215,7 +222,9 @@ async def session(request: Request):
             "account_id_fallback_allowed": allow_account_id_fallback(),
             "google_auth_fallback_allowed": allow_google_auth_fallback(),
             "account_login_id": account_login_id(),
-            "client_ip": get_client_ip(request.headers, request.client.host if request.client else None),
+            "client_ip": get_client_ip(
+                request.headers, request.client.host if request.client else None
+            ),
             "cloudflare_access": {
                 "email": access_context.email,
                 "has_jwt": access_context.has_jwt,
@@ -233,13 +242,19 @@ async def account_login(request: Request):
     if not allow_account_id_fallback():
         return _json({"error": "계정 ID fallback이 꺼져 있습니다."}, status_code=403)
     payload = await request.json()
-    login_id = str(payload.get("account_id") or payload.get("email") or "").strip().lower()
+    login_id = (
+        str(payload.get("account_id") or payload.get("email") or "").strip().lower()
+    )
     password = str(payload.get("password") or "")
-    if login_id != account_login_id() or password != account_login_password():
-        return _json({"error": "계정 ID 또는 비밀번호가 올바르지 않습니다."}, status_code=401)
+    if login_id != account_login_id() or not verify_account_password(password):
+        return _json(
+            {"error": "계정 ID 또는 비밀번호가 올바르지 않습니다."}, status_code=401
+        )
     email = owner_email()
     token = _create_account_session(email)
-    response = _json({"ok": True, "email": email, "expires_in": ACCOUNT_SESSION_TTL_SECONDS})
+    response = _json(
+        {"ok": True, "email": email, "expires_in": ACCOUNT_SESSION_TTL_SECONDS}
+    )
     response.set_cookie(
         ACCOUNT_SESSION_COOKIE,
         token,
@@ -255,10 +270,12 @@ async def usage_summary(request: Request):
     ok, message = _is_authorized(request)
     if not ok:
         return _json({"error": message}, status_code=401)
-    
+
     try:
         multiplier = float(request.query_params.get("multiplier", 1.0))
-        exchange_rate = float(request.query_params.get("exchange_rate", USD_TO_KRW_RATE))
+        exchange_rate = float(
+            request.query_params.get("exchange_rate", USD_TO_KRW_RATE)
+        )
     except ValueError:
         multiplier = 1.0
         exchange_rate = USD_TO_KRW_RATE
@@ -266,7 +283,7 @@ async def usage_summary(request: Request):
     try:
         logs = _load_gemini_usage_logs()
         today_krw, month_krw, today_usd, month_usd = _sum_usage_costs(logs)
-        
+
         today_adjusted = today_usd * exchange_rate * multiplier
         month_adjusted = month_usd * exchange_rate * multiplier
 
@@ -294,8 +311,9 @@ async def settings_password_update(request: Request):
     new_password = payload.get("new_password", "").strip()
     if len(new_password) < 4:
         return _json({"error": "비밀번호는 4자리 이상이어야 합니다."}, status_code=400)
-    
+
     from app.security import update_account_password
+
     try:
         update_account_password(new_password)
         return _json({"ok": True})
@@ -317,7 +335,9 @@ async def settings_access_logs(request: Request):
         ip_counts[ip] = ip_counts.get(ip, 0) + 1
     top_ips = [
         {"ip": ip, "count": count}
-        for ip, count in sorted(ip_counts.items(), key=lambda item: item[1], reverse=True)[:5]
+        for ip, count in sorted(
+            ip_counts.items(), key=lambda item: item[1], reverse=True
+        )[:5]
     ]
     return _json(
         {
@@ -342,16 +362,16 @@ async def settings_access_logs_clear(request: Request):
 
 
 async def tool_text_cleaner(request: Request):
-    # 도구는 비인증으로 열려있으되 민감기능만 제한할 수 있음. 
+    # 도구는 비인증으로 열려있으되 민감기능만 제한할 수 있음.
     # 여기서는 전체 허용하되 필요시 _is_authorized 체크 추가 가능
     payload = await request.json()
     text = (payload.get("text") or "").strip()
     if not text:
         return _json({"error": "텍스트를 입력하세요."}, status_code=400)
-    
+
     mode = payload.get("mode", "basic")
     options = payload.get("options", {})
-    
+
     cleaned = text
     if mode == "basic":
         if options.get("ai_mode"):
@@ -359,6 +379,7 @@ async def tool_text_cleaner(request: Request):
             if api_key:
                 try:
                     from google import genai
+
                     client = genai.Client(api_key=api_key)
                     clean_prompt = (
                         "너는 텍스트를 정리하는 인공지능 비서야.\n"
@@ -371,16 +392,23 @@ async def tool_text_cleaner(request: Request):
                         f"텍스트:\n{text}"
                     )
                     response = client.models.generate_content(
-                        model=_get_model_name(),
-                        contents=clean_prompt
+                        model=_get_model_name(), contents=clean_prompt
                     )
                     cleaned = response.text or text
                 except Exception:
                     # Fallback to regex if AI fails
-                    cleaned = _clean_ai_mode(text, convert_numbered_lists=options.get("ai_numbered_to_dash", False))
+                    cleaned = _clean_ai_mode(
+                        text,
+                        convert_numbered_lists=options.get(
+                            "ai_numbered_to_dash", False
+                        ),
+                    )
             else:
-                cleaned = _clean_ai_mode(text, convert_numbered_lists=options.get("ai_numbered_to_dash", False))
-        
+                cleaned = _clean_ai_mode(
+                    text,
+                    convert_numbered_lists=options.get("ai_numbered_to_dash", False),
+                )
+
         cleaned = _apply_basic_cleaning_options(
             cleaned,
             opt_tab=options.get("opt_tab", True),
@@ -406,12 +434,10 @@ async def tool_text_cleaner(request: Request):
             keep_code_blocks=options.get("keep_code_blocks", True),
             keep_lists=options.get("keep_lists", True),
         )
-    
-    return _json({
-        "original_len": len(text),
-        "cleaned_len": len(cleaned),
-        "cleaned": cleaned
-    })
+
+    return _json(
+        {"original_len": len(text), "cleaned_len": len(cleaned), "cleaned": cleaned}
+    )
 
 
 async def tool_settlement(request: Request):
@@ -420,13 +446,15 @@ async def tool_settlement(request: Request):
     expenses = payload.get("expenses") or []
     if not people:
         return _json({"error": "사람 목록을 입력하세요."}, status_code=400)
-    
+
     result = calculate_settlement(people, expenses)
-    return _json({
-        "summary_rows": result.summary_rows,
-        "transfer_rows": result.transfer_rows,
-        "errors": result.errors
-    })
+    return _json(
+        {
+            "summary_rows": result.summary_rows,
+            "transfer_rows": result.transfer_rows,
+            "errors": result.errors,
+        }
+    )
 
 
 async def v6_health(_request: Request):
@@ -474,43 +502,47 @@ async def v6_publish_sync(request: Request):
     ok, message = _is_authorized(request)
     if not ok:
         return _json({"error": message}, status_code=401)
-    
+
     payload = await request.json()
     documents = payload.get("documents", [])
     manifest = payload.get("manifest", [])
-    
+
     if not documents:
         return _json({"error": "동기화할 문서가 없습니다."}, status_code=400)
-        
+
     bucket = get_bucket()
     synced_files = []
-    
+
     for doc in documents:
         rel_path = doc.get("relativePath")
         content = doc.get("content", "")
         if not rel_path:
             continue
-            
+
         blob_name = f"v6_sync/{rel_path}"
         blob = bucket.blob(blob_name)
-        
+
         content_type = "text/plain; charset=utf-8"
         if rel_path.endswith(".csv"):
             content_type = "text/csv; charset=utf-8"
         elif rel_path.endswith(".md"):
             content_type = "text/markdown; charset=utf-8"
-            
+
         blob.upload_from_string(content.encode("utf-8"), content_type=content_type)
         synced_files.append(blob_name)
-    
+
     # Save manifest
     if manifest and documents:
         patient_id = documents[0].get("metadata", {}).get("patientId", "unknown")
-        manifest_blob_name = f"v6_sync/workspace/{patient_id}/_manifest_{secrets.token_hex(4)}.json"
+        manifest_blob_name = (
+            f"v6_sync/workspace/{patient_id}/_manifest_{secrets.token_hex(4)}.json"
+        )
         manifest_blob = bucket.blob(manifest_blob_name)
-        manifest_blob.upload_from_string(json.dumps(manifest).encode("utf-8"), content_type="application/json")
+        manifest_blob.upload_from_string(
+            json.dumps(manifest).encode("utf-8"), content_type="application/json"
+        )
         synced_files.append(manifest_blob_name)
-        
+
     return _json({"ok": True, "synced_count": len(synced_files)})
 
 
@@ -520,7 +552,9 @@ async def settings_gemini_usage(request: Request):
         return _json({"error": message}, status_code=401)
     try:
         multiplier = float(request.query_params.get("multiplier", 1.0))
-        exchange_rate = float(request.query_params.get("exchange_rate", USD_TO_KRW_RATE))
+        exchange_rate = float(
+            request.query_params.get("exchange_rate", USD_TO_KRW_RATE)
+        )
     except ValueError:
         multiplier = 1.0
         exchange_rate = USD_TO_KRW_RATE
@@ -538,10 +572,13 @@ async def settings_gemini_usage(request: Request):
     for entry in logs:
         entry_time = _parse_usage_time(entry.get("time", ""))
         day = entry_time.strftime("%Y-%m-%d") if entry_time else "unknown"
-        row = daily.setdefault(day, {"date": day, "requests": 0, "tokens": 0, "cost_usd": 0.0})
+        row = daily.setdefault(
+            day, {"date": day, "requests": 0, "tokens": 0, "cost_usd": 0.0}
+        )
         row["requests"] += 1
         row["tokens"] += int(entry.get("total_tokens") or 0)
         from app.ai import _entry_cost_usd
+
         row["cost_usd"] += _entry_cost_usd(entry)
 
     daily_rows = sorted(daily.values(), key=lambda row: row["date"], reverse=True)[:10]
@@ -634,7 +671,7 @@ async def auth_logout(request: Request):
     response = JSONResponse({"ok": True})
     # Remove passkey cookie
     response.delete_cookie("jisong_passkey_session")
-    
+
     # Remove account session from store and cookie
     token = _account_token(request)
     if token:
@@ -671,8 +708,9 @@ async def files_download(request: Request):
     blob_name = request.query_params.get("blob_name")
     if not blob_name:
         return _json({"error": "blob_name is required"}, status_code=400)
-    
+
     from app.storage import download_file_bytes
+
     content, content_type, original_name = download_file_bytes(blob_name)
     return _file_response_bytes(content, original_name or blob_name, content_type)
 
@@ -687,12 +725,37 @@ async def files_upload(request: Request):
     for _, upload in form.multi_items():
         if not hasattr(upload, "filename"):
             continue
+
+        filename = str(upload.filename or "")
+        ext = Path(filename).suffix.lower()
+        allowed_extensions = {
+            ".pdf",
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".webp",
+            ".gif",
+            ".txt",
+            ".md",
+            ".markdown",
+            ".csv",
+            ".docx",
+            ".xlsx",
+            ".pptx",
+        }
+        if ext not in allowed_extensions:
+            return _json(
+                {"error": f"지원하지 않는 파일 형식입니다 ({ext})."}, status_code=400
+            )
+
         content = await upload.read()
         if len(content) > MAX_UPLOAD_SIZE_BYTES:
-            return _json({"error": f"{upload.filename} 파일이 50MB 제한을 초과했습니다."}, status_code=413)
+            return _json(
+                {"error": f"{upload.filename} 파일이 50MB 제한을 초과했습니다."},
+                status_code=413,
+            )
         safe_original = Path(upload.filename).name.replace("\\", "_").replace("/", "_")
         name = Path(safe_original).stem or "file"
-        ext = Path(safe_original).suffix
         new_filename = safe_original
         blob_name = normalize_blob_name(UPLOAD_PREFIX, new_filename)
         if bucket.blob(blob_name).exists():
@@ -724,13 +787,16 @@ async def files_zip(request: Request):
     ok, message = _is_authorized(request)
     if not ok:
         return _json({"error": message}, status_code=401)
-    zip_buffer = create_zip_of_files()
-    if not zip_buffer:
+    
+    zip_path = create_zip_of_files()
+    if not zip_path or not os.path.exists(zip_path):
         return _json({"error": "다운로드할 파일이 없습니다."}, status_code=404)
-    return StreamingResponse(
-        zip_buffer,
+        
+    return FileResponse(
+        zip_path,
         media_type="application/zip",
-        headers={"Content-Disposition": 'attachment; filename="jisong-cloud-files.zip"'},
+        filename="jisong-cloud-files.zip",
+        background=BackgroundTask(os.remove, zip_path)
     )
 
 
@@ -794,7 +860,9 @@ async def memos_zip(request: Request):
     return StreamingResponse(
         zip_buffer,
         media_type="application/zip",
-        headers={"Content-Disposition": 'attachment; filename="jisong-cloud-memos.zip"'},
+        headers={
+            "Content-Disposition": 'attachment; filename="jisong-cloud-memos.zip"'
+        },
     )
 
 
@@ -808,7 +876,9 @@ async def ai_analyze(request: Request):
         return _json({"error": "분석할 요청을 입력하세요."}, status_code=400)
     api_key = _get_gemini_api_key()
     if not api_key:
-        return _json({"error": "Gemini API key가 설정되지 않았습니다."}, status_code=400)
+        return _json(
+            {"error": "Gemini API key가 설정되지 않았습니다."}, status_code=400
+        )
     try:
         can_use, limit_message = _get_usage_limit_status()
         if not can_use:
@@ -883,11 +953,17 @@ routes = [
     Route("/api/session", session, methods=["GET"]),
     Route("/api/usage/summary", usage_summary, methods=["GET"]),
     Route("/api/settings/access-logs", settings_access_logs, methods=["GET"]),
-    Route("/api/settings/access-logs/clear", settings_access_logs_clear, methods=["POST"]),
+    Route(
+        "/api/settings/access-logs/clear", settings_access_logs_clear, methods=["POST"]
+    ),
     Route("/api/settings/password", settings_password_update, methods=["POST"]),
     Route("/api/settings/gemini-usage", settings_gemini_usage, methods=["GET"]),
-    Route("/api/auth/passkey/register/options", passkey_register_options, methods=["POST"]),
-    Route("/api/auth/passkey/register/verify", passkey_register_verify, methods=["POST"]),
+    Route(
+        "/api/auth/passkey/register/options", passkey_register_options, methods=["POST"]
+    ),
+    Route(
+        "/api/auth/passkey/register/verify", passkey_register_verify, methods=["POST"]
+    ),
     Route("/api/auth/passkey/login/options", passkey_login_options, methods=["POST"]),
     Route("/api/auth/passkey/login/verify", passkey_login_verify, methods=["POST"]),
     Route("/api/auth/logout", auth_logout, methods=["POST"]),

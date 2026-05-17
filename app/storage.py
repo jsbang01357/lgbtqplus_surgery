@@ -5,6 +5,8 @@ import io
 import mimetypes
 import html
 import re
+import tempfile
+import os
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path, PurePosixPath
@@ -143,29 +145,27 @@ def save_generated_file(
 
 
 def delete_uploaded_file(blob_name: str):
+    if not blob_name:
+        return
     bucket = get_bucket()
     blob = bucket.blob(blob_name)
-    blob.delete()
-
+    if blob.exists():
+        blob.delete()
+    
     # 삭제 후 목록 캐시 비우기
     list_uploaded_files_cached.clear()
-    download_file_bytes.clear()
-    create_zip_of_files.clear()
 
 
 def clear_all_uploaded_files():
     bucket = get_bucket()
     blobs = list(bucket.list_blobs(prefix=f"{UPLOAD_PREFIX}/"))
-    for blob in blobs:
-        blob.delete()
+    if blobs:
+        bucket.delete_blobs(blobs)
 
     # 전체 삭제 후 목록 캐시 비우기
     list_uploaded_files_cached.clear()
-    download_file_bytes.clear()
-    create_zip_of_files.clear()
 
 
-@ttl_cache(seconds=300)
 def download_file_bytes(blob_name: str) -> bytes:
     bucket = get_bucket()
     blob = bucket.blob(blob_name)
@@ -188,20 +188,22 @@ def create_file_download_url(file_info: GCSFileInfo) -> str:
     )
 
 
-@ttl_cache(seconds=60)
 def create_zip_of_files():
     files = list_uploaded_files()
     if not files:
         return None
 
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        for f in files:
-            data = download_file_bytes(f.blob_name)
-            zf.writestr(f.name, data)
+    bucket = get_bucket()
+    fd, temp_path = tempfile.mkstemp(suffix=".zip")
+    os.close(fd)
 
-    zip_buffer.seek(0)
-    return zip_buffer
+    with zipfile.ZipFile(temp_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in files:
+            blob = bucket.blob(f.blob_name)
+            with zf.open(f.name, "w") as dest:
+                blob.download_to_file(dest)
+
+    return temp_path
 
 
 def _format_file_size(size: int) -> str:

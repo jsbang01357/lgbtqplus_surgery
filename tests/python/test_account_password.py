@@ -25,7 +25,7 @@ class AccountPasswordTests(unittest.TestCase):
 
         with patch.dict(os.environ, {"ALLOW_ACCOUNT_ID_FALLBACK": "true"}, clear=True), \
             patch.object(api_server, "account_login_id", return_value="owner@example.com"), \
-            patch.object(api_server, "account_login_password", return_value="secret"), \
+            patch.object(api_server, "verify_account_password", return_value=True), \
             patch.object(api_server, "owner_email", return_value="owner@example.com"), \
             patch.object(api_server, "_create_account_session", return_value="issued-token"), \
             patch.object(api_server, "_should_secure_cookie", return_value=False):
@@ -44,7 +44,7 @@ class AccountPasswordTests(unittest.TestCase):
 
         with patch.dict(os.environ, {"ALLOW_ACCOUNT_ID_FALLBACK": "true"}, clear=True), \
             patch.object(api_server, "account_login_id", return_value="owner@example.com"), \
-            patch.object(api_server, "account_login_password", return_value="secret"):
+            patch.object(api_server, "verify_account_password", return_value=False):
             response = asyncio.run(api_server.account_login(request))
 
         body = json.loads(response.body)

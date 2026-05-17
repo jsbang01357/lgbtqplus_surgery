@@ -3,6 +3,7 @@ import time
 import streamlit as st
 
 from app.config import get_admin_password
+from app.streamlit_compat import render_inline_html
 
 MAX_LOGIN_FAILURES = 5
 LOGIN_LOCK_SECONDS = 600

@@ -13,7 +13,7 @@ from cryptography.hazmat.primitives.asymmetric.utils import (
 )
 from cryptography.hazmat.primitives.hashes import SHA256
 
-from app.core_utils import get_now
+from app.core_utils import get_now, ttl_cache
 from app.gcs_helper import get_bucket
 from app.config import get_config
 
@@ -41,6 +41,7 @@ def _iso_to_ts(value: str) -> float:
     return get_now().fromisoformat(value).timestamp()
 
 
+@ttl_cache(seconds=10)
 def _load_store() -> dict[str, Any]:
     bucket = get_bucket()
     blob = bucket.blob(PASSKEY_CREDENTIALS_BLOB)
@@ -65,6 +66,7 @@ def _save_store(data: dict[str, Any]):
         json.dumps(data, ensure_ascii=False, indent=2),
         content_type="application/json; charset=utf-8",
     )
+    _load_store.clear()
 
 
 def _cleanup_expired(data: dict[str, Any]):
@@ -371,10 +373,11 @@ def verify_session(token: str, email: str = "") -> bool:
     if not token:
         return False
     data = _load_store()
-    _cleanup_expired(data)
     session = data.get("sessions", {}).get(token)
-    _save_store(data)
     if not session:
+        return False
+    expires_at = session.get("expires_at")
+    if expires_at and _iso_to_ts(expires_at) <= get_now().timestamp():
         return False
     if email and session.get("email") != email:
         return False

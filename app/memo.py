@@ -5,6 +5,8 @@ import zipfile
 import io
 import time
 import random
+import tempfile
+import os
 from pathlib import PurePosixPath
 
 from app.core_utils import get_now, safe_filename, slugify, ttl_cache
@@ -187,9 +189,9 @@ def delete_memo_txt(file_name):
 def clear_all_memos():
     bucket = get_bucket()
     blobs = list(bucket.list_blobs(prefix=f"{MEMO_PREFIX}/"))
-    for blob in blobs:
-        blob.delete()
-
+    if blobs:
+        bucket.delete_blobs(blobs)
+    
     load_memo_list_cached.clear()
     load_single_memo_content.clear()
     create_zip_of_memos.clear()
@@ -200,16 +202,18 @@ def create_zip_of_memos(memo_list):
     if not memo_list:
         return None
 
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+    bucket = get_bucket()
+    fd, temp_path = tempfile.mkstemp(suffix=".zip")
+    os.close(fd)
+
+    with zipfile.ZipFile(temp_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for m in memo_list:
             memo_full = load_single_memo_content(m["file_name"])
             safe_name = safe_filename(memo_full["title"]) or "memo"
             file_name = f"{safe_name}.txt"
             zf.writestr(file_name, memo_full["content"].encode("utf-8"))
 
-    zip_buffer.seek(0)
-    return zip_buffer
+    return temp_path
 
 
 def _memo_preview(content: str, limit: int = 120) -> str:

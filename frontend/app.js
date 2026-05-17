@@ -33,6 +33,8 @@ const state = {
   memoQuery: "",
   editingMemoFileName: "",
   lastAiResult: "",
+  lastParsedData: null,
+  editingDocIdx: null,
 };
 
 const fileList = document.querySelector("#file-list");
@@ -910,6 +912,119 @@ function renderPresets() {
     .join("");
 }
 
+function renderParsedDocuments() {
+  const data = state.lastParsedData;
+  if (!data || !data.documents) return;
+  
+  let html = `<div style="border-bottom: 2px solid var(--neutral-20); padding-bottom: 8px; margin-bottom: 16px; display:flex; justify-content:space-between; align-items:center;">
+    <div>
+      <span style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: var(--neutral-50);">Pipeline Result</span>
+      <h3 style="margin: 4px 0 0 0; color: var(--neutral-90);">Extracted Artifacts (${data.documents.length})</h3>
+    </div>
+    <span style="font-size:0.75rem; color:var(--neutral-50);">* 검수 완료 후 동기화하세요</span>
+  </div>`;
+  
+  html += `<div style="display: flex; flex-direction: column; gap: 16px;">`;
+  data.documents.forEach((doc, index) => {
+     const isEditing = state.editingDocIdx === index;
+     const isCsv = doc.kind === "lab" || doc.kind === "medication";
+     const icon = isCsv ? '📊' : '📝';
+     
+     if (isEditing) {
+       html += `
+       <div style="background:#fff; border-radius:8px; border:2px solid var(--blue-50); box-shadow: 0 4px 12px rgba(0,90,158,0.15); overflow: hidden;">
+         <div style="background:var(--neutral-10); padding:12px 16px; border-bottom:1px solid var(--neutral-20);">
+           <div style="display:flex; flex-direction:column; gap:8px;">
+             <div>
+               <label style="display:block; font-size:0.75rem; font-weight:600; color:var(--neutral-60); margin-bottom:4px;">File Relative Path</label>
+               <input type="text" id="edit-doc-path" class="input" value="${escapeHtml(doc.relativePath)}" style="width:100%; font-family:monospace; font-size:0.85rem; padding:6px 10px;">
+             </div>
+             <div style="display:flex; gap:12px;">
+               <div style="flex:1;">
+                 <label style="display:block; font-size:0.75rem; font-weight:600; color:var(--neutral-60); margin-bottom:4px;">Modality Kind</label>
+                 <select id="edit-doc-kind" class="input" style="width:100%; padding:6px 10px;">
+                   <option value="notes" ${doc.kind === 'notes' ? 'selected' : ''}>notes (MD)</option>
+                   <option value="lab" ${doc.kind === 'lab' ? 'selected' : ''}>lab (CSV)</option>
+                   <option value="medication" ${doc.kind === 'medication' ? 'selected' : ''}>medication (CSV)</option>
+                   <option value="imaging" ${doc.kind === 'imaging' ? 'selected' : ''}>imaging (MD)</option>
+                   <option value="pathology" ${doc.kind === 'pathology' ? 'selected' : ''}>pathology (MD)</option>
+                 </select>
+               </div>
+             </div>
+           </div>
+         </div>
+         <div style="padding:16px;">
+           <label style="display:block; font-size:0.75rem; font-weight:600; color:var(--neutral-60); margin-bottom:6px;">Document Content</label>
+           <textarea id="edit-doc-content" class="input" rows="12" style="width:100%; font-family:monospace; font-size:0.85rem; line-height:1.4; padding:12px; white-space:pre-wrap;">${escapeHtml(doc.content)}</textarea>
+           <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">
+             <button type="button" class="button button-secondary" data-doc-cancel style="padding:6px 12px; font-size:0.85rem;">취소</button>
+             <button type="button" class="button button-primary" data-doc-save="${index}" style="padding:6px 12px; font-size:0.85rem;">적용</button>
+           </div>
+         </div>
+       </div>`;
+     } else {
+       html += `
+       <div style="background:#fff; border-radius:8px; border:1px solid var(--neutral-20); box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow: hidden;">
+         <div style="background:var(--neutral-10); padding:10px 16px; border-bottom:1px solid var(--neutral-20); display:flex; justify-content:space-between; align-items:center;">
+           <div style="display:flex; align-items:center; gap:8px;">
+             <span style="font-size:1.2rem;">${icon}</span>
+             <strong style="color:var(--neutral-90); font-family:monospace; font-size:0.9rem;">${escapeHtml(doc.relativePath)}</strong>
+           </div>
+           <div style="display:flex; align-items:center; gap:12px;">
+             <span style="font-size:0.75rem; font-weight:600; text-transform:uppercase; background:var(--blue-10); color:var(--blue-70); padding:2px 8px; border-radius:12px;">${escapeHtml(doc.kind)}</span>
+             <button type="button" class="text-button" data-doc-edit="${index}" style="font-size:0.8rem; font-weight:600;">수정</button>
+           </div>
+         </div>
+         <div style="padding:0; margin:0;">
+           <pre style="margin:0; padding:16px; background:#fcfcfc; max-height:250px; overflow-y:auto; font-size:0.85rem; border:none; white-space:pre-wrap; color:var(--neutral-80);">${escapeHtml(doc.content)}</pre>
+         </div>
+       </div>`;
+     }
+  });
+  html += `</div>`;
+  
+  const resultEl = document.querySelector("#ai-result");
+  if (resultEl) {
+    resultEl.style.display = "block";
+    resultEl.innerHTML = html;
+  }
+}
+
+async function sha256(message) {
+  const msgBuffer = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function rebuildManifests() {
+  const data = state.lastParsedData;
+  if (!data || !data.documents) return [];
+  
+  const manifests = [];
+  for (let i = 0; i < data.documents.length; i++) {
+    const doc = data.documents[i];
+    const originalManifest = data.manifest && data.manifest[i] ? data.manifest[i] : {};
+    
+    const checksum = await sha256(doc.content);
+    const sourceArtId = doc.metadata?.sourceArtifactId || originalManifest.sourceArtifactId || "api-upload";
+    const patientId = doc.metadata?.patientId || originalManifest.patientId || "unknown";
+    
+    manifests.push({
+      documentId: `${sourceArtId}:${doc.relativePath}`,
+      patientId: patientId,
+      type: doc.kind,
+      relativePath: doc.relativePath,
+      checksum: checksum,
+      generatedAt: new Date().toISOString(),
+      sourceArtifactId: sourceArtId,
+      reviewRequired: doc.metadata?.reviewRequired ?? originalManifest.reviewRequired ?? false,
+      tags: doc.metadata?.tags || originalManifest.tags || [],
+    });
+  }
+  return manifests;
+}
+
 function renderAiSources() {
   const realFiles = state.files.filter((file) => file.blobName);
   const realMemos = state.memos.filter((memo) => memo.fileName);
@@ -1148,6 +1263,38 @@ async function bootstrap() {
       deleteMemo(parseInt(memoDelete.dataset.memoDelete));
       return;
     }
+
+    const docEdit = e.target.closest("[data-doc-edit]");
+    if (docEdit) {
+      state.editingDocIdx = parseInt(docEdit.getAttribute("data-doc-edit"));
+      renderParsedDocuments();
+      return;
+    }
+
+    const docCancel = e.target.closest("[data-doc-cancel]");
+    if (docCancel) {
+      state.editingDocIdx = null;
+      renderParsedDocuments();
+      return;
+    }
+
+    const docSave = e.target.closest("[data-doc-save]");
+    if (docSave) {
+      const idx = parseInt(docSave.getAttribute("data-doc-save"));
+      const pathVal = document.querySelector("#edit-doc-path")?.value.trim();
+      const kindVal = document.querySelector("#edit-doc-kind")?.value;
+      const contentVal = document.querySelector("#edit-doc-content")?.value;
+      
+      if (pathVal && kindVal && contentVal !== undefined) {
+        state.lastParsedData.documents[idx].relativePath = pathVal;
+        state.lastParsedData.documents[idx].kind = kindVal;
+        state.lastParsedData.documents[idx].content = contentVal;
+        showToast("임시 수정사항이 반영되었습니다.");
+      }
+      state.editingDocIdx = null;
+      renderParsedDocuments();
+      return;
+    }
   });
 
   document.querySelector("#memo-form")?.addEventListener("submit", async e => {
@@ -1218,38 +1365,11 @@ async function bootstrap() {
     setBusy(btn, "파이프라인 실행 중", true);
     try {
       const data = await postJson("/api/v6/parse", { patient_id: patientId, raw_text: rawText });
-      
-      let html = `<div style="border-bottom: 2px solid var(--neutral-20); padding-bottom: 8px; margin-bottom: 16px;">
-        <span style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: var(--neutral-50);">Pipeline Result</span>
-        <h3 style="margin: 4px 0 0 0; color: var(--neutral-90);">Extracted Artifacts (${data.documents?.length || 0})</h3>
-      </div>`;
-      
-      if (data.documents) {
-        html += `<div style="display: flex; flex-direction: column; gap: 16px;">`;
-        data.documents.forEach(doc => {
-           const isCsv = doc.kind === "lab" || doc.kind === "medication";
-           const icon = isCsv ? '📊' : '📝';
-           html += `<div style="background:#fff; border-radius:8px; border:1px solid var(--neutral-20); box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow: hidden;">
-             <div style="background:var(--neutral-10); padding:10px 16px; border-bottom:1px solid var(--neutral-20); display:flex; justify-content:space-between; align-items:center;">
-               <div style="display:flex; align-items:center; gap:8px;">
-                 <span style="font-size:1.2rem;">${icon}</span>
-                 <strong style="color:var(--neutral-90); font-family:monospace; font-size:0.9rem;">${doc.relativePath}</strong>
-               </div>
-               <span style="font-size:0.75rem; font-weight:600; text-transform:uppercase; background:var(--blue-10); color:var(--blue-70); padding:2px 8px; border-radius:12px;">${doc.kind}</span>
-             </div>
-             <div style="padding:0; margin:0;">
-               <pre style="margin:0; padding:16px; background:#fcfcfc; max-height:250px; overflow-y:auto; font-size:0.85rem; border:none; white-space:pre-wrap; color:var(--neutral-80);">${doc.content}</pre>
-             </div>
-           </div>`;
-        });
-        html += `</div>`;
-      }
-      
-      const resultEl = document.querySelector("#ai-result");
-      resultEl.style.display = "block";
-      resultEl.innerHTML = html;
-      
       state.lastParsedData = data;
+      state.editingDocIdx = null;
+      
+      renderParsedDocuments();
+      
       const syncContainer = document.querySelector("#sync-container");
       if (syncContainer) syncContainer.style.display = "flex";
       
@@ -1262,7 +1382,12 @@ async function bootstrap() {
     const btn = document.querySelector("#sync-local");
     setBusy(btn, "Syncing", true);
     try {
-      const data = await postJson("/api/v6/publish", state.lastParsedData);
+      const newManifests = await rebuildManifests();
+      const payload = {
+        documents: state.lastParsedData.documents,
+        manifest: newManifests,
+      };
+      const data = await postJson("/api/v6/publish", payload);
       showToast(`${data.synced_count}개의 파일이 동기화 큐(GCS)에 발행되었습니다.`);
     } catch(err) {
       showToast(err.message);
