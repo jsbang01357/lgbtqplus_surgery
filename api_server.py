@@ -864,6 +864,28 @@ routes = [
     Route("/api/tools/text-cleaner", tool_text_cleaner, methods=["POST"]),
     Route("/api/tools/settlement", tool_settlement, methods=["POST"]),
     Route("/api/v6/parse", v6_parse, methods=["POST"]),
+    Route("/api/v6/publish", v6_publish_sync, methods=["POST"]),
+    Route("/", frontend, methods=["GET"]),
+    Route("/{path:path}", frontend, methods=["GET"]),
+]
+
+
+app = Starlette(debug=False, routes=routes)
+thods=["POST"]),
+    Route("/api/files/download", files_download, methods=["GET"]),
+    Route("/api/files/delete", files_delete, methods=["POST"]),
+    Route("/api/files/zip", files_zip, methods=["GET"]),
+    Route("/api/memos", memos_list, methods=["GET"]),
+    Route("/api/memos", memo_save, methods=["POST"]),
+    Route("/api/memos/delete", memo_delete, methods=["POST"]),
+    Route("/api/memos/zip", memos_zip, methods=["GET"]),
+    Route("/api/memos/{file_name:str}/download", memo_download, methods=["GET"]),
+    Route("/api/memos/{file_name:str}", memo_detail, methods=["GET"]),
+    Route("/api/ai/analyze", ai_analyze, methods=["POST"]),
+    Route("/api/tools/markdown-pdf", tool_markdown_pdf, methods=["POST"]),
+    Route("/api/tools/text-cleaner", tool_text_cleaner, methods=["POST"]),
+    Route("/api/tools/settlement", tool_settlement, methods=["POST"]),
+    Route("/api/v6/parse", v6_parse, methods=["POST"]),
     Route("/", frontend, methods=["GET"]),
     Route("/{path:path}", frontend, methods=["GET"]),
 ]

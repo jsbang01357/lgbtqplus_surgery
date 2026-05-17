@@ -1007,3 +1007,33 @@ Mark items as complete as you go.
 - 실제 사용자 영향이 있는 런타임/운영 문제를 먼저 정리했다.
 - 코드 기본값과 중복 경로를 제거해 인증과 로그의 단일 출처를 맞췄다.
 - 도구 패널 분리로 `frontend/app.js`의 책임을 줄였다.
+
+---
+
+## Gemini 설정 오류 수정
+
+- [x] `/Users/jsbang/.gemini/settings.json`의 `general.defaultApprovalMode` 값을 `"default"`로 수정
+- [x] `gemini` CLI 실행을 통해 설정 오류 해결 여부 검증
+
+## 요약
+- `~/.gemini/settings.json`의 `general.defaultApprovalMode` 값이 지원되지 않는 `"auto"`로 설정되어 있어 CLI 실행 시 발생하던 검증 에러를 수정했습니다.
+- 유효한 값인 `"default"`로 설정을 변경하여 configuration 파싱 에러를 완벽히 해결했습니다.
+
+
+---
+
+## v6 Core Philosophy 및 아키텍처 재설계 기반 로드맵
+*(EMR 정제 파이프라인 및 Local-first 브릿지 지향)*
+
+### Phase 1: Data Pipeline & Workspace Structure
+- [x] **Patient-centric Workspace 구조 적용:** `workspace/patient_ID/{labs, medications, imaging, pathology, notes}` 디렉토리 구조 확립 및 경로 빌더 연동
+- [x] **모든 문서(MD/CSV) Metadata 필수 첨부 강제화:** (type, date, tags, source 등)
+
+### Phase 2: Frontend Redesign & Sync Integration
+- [x] **Drag-and-Drop Intake UI 개편:** 범용 AI 챗봇 UI를 대폭 축소하고, EMR 텍스트/파일을 던져넣는(Ingestion) 유틸리티 인터페이스로 전환
+- [ ] **Document Preview & Metadata Editing UI 구현:** 파싱된 결과를 로컬로 넘기기 전 검수하고 메타데이터를 수정하는 뷰어 추가
+- [ ] **Local Sync Daemon 연동 기반 마련:** GCS와 로컬 Mac(`~/Developer/jisong_workspace/`) 간의 동기화 모니터링 UI
+
+### Phase 3 & 4: Local Mac Ecosystem Handoff
+- [ ] **메타데이터 인덱싱 및 시각화용 Export 정비**
+- [ ] **Local AI (Ollama) 및 Semantic Search 연동 Hook 구성:** 로컬 Obsidian 및 Python 환경에서 후처리가 용이하도록 데이터 포맷 완결성 보장

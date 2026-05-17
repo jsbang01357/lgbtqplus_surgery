@@ -33,3 +33,4 @@ AGENTS.md
 # v6 parser-core local artifacts
 v6/parser-core/node_modules/
 v6/parser-core/dist/
+*.txt

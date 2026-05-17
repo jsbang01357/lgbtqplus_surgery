@@ -62,6 +62,12 @@ export const LAB_SECTION_HINTS = [
   "abga",
   "ua",
   "urinalysis",
+  "진검",
+  "혈액",
+  "화학",
+  "검사",
+  "종양표지자",
+  "면역",
 ];
 
 export const MEDICATION_KEYWORDS = [
@@ -88,6 +94,10 @@ export const LAB_KEYWORDS_SAFE = [
   "Lactate",
   "CRP",
   "ESR",
+  "단위",
+  "참고치",
+  "결과값",
+  "검사명",
 ];
 
 export const LAB_KEYWORDS_STRICT = [

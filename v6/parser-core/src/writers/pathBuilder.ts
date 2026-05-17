@@ -17,19 +17,21 @@ function baseFilename(document: NormalizedDocument): string {
 
 export function buildRelativeOutputPath(document: NormalizedDocument): string {
   const filename = baseFilename(document);
+  const patientId = document.metadata.patientId || "unknown_patient";
+  const prefix = `workspace/${patientId}`;
 
   switch (document.kind) {
     case "lab":
-      return `labs/${filename}.csv`;
+      return `${prefix}/labs/${filename}.csv`;
     case "medication":
-      return `medications/${filename}.csv`;
+      return `${prefix}/medications/${filename}.csv`;
     case "imaging":
-      return `imaging/${filename}.md`;
+      return `${prefix}/imaging/${filename}.md`;
     case "pathology":
-      return `pathology/${filename}.md`;
+      return `${prefix}/pathology/${filename}.md`;
     case "note":
-      return `notes/${filename}.md`;
+      return `${prefix}/notes/${filename}.md`;
     default:
-      return `artifacts/${filename}.txt`;
+      return `${prefix}/artifacts/${filename}.txt`;
   }
 }

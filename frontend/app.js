@@ -1181,16 +1181,47 @@ async function bootstrap() {
   });
 
   document.querySelector("#run-ai")?.addEventListener("click", async () => {
-    const prompt = document.querySelector("#ai-prompt").value;
+    const rawText = document.querySelector("#ai-prompt").value;
+    const patientId = document.querySelector("#intake-patient-id")?.value || "patient_001";
     const btn = document.querySelector("#run-ai");
-    setBusy(btn, "분석 중", true);
+    setBusy(btn, "파이프라인 실행 중", true);
     try {
-      const data = await postJson("/api/ai/analyze", { prompt, blob_names: selectedValues("[data-ai-file]"), memo_file_names: selectedValues("[data-ai-memo]") });
-      document.querySelector("#ai-result").innerHTML = `<span>AI result</span><h3>분석 결과</h3><div>${markdownToHtml(data.result)}</div>`;
-      state.lastAiResult = data.result;
-      saveAiMemoButton.disabled = false; downloadAiMdButton.disabled = false; downloadAiPdfButton.disabled = false;
-      await loadUsageSummary();
-    } catch(err) { showToast(err.message); } finally { setBusy(btn, "분석 중", false); }
+      const data = await postJson("/api/v6/parse", { patient_id: patientId, raw_text: rawText });
+      
+      let html = `<span>Pipeline result</span><h3 style="margin-bottom:12px;">추출된 아티팩트 (${data.documents?.length || 0}개)</h3>`;
+      if (data.documents) {
+        html += `<ul style="list-style:none; padding:0; margin:0;">`;
+        data.documents.forEach(doc => {
+           html += `<li style="background:var(--neutral-10); padding:12px; margin-bottom:12px; border-radius:6px; border:1px solid var(--neutral-20);">
+             <strong style="color:var(--blue-50);">${doc.relativePath}</strong> <span style="font-size:0.8rem; color:var(--neutral-60); margin-left:4px;">(${doc.kind})</span>
+             <pre style="margin-top:8px; padding:8px; background:#fff; max-height:200px; overflow-y:auto; font-size:0.8rem; border-radius:4px; border:1px solid var(--neutral-20); white-space:pre-wrap;">${doc.content}</pre>
+           </li>`;
+        });
+        html += `</ul>`;
+      }
+      const resultEl = document.querySelector("#ai-result");
+      resultEl.style.display = "block";
+      resultEl.innerHTML = html;
+      
+      state.lastParsedData = data;
+      const syncBtn = document.querySelector("#sync-local");
+      if (syncBtn) syncBtn.disabled = false;
+      showToast("정규화 완료");
+    } catch(err) { showToast(err.message); } finally { setBusy(btn, "Run Normalization", false); }
+  });
+
+  document.querySelector("#sync-local")?.addEventListener("click", async () => {
+    if (!state.lastParsedData || !state.lastParsedData.documents) return;
+    const btn = document.querySelector("#sync-local");
+    setBusy(btn, "Syncing", true);
+    try {
+      const data = await postJson("/api/v6/publish", state.lastParsedData);
+      showToast(`${data.synced_count}개의 파일이 동기화 큐(GCS)에 발행되었습니다.`);
+    } catch(err) {
+      showToast(err.message);
+    } finally {
+      setBusy(btn, "Sync to Local Workspace (Phase 3)", false);
+    }
   });
 
   saveAiMemoButton?.addEventListener("click", async () => {

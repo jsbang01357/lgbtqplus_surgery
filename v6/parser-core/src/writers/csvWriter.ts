@@ -1,4 +1,4 @@
-import { StructuredLabDocument, StructuredMedicationDocument } from "../schemas/documents";
+import { StructuredLabDocument, StructuredMedicationDocument, BaseMetadata } from "../schemas/documents";
 
 function escapeCsv(value: string | undefined): string {
   const normalized = value ?? "";
@@ -6,6 +6,16 @@ function escapeCsv(value: string | undefined): string {
     return `"${normalized.replace(/"/g, '""')}"`;
   }
   return normalized;
+}
+
+function renderCsvMetadata(metadata: BaseMetadata): string {
+  return [
+    `# patient_id: ${metadata.patientId}`,
+    `# type: ${metadata.type}`,
+    `# source: ${metadata.source}`,
+    `# date: ${metadata.date || "unknown"}`,
+    `# tags: ${metadata.tags.join(";")}`,
+  ].join("\n");
 }
 
 export function renderLabCsv(document: StructuredLabDocument): string {
@@ -24,7 +34,8 @@ export function renderLabCsv(document: StructuredLabDocument): string {
       .join(","),
   );
 
-  return [header.join(","), ...rows].join("\n");
+  const metaHeader = renderCsvMetadata(document.metadata);
+  return [metaHeader, header.join(","), ...rows].join("\n");
 }
 
 export function renderMedicationCsv(document: StructuredMedicationDocument): string {
@@ -43,5 +54,6 @@ export function renderMedicationCsv(document: StructuredMedicationDocument): str
       .join(","),
   );
 
-  return [header.join(","), ...rows].join("\n");
+  const metaHeader = renderCsvMetadata(document.metadata);
+  return [metaHeader, header.join(","), ...rows].join("\n");
 }
