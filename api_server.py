@@ -64,6 +64,7 @@ from app.text_cleaner import (
     _convert_markdown_to_word_text,
 )
 from app.settlement import calculate_settlement
+from app.v6_bridge import ParserBridgeError, parser_bridge_available, run_v6_parse
 import json
 
 logger = logging.getLogger(__name__)
@@ -426,6 +427,47 @@ async def tool_settlement(request: Request):
         "transfer_rows": result.transfer_rows,
         "errors": result.errors
     })
+
+
+async def v6_health(_request: Request):
+    available, reason = parser_bridge_available()
+    return _json(
+        {
+            "ok": True,
+            "parser_bridge_available": available,
+            "reason": reason,
+        }
+    )
+
+
+async def v6_parse(request: Request):
+    ok, message = _is_authorized(request)
+    if not ok:
+        return _json({"error": message}, status_code=401)
+
+    payload = await request.json()
+    raw_text = str(payload.get("raw_text") or payload.get("text") or "").strip()
+    patient_id = str(payload.get("patient_id") or "").strip() or "patient_001"
+    source = str(payload.get("source") or "emr").strip() or "emr"
+    source_path = str(payload.get("source_path") or "").strip()
+
+    if not raw_text:
+        return _json({"error": "raw_text를 입력하세요."}, status_code=400)
+
+    try:
+        result = run_v6_parse(
+            patient_id=patient_id,
+            raw_text=raw_text,
+            source=source,
+            source_path=source_path,
+        )
+    except ParserBridgeError as exc:
+        return _json({"error": str(exc)}, status_code=503)
+    except Exception as exc:
+        logger.exception("v6 parse failed")
+        return _json({"error": str(exc)}, status_code=500)
+
+    return _json(result)
 
 
 async def settings_gemini_usage(request: Request):
@@ -793,6 +835,7 @@ async def frontend(request: Request):
 
 routes = [
     Route("/api/health", health, methods=["GET"]),
+    Route("/api/v6/health", v6_health, methods=["GET"]),
     Route("/api/session", session, methods=["GET"]),
     Route("/api/usage/summary", usage_summary, methods=["GET"]),
     Route("/api/settings/access-logs", settings_access_logs, methods=["GET"]),
@@ -820,6 +863,7 @@ routes = [
     Route("/api/tools/markdown-pdf", tool_markdown_pdf, methods=["POST"]),
     Route("/api/tools/text-cleaner", tool_text_cleaner, methods=["POST"]),
     Route("/api/tools/settlement", tool_settlement, methods=["POST"]),
+    Route("/api/v6/parse", v6_parse, methods=["POST"]),
     Route("/", frontend, methods=["GET"]),
     Route("/{path:path}", frontend, methods=["GET"]),
 ]

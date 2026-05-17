@@ -218,6 +218,41 @@ Mark items as complete as you go.
 
 ## Jisong Cloud UI 개선
 
+---
+
+## JisongCloud v6 아키텍처 재설계
+
+- [x] 기존 v5 구조와 최근 설계/운영 맥락 확인
+- [x] v6 핵심 철학과 클라우드/로컬 역할 재정의
+- [x] EMR 정규화 파이프라인과 modality별 출력 구조 설계
+- [x] 메타데이터, chunk parsing, local sync 전략 설계
+- [x] 프론트엔드 surface와 abstraction/migration 계획 정리
+- [x] 위험요소와 단계별 전환 전략 정리
+
+## 요약
+- v6는 AI 중심 웹앱이 아니라 EMR ingestion과 normalization을 담당하는 lightweight cloud bridge로 재정의했다.
+- canonical brain은 로컬 Mac workspace로 두고, cloud는 업로드, 정규화, 메타데이터 부착, sync trigger까지만 맡는 구조로 정리했다.
+- 출력 형식은 modality별 `csv`와 `md`를 기본으로 하고, patient workspace 디렉터리와 metadata/manifest 레이어를 함께 설계했다.
+
+### 다음 구현 계획
+
+- [x] clean_text 레포의 TSX 파싱 로직을 inventory하고 순수 파서 코어와 UI 의존부를 분리한다.
+- [x] modality 공통 schema와 document manifest schema를 TS 타입으로 먼저 고정한다.
+- [x] `labs`, `medications`, `imaging`, `pathology`, `notes`용 parser interface를 정의한다.
+- [x] chunk splitter와 classifier를 heuristic-first 방식으로 구현한다.
+- [x] CSV/Markdown artifact writer와 frontmatter metadata writer를 구현한다.
+- [x] local workspace sync manifest 포맷과 상대 경로 규칙을 TS로 고정한다.
+- [ ] GCS staging publish/pull contract를 구현한다.
+- [x] v5 Starlette API에 `/api/v6/health`, `/api/v6/parse` 경로를 병행 추가한다.
+- [x] mixed EMR blob의 note/lab/imaging 분리 heuristic과 회귀 테스트를 추가한다.
+- [ ] lightweight intake/review frontend는 parser 결과 검수용 surface만 남기고 범용 AI UI는 축소한다.
+
+## 진행 메모
+- `Clean_Text`의 `labParser.ts`, `textCleaner.ts`를 기준으로 `v6/parser-core` 독립 TS 패키지를 추가했다.
+- `app/v6_bridge.py`와 `api_server.py`에 Node CLI 기반 bridge를 추가했고, Dockerfile도 parser-core build를 수행하도록 맞췄다.
+- chunk splitter는 `[Chemistry]`, `CT Abdomen`, `Findings/Impression` 같은 내부 섹션을 과분리하지 않도록 조정했고, mixed blob regression test를 추가했다.
+- 아직 남은 큰 작업은 parser precision 보강, GCS/local sync publish contract, review UI다.
+
 - [x] 현재 전역 레이아웃과 도구모음 UI 구조 점검
 - [x] 전역 스타일과 사이드바 톤 정리
 - [x] 도구모음 선택 UI와 화면 헤더 재구성

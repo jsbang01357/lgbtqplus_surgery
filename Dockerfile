@@ -14,6 +14,8 @@ RUN apt-get update \
         libharfbuzz0b \
         libjpeg62-turbo \
         libopenjp2-7 \
+        nodejs \
+        npm \
         libpango-1.0-0 \
         libpangoft2-1.0-0 \
         libxml2 \
@@ -26,6 +28,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
+RUN npm --prefix /app/v6/parser-core ci \
+    && npm --prefix /app/v6/parser-core run build
 
 EXPOSE 8080
 
