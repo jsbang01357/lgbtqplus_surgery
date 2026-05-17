@@ -242,7 +242,7 @@ Mark items as complete as you go.
 - [x] chunk splitter와 classifier를 heuristic-first 방식으로 구현한다.
 - [x] CSV/Markdown artifact writer와 frontmatter metadata writer를 구현한다.
 - [x] local workspace sync manifest 포맷과 상대 경로 규칙을 TS로 고정한다.
-- [ ] GCS staging publish/pull contract를 구현한다.
+- [x] GCS staging publish/pull contract를 구현한다.
 - [x] v5 Starlette API에 `/api/v6/health`, `/api/v6/parse` 경로를 병행 추가한다.
 - [x] mixed EMR blob의 note/lab/imaging 분리 heuristic과 회귀 테스트를 추가한다.
 - [ ] lightweight intake/review frontend는 parser 결과 검수용 surface만 남기고 범용 AI UI는 축소한다.
@@ -1032,7 +1032,7 @@ Mark items as complete as you go.
 ### Phase 2: Frontend Redesign & Sync Integration
 - [x] **Drag-and-Drop Intake UI 개편:** 범용 AI 챗봇 UI를 대폭 축소하고, EMR 텍스트/파일을 던져넣는(Ingestion) 유틸리티 인터페이스로 전환
 - [ ] **Document Preview & Metadata Editing UI 구현:** 파싱된 결과를 로컬로 넘기기 전 검수하고 메타데이터를 수정하는 뷰어 추가
-- [ ] **Local Sync Daemon 연동 기반 마련:** GCS와 로컬 Mac(`~/Developer/jisong_workspace/`) 간의 동기화 모니터링 UI
+- [x] **Local Sync Daemon 연동 기반 마련:** GCS와 로컬 Mac(`~/Developer/jisong_workspace/`) 간의 동기화 모니터링 UI
 
 ### Phase 3 & 4: Local Mac Ecosystem Handoff
 - [ ] **메타데이터 인덱싱 및 시각화용 Export 정비**
