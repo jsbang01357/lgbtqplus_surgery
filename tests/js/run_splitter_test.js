@@ -1,5 +1,5 @@
 const fs = require('fs');
-const { splitEmrIntoChunks } = require('./v6/parser-core/dist/splitters/emrChunkSplitter');
+const { splitEmrIntoChunks } = require('../../v6/parser-core/dist/splitters/emrChunkSplitter');
 
 const text = fs.readFileSync("변영* 검사통합.txt", "utf-8");
 const artifact = { artifactId: "test", patientId: "p1", rawText: text };
