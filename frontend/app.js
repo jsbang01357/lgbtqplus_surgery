@@ -66,6 +66,7 @@ const heroMemoPreview = document.querySelector("#hero-memo-preview");
 const geminiExchangeRateInput = document.querySelector("#gemini-exchange-rate");
 const geminiCostMultiplierInput = document.querySelector("#gemini-cost-multiplier");
 const geminiSettingsSaveBtn = document.querySelector("#gemini-settings-save");
+const folderSyncRescanButton = document.querySelector("#folder-sync-rescan");
 const aiFileSources = document.querySelector("#ai-file-sources");
 const aiMemoSources = document.querySelector("#ai-memo-sources");
 const aiFileStatus = document.querySelector("#ai-file-status");
@@ -720,6 +721,7 @@ async function loadSettings() {
   if (!state.session?.authorized) {
     renderAccessLogSettings({ logs: [] });
     renderGeminiUsageSettings({ daily: [] });
+    renderSyncSettings({ file_records: [] });
     return;
   }
   try {
@@ -733,8 +735,10 @@ async function loadSettings() {
       apiJson("/api/settings/access-logs"),
       apiJson(`/api/settings/gemini-usage?${query.toString()}`),
     ]);
+    const syncStatus = await apiJson("/api/sync/status");
     renderAccessLogSettings(accessLogs);
     renderGeminiUsageSettings(geminiUsage);
+    renderSyncSettings(syncStatus);
   } catch (error) {
     showToast(error.message);
   }
@@ -767,6 +771,45 @@ function renderSettingsStorage() {
     <article><span>저장소</span><strong>GCS</strong></article>
     <article><span>런타임</span><strong>Cloud Run</strong></article>
   `;
+}
+
+function renderSyncSettings(data = {}) {
+  const metrics = document.querySelector("#folder-sync-metrics");
+  const list = document.querySelector("#folder-sync-list");
+  const status = document.querySelector("#sync-status");
+  if (!metrics || !list || !status) return;
+
+  const lastResult = data.last_result || {};
+  const fileRecords = data.file_records || [];
+  status.textContent = data.enabled
+    ? `${data.root || "-"} · ${data.running ? "실행 중" : "대기"}`
+    : "비활성";
+
+  metrics.innerHTML = `
+    <article><span>상태</span><strong>${data.enabled ? (data.running ? "Running" : "Idle") : "Off"}</strong></article>
+    <article><span>루트</span><strong>${escapeHtml(data.root || "-")}</strong></article>
+    <article><span>업로드</span><strong>${Number(lastResult.uploaded || 0).toLocaleString()}</strong></article>
+    <article><span>충돌</span><strong>${Number(lastResult.conflicts || 0).toLocaleString()}</strong></article>
+  `;
+
+  const records = fileRecords.slice(-8).reverse();
+  list.innerHTML = records.length
+    ? records
+        .map((row) => {
+          const badge = row.status || "skipped";
+          const conflict = row.conflict_blob_name
+            ? `<small>conflict: ${escapeHtml(row.conflict_blob_name)}</small>`
+            : "";
+          return `
+            <article class="settings-row">
+              <strong>${escapeHtml(row.relative_path || row.blob_name || "-")}</strong>
+              <span>${escapeHtml(badge)} · ${escapeHtml(row.synced_at || "-")}</span>
+              ${conflict}
+            </article>
+          `;
+        })
+        .join("")
+    : `<p class="empty-state">동기화 기록이 없습니다.</p>`;
 }
 
 function renderAccessLogSettings(data) {
@@ -1196,6 +1239,18 @@ async function bootstrap() {
   });
   document.querySelector("#settings-refresh")?.addEventListener("click", async () => {
     await loadSession(); await loadSettings(); showToast("새로고침 완료");
+  });
+  folderSyncRescanButton?.addEventListener("click", async () => {
+    try {
+      setBusy(folderSyncRescanButton, "동기화 중", true);
+      await postJson("/api/sync/rescan");
+      await loadSettings();
+      showToast("동기화 완료");
+    } catch (err) {
+      showToast(err.message);
+    } finally {
+      setBusy(folderSyncRescanButton, "지금 동기화", false);
+    }
   });
   document.querySelector("#access-log-clear")?.addEventListener("click", async () => {
     if (!confirm("삭제하시겠습니까?")) return;

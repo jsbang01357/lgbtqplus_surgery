@@ -3,6 +3,8 @@ import io
 import re
 import secrets
 import logging
+from dataclasses import asdict
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from starlette.applications import Starlette
@@ -54,6 +56,7 @@ from app.ai import (
     _run_gemini_analysis,
     _sum_usage_costs,
 )
+from app.folder_sync import get_folder_sync_service, start_folder_sync_service, stop_folder_sync_service
 from app.gcs_helper import get_bucket
 from app.core_utils import get_now
 from app.request_utils import get_client_ip
@@ -455,6 +458,23 @@ async def tool_settlement(request: Request):
             "errors": result.errors,
         }
     )
+
+
+async def folder_sync_status(request: Request):
+    ok, message = _is_authorized(request)
+    if not ok:
+        return _json({"error": message}, status_code=401)
+    service = get_folder_sync_service()
+    return _json(service.status())
+
+
+async def folder_sync_rescan(request: Request):
+    ok, message = _is_authorized(request)
+    if not ok:
+        return _json({"error": message}, status_code=401)
+    service = get_folder_sync_service()
+    result = service.sync_now()
+    return _json({"ok": True, **asdict(result)})
 
 
 async def v6_health(_request: Request):
@@ -952,6 +972,8 @@ routes = [
     Route("/api/v6/health", v6_health, methods=["GET"]),
     Route("/api/session", session, methods=["GET"]),
     Route("/api/usage/summary", usage_summary, methods=["GET"]),
+    Route("/api/sync/status", folder_sync_status, methods=["GET"]),
+    Route("/api/sync/rescan", folder_sync_rescan, methods=["POST"]),
     Route("/api/settings/access-logs", settings_access_logs, methods=["GET"]),
     Route(
         "/api/settings/access-logs/clear", settings_access_logs_clear, methods=["POST"]
@@ -990,4 +1012,13 @@ routes = [
 ]
 
 
-app = Starlette(debug=False, routes=routes)
+@asynccontextmanager
+async def lifespan(_app):
+    start_folder_sync_service()
+    try:
+        yield
+    finally:
+        stop_folder_sync_service()
+
+
+app = Starlette(debug=False, routes=routes, lifespan=lifespan)

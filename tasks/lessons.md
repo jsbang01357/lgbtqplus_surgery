@@ -23,4 +23,4 @@ Reuse these lessons in future tasks to avoid repeating the same mistakes.
 * 화면에서 사라진 레거시 DOM 셀렉터는 바인딩만 남겨도 실제 동작은 안 바뀌지만 유지보수 잡음을 만든다. 존재하지 않는 `querySelector`는 같이 제거한다.
 * 큰 프론트엔드 파일을 나눌 때는 렌더링 템플릿만 빼는 것으로 끝내지 말고, 호출부의 deps 전달도 함께 정리해야 분리 효과가 유지된다.
 * 런타임 호환 컴포넌트(`streamlit_compat.py` 등)를 새로 사용하도록 코드를 리팩토링할 때는 호출부 파일(`auth.py` 등)에서 해당 함수(`render_inline_html`)가 올바르게 임포트되었는지 꼼꼼하게 교차 검증해야 한다.
-
+* Starlette 버전에 따라 `Starlette(..., on_startup=..., on_shutdown=...)`가 지원되지 않을 수 있으니, background service 연결은 `lifespan`으로 묶는 쪽을 우선 확인한다.

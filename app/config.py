@@ -88,3 +88,20 @@ def get_gemini_api_key() -> str:
 
 def get_bucket_name() -> str:
     return get_config("GCS_BUCKET_NAME", "jisong-cloud-storage")
+
+
+def get_bool_config(key: str, default: bool = False) -> bool:
+    raw = os.getenv(key)
+    if raw is None or raw.strip() == "":
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def get_int_config(key: str, default: int) -> int:
+    raw = get_config(key, "")
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default

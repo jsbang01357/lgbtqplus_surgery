@@ -957,11 +957,11 @@ Mark items as complete as you go.
 - [x] 웹하드 파일 선택 즉시 업로드
 - [x] 업로드 파일명에서 날짜/시간 suffix 제거 및 업로드 시각은 metadata로 저장
 - [x] 문법과 단위 테스트 검증
-- [ ] 제한 없는 로컬 HTTP 검증
+- [x] 제한 없는 로컬 HTTP 검증
 
 ## 요약
 - 실사용 흐름 기준으로 인증, AI 결과물, 메모/파일 동작을 정리한다.
-- `node --check`, `py_compile`, unittest 26개를 확인했다. 로컬 HTTP 서버 실행은 현재 sandbox/승인 제한으로 보류했다.
+- `node --check`, `py_compile`, unittest 26개를 확인했고, 로컬 API 서버를 띄워 `/`, `/files`, `/memos`, `/ai`, `/tools`, `/settings`, `/api/session`, `/api/health` 응답을 확인했다.
 
 ---
 
@@ -972,11 +972,11 @@ Mark items as complete as you go.
 - [x] Dockerfile에 Python 런타임 기본 env 추가
 - [x] 배포 문서의 env/secret 목록 갱신
 - [x] 빌드 설정 문법 및 정적 검증
-- [ ] Docker daemon 연결 후 실제 이미지 빌드 검증
+- [x] Docker daemon 연결 후 실제 이미지 빌드 검증
 
 ## 요약
 - Cloud Build가 더 이상 Cloudflare OTP 필수/Google Access fallback 기준으로 배포하지 않게 정리한다.
-- `cloudbuild.yaml` YAML 파싱, `py_compile`, `node --check`, unittest 26개를 확인했다. 로컬 Docker build는 Docker daemon socket 부재로 보류했다.
+- `cloudbuild.yaml` YAML 파싱, `py_compile`, `node --check`, unittest 26개를 확인했고, 실제 `docker build -t jisong-cloud:test .`까지 성공했다.
 
 ---
 
@@ -1007,6 +1007,23 @@ Mark items as complete as you go.
 - `User project invalid` 오류 해결을 위해 `gcs_helper.py`에서 서비스 계정 정보를 `secrets.toml`에서 직접 로드하도록 수정했습니다.
 - `uvicorn` 환경에서도 설정을 정확히 읽어올 수 있도록 `config.py`에 TOML 직접 파싱 로직을 추가했습니다.
 - 패스키 로그인 시 발생하던 400 오류의 원인을 파악하기 위해 상세 디버그 로그를 추가했습니다.
+- 로컬 API에서 `/api/auth/passkey/login/options`는 현재 `404 {"error":"등록된 passkey가 없습니다."}`를 반환해, 실제 패스키 등록자 없이는 최종 end-to-end 확인이 불가능한 상태입니다.
+
+---
+
+## Mac folder sync + CSV 분리 설계
+
+- [x] Mac `Developer` 폴더를 source of truth로 두는 파일 sync 구조 설계
+- [x] MongoDB 대신 CSV로 환자 검사정보를 분리하는 방향 정리
+- [x] sync worker, conflict 규칙, schema 초안 문서화
+- [x] local folder watcher와 sync queue 구현
+- [x] CSV schema와 file reference 모델 구현
+- [x] UI에서 sync 상태와 conflict copy 노출
+
+## 요약
+- 파일은 Mac 폴더와 GCS mirror로 두고, 환자 검사정보는 CSV로 우선 분리하는 구조로 정리했다.
+- MongoDB는 문서 저장에는 쓸 수 있지만, 이 프로젝트의 핵심 문제인 파일 동기화와 충돌 처리에는 맞지 않는다.
+- 구현은 watcher, queue, CSV schema 순으로 쪼개는 게 안전하다.
 
 - [x] Gemini 모델을 `gemini-3-flash-preview`로 변경
 - [x] 프론트엔드 영문 폰트(Inter/Outfit)를 제거하고 Apple SD Gothic Neo 등의 시스템 폰트로 일괄 적용
