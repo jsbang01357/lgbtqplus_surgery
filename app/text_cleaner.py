@@ -1,6 +1,5 @@
 import streamlit as st
 import re
-from components.custom_copy_btn import copy_to_clipboard
 
 
 def _render_result(clean_input, cleaned):
@@ -24,12 +23,6 @@ def _render_result(clean_input, cleaned):
         value=cleaned,
         height=250,
         key="clean_result_area",
-    )
-    copy_to_clipboard(
-        text=cleaned,
-        before_copy_label="📋 결과 복사하기",
-        after_copy_label="✅ 복사 완료",
-        key="copy_clean_result",
     )
 
 
@@ -167,12 +160,16 @@ def _convert_markdown_text(
             continue
 
         if unordered_match:
-            item = _strip_markdown_inline(unordered_match.group(1).strip(), keep_link_urls)
+            item = _strip_markdown_inline(
+                unordered_match.group(1).strip(), keep_link_urls
+            )
             lines.append(f"- {item}" if keep_lists else item)
             continue
 
         if ordered_match:
-            item = _strip_markdown_inline(ordered_match.group(2).strip(), keep_link_urls)
+            item = _strip_markdown_inline(
+                ordered_match.group(2).strip(), keep_link_urls
+            )
             lines.append(f"{ordered_match.group(1)}. {item}" if keep_lists else item)
             continue
 
@@ -266,7 +263,6 @@ def _apply_basic_cleaning_options(
 def render_text_cleaner():
     """텍스트 클리너 메인 UI"""
 
-
     st.markdown("**출력 형식**")
 
     output_mode = st.radio(
@@ -278,11 +274,15 @@ def render_text_cleaner():
     )
 
     if output_mode == "기본 정리":
-        st.caption("• 기존 방식으로 공백, 불릿, 구분선, 특수문자 옵션을 직접 조합합니다.")
+        st.caption(
+            "• 기존 방식으로 공백, 불릿, 구분선, 특수문자 옵션을 직접 조합합니다."
+        )
     elif output_mode == "Markdown → Plain Text":
         st.caption("• 마크다운 기호를 제거하고 일반 텍스트로 읽기 좋게 바꿉니다.")
     else:
-        st.caption("• 제목 앞뒤 여백과 목록 구조를 살려 Word에 붙여넣기 좋은 텍스트로 바꿉니다.")
+        st.caption(
+            "• 제목 앞뒤 여백과 목록 구조를 살려 Word에 붙여넣기 좋은 텍스트로 바꿉니다."
+        )
 
     # 세부 옵션들을 익스팬더로 숨김
     with st.expander("🛠️ 상세 옵션 설정"):
@@ -292,7 +292,9 @@ def render_text_cleaner():
                 value=True,
             )
             if ai_mode:
-                st.caption("• AI 답변이나 복붙 텍스트의 특수 불릿과 구분선을 깔끔하게 정리합니다.")
+                st.caption(
+                    "• AI 답변이나 복붙 텍스트의 특수 불릿과 구분선을 깔끔하게 정리합니다."
+                )
 
             col_opt1, col_opt2 = st.columns(2)
             with col_opt1:
@@ -301,10 +303,16 @@ def render_text_cleaner():
                 opt_empty_lines = st.checkbox("연속 빈 줄 → 한 줄로", value=True)
                 opt_trim_lines = st.checkbox("각 줄 앞뒤 공백 제거", value=True)
             with col_opt2:
-                opt_line_numbers = st.checkbox("줄번호 제거 (예: 1. 또는 1) )", value=False)
+                opt_line_numbers = st.checkbox(
+                    "줄번호 제거 (예: 1. 또는 1) )", value=False
+                )
                 opt_urls = st.checkbox("URL 제거", value=False)
-                opt_special_chars = st.checkbox("특수문자 제거 (글자/숫자/공백만 남김)", value=False)
-                opt_merge_lines = st.checkbox("모든 줄바꿈 제거 (한 문단으로)", value=False)
+                opt_special_chars = st.checkbox(
+                    "특수문자 제거 (글자/숫자/공백만 남김)", value=False
+                )
+                opt_merge_lines = st.checkbox(
+                    "모든 줄바꿈 제거 (한 문단으로)", value=False
+                )
 
             st.markdown("---")
             opt_ai_numbered_to_dash = st.checkbox(

@@ -16,7 +16,6 @@ from app.md_pdf import markdown_to_pdf_bytes
 from app.memo import load_memo_list_cached, load_single_memo_content, save_memo_txt
 from app.storage import download_file_bytes, list_uploaded_files, save_generated_file
 from app.streamlit_compat import render_inline_html
-from components.custom_copy_btn import copy_to_clipboard
 
 
 SUPPORTED_EXTENSIONS = {
@@ -122,16 +121,15 @@ PROMPT_PRESETS = [
 ]
 
 
-
-
 def _get_gemini_api_key() -> str:
     return get_gemini_api_key()
+
 
 def _get_model_name() -> str:
     return get_config("GEMINI_MODEL", "gemini-3-flash-preview")
 
-GEMINI_MODEL = _get_model_name()
 
+GEMINI_MODEL = _get_model_name()
 
 
 def _is_supported_file(filename: str) -> bool:
@@ -557,6 +555,7 @@ def _entry_cost_krw(entry: dict) -> float:
         return float(entry.get("estimated_cost_krw") or 0)
     return _entry_cost_usd(entry) * USD_TO_KRW_RATE
 
+
 def _sum_usage_costs(logs: list[dict]) -> tuple[float, float, float, float]:
     now = get_now()
     today_key = now.strftime("%Y-%m-%d")
@@ -962,14 +961,8 @@ def render_ai():
         """,
         unsafe_allow_html=True,
     )
-    col_copy, col_md, col_pdf, col_hist = st.columns(4)
-    with col_copy:
-        copy_to_clipboard(
-            result,
-            before_copy_label="복사",
-            after_copy_label="복사됨",
-            key="ai_result_copy",
-        )
+    col_md, col_pdf, col_hist = st.columns(3)
+
     with col_md:
         st.download_button(
             "MD 다운로드",
