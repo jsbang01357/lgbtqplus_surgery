@@ -9,7 +9,6 @@ from pathlib import PurePosixPath
 
 from app.core_utils import get_now, safe_filename, slugify, ttl_cache
 from app.streamlit_compat import render_inline_html
-from components.custom_copy_btn import copy_to_clipboard
 from app.gcs_helper import get_bucket
 
 MEMO_PREFIX = "memos"
@@ -322,11 +321,15 @@ def render_memo_manager():
     if not memos_list:
         st.info("저장된 메모가 없습니다.")
 
-    memo_query = st.text_input(
-        "메모 검색",
-        placeholder="제목이나 내용으로 찾기",
-        key="memo_search_query",
-    ).strip().lower()
+    memo_query = (
+        st.text_input(
+            "메모 검색",
+            placeholder="제목이나 내용으로 찾기",
+            key="memo_search_query",
+        )
+        .strip()
+        .lower()
+    )
 
     filtered_memos = []
     for memo in memos_list:
@@ -382,11 +385,15 @@ def render_memo_manager():
                     f"수정시간: {memo_full['updated_at']}\n\n"
                     f"{cont}"
                 )
-                copy_to_clipboard(
-                    text=copy_text,
-                    before_copy_label="복사",
-                    after_copy_label="✅ 완료",
-                    key=f"out_copy_{fname}",
+
+                # Fallback for missing custom_copy_btn component
+                render_inline_html(
+                    f"""
+                    <button onclick="navigator.clipboard.writeText(`{html.escape(copy_text)}`); this.innerText='✅ 완료'; setTimeout(() => this.innerText='복사', 2000);" 
+                            style="padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; font-size: 0.8rem;">
+                        복사
+                    </button>
+                    """
                 )
 
             with col_dl:
@@ -416,7 +423,9 @@ def render_memo_manager():
                 )
 
                 edit_title = st.text_input(
-                    "제목 수정", value=memo_full["title"], key=f"edit_title_{idx}_{fname}"
+                    "제목 수정",
+                    value=memo_full["title"],
+                    key=f"edit_title_{idx}_{fname}",
                 )
 
                 line_count = cont.count("\n") + 1
