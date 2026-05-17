@@ -470,6 +470,50 @@ async def v6_parse(request: Request):
     return _json(result)
 
 
+async def v6_publish_sync(request: Request):
+    ok, message = _is_authorized(request)
+    if not ok:
+        return _json({"error": message}, status_code=401)
+    
+    payload = await request.json()
+    documents = payload.get("documents", [])
+    manifest = payload.get("manifest", [])
+    
+    if not documents:
+        return _json({"error": "동기화할 문서가 없습니다."}, status_code=400)
+        
+    bucket = get_bucket()
+    synced_files = []
+    
+    for doc in documents:
+        rel_path = doc.get("relativePath")
+        content = doc.get("content", "")
+        if not rel_path:
+            continue
+            
+        blob_name = f"v6_sync/{rel_path}"
+        blob = bucket.blob(blob_name)
+        
+        content_type = "text/plain; charset=utf-8"
+        if rel_path.endswith(".csv"):
+            content_type = "text/csv; charset=utf-8"
+        elif rel_path.endswith(".md"):
+            content_type = "text/markdown; charset=utf-8"
+            
+        blob.upload_from_string(content.encode("utf-8"), content_type=content_type)
+        synced_files.append(blob_name)
+    
+    # Save manifest
+    if manifest and documents:
+        patient_id = documents[0].get("metadata", {}).get("patientId", "unknown")
+        manifest_blob_name = f"v6_sync/workspace/{patient_id}/_manifest_{secrets.token_hex(4)}.json"
+        manifest_blob = bucket.blob(manifest_blob_name)
+        manifest_blob.upload_from_string(json.dumps(manifest).encode("utf-8"), content_type="application/json")
+        synced_files.append(manifest_blob_name)
+        
+    return _json({"ok": True, "synced_count": len(synced_files)})
+
+
 async def settings_gemini_usage(request: Request):
     ok, message = _is_authorized(request)
     if not ok:
@@ -865,27 +909,6 @@ routes = [
     Route("/api/tools/settlement", tool_settlement, methods=["POST"]),
     Route("/api/v6/parse", v6_parse, methods=["POST"]),
     Route("/api/v6/publish", v6_publish_sync, methods=["POST"]),
-    Route("/", frontend, methods=["GET"]),
-    Route("/{path:path}", frontend, methods=["GET"]),
-]
-
-
-app = Starlette(debug=False, routes=routes)
-thods=["POST"]),
-    Route("/api/files/download", files_download, methods=["GET"]),
-    Route("/api/files/delete", files_delete, methods=["POST"]),
-    Route("/api/files/zip", files_zip, methods=["GET"]),
-    Route("/api/memos", memos_list, methods=["GET"]),
-    Route("/api/memos", memo_save, methods=["POST"]),
-    Route("/api/memos/delete", memo_delete, methods=["POST"]),
-    Route("/api/memos/zip", memos_zip, methods=["GET"]),
-    Route("/api/memos/{file_name:str}/download", memo_download, methods=["GET"]),
-    Route("/api/memos/{file_name:str}", memo_detail, methods=["GET"]),
-    Route("/api/ai/analyze", ai_analyze, methods=["POST"]),
-    Route("/api/tools/markdown-pdf", tool_markdown_pdf, methods=["POST"]),
-    Route("/api/tools/text-cleaner", tool_text_cleaner, methods=["POST"]),
-    Route("/api/tools/settlement", tool_settlement, methods=["POST"]),
-    Route("/api/v6/parse", v6_parse, methods=["POST"]),
     Route("/", frontend, methods=["GET"]),
     Route("/{path:path}", frontend, methods=["GET"]),
 ]
