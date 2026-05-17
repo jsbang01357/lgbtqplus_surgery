@@ -1,5 +1,6 @@
 import io
 import json
+import logging
 import re
 import zipfile
 from datetime import datetime
@@ -7,7 +8,6 @@ from pathlib import PurePosixPath
 from xml.etree import ElementTree
 
 import streamlit as st
-from google.api_core.exceptions import PreconditionFailed
 
 from app.core_utils import get_now, ttl_cache
 from app.config import get_gemini_api_key, get_config
@@ -17,6 +17,7 @@ from app.memo import load_memo_list_cached, load_single_memo_content, save_memo_
 from app.storage import download_file_bytes, list_uploaded_files, save_generated_file
 from app.streamlit_compat import render_inline_html
 
+logger = logging.getLogger(__name__)
 
 SUPPORTED_EXTENSIONS = {
     ".pdf",
@@ -37,7 +38,7 @@ GEMINI_UPLOAD_EXTENSIONS = SUPPORTED_EXTENSIONS - {".docx", ".xlsx", ".pptx"}
 OFFICE_TEXT_EXTENSIONS = {".docx", ".xlsx", ".pptx"}
 
 GEMINI_USAGE_LOG_BLOB = "logs/gemini_usage.json"
-MAX_USAGE_LOGS = 1000
+MAX_USAGE_LOGS = 50
 GEMINI_DAILY_LIMIT_KRW = 5000
 GEMINI_MONTHLY_LIMIT_KRW = 15000
 
@@ -520,6 +521,44 @@ def _extract_usage_record(response) -> dict:
 def _record_gemini_usage(usage_record: dict):
     if not usage_record.get("input_tokens") and not usage_record.get("output_tokens"):
         return
+        
+    krw = _entry_cost_krw(usage_record)
+    bucket = get_bucket()
+    
+    # 1. Update tiny summary file safely (Fast)
+    for _ in range(5):
+        summary_blob = bucket.blob("logs/usage_summary.json")
+        try:
+            if summary_blob.exists():
+                summary_blob.reload()
+                gen = summary_blob.generation
+                summary = json.loads(summary_blob.download_as_text())
+            else:
+                gen = 0
+                now = get_now()
+                logs = _load_gemini_usage_logs()
+                tk, mk, _, _ = _sum_usage_costs(logs)
+                summary = {"today_krw": tk, "month_krw": mk, "today": now.strftime("%Y-%m-%d"), "month": now.strftime("%Y-%m")}
+                
+            now_date = get_now().strftime("%Y-%m-%d")
+            now_month = get_now().strftime("%Y-%m")
+            
+            if summary.get("today") != now_date:
+                summary["today"] = now_date
+                summary["today_krw"] = 0
+            if summary.get("month") != now_month:
+                summary["month"] = now_month
+                summary["month_krw"] = 0
+                
+            summary["today_krw"] += krw
+            summary["month_krw"] += krw
+            
+            summary_blob.upload_from_string(json.dumps(summary), content_type="application/json", if_generation_match=gen)
+            break
+        except Exception:
+            continue
+
+    # 2. Update recent UI log (Shrink to MAX_USAGE_LOGS)
     for _ in range(3):
         logs, generation = _read_gemini_usage_blob()
         logs.insert(0, usage_record)
@@ -527,9 +566,9 @@ def _record_gemini_usage(usage_record: dict):
             _save_gemini_usage_logs(logs, generation)
             _load_gemini_usage_logs.clear()
             return
-        except PreconditionFailed:
+        except Exception:
             continue
-    raise RuntimeError("Gemini 사용량 로그가 동시에 수정되어 저장하지 못했습니다.")
+    logger.warning("Gemini 사용량 최근 로그 UI 업데이트를 건너뛰었습니다 (동시성 충돌).")
 
 
 def _parse_usage_time(value: str) -> datetime | None:
@@ -585,15 +624,29 @@ def format_krw_cost(cost: float) -> str:
     return f"₩{rounded:,}"
 
 
-def get_monthly_gemini_cost_label() -> str:
+def _get_usage_summary_cache() -> dict:
+    bucket = get_bucket()
+    blob = bucket.blob("logs/usage_summary.json")
+    if blob.exists():
+        try:
+            return json.loads(blob.download_as_text())
+        except Exception:
+            pass
+    # Fallback to computing from existing logs if summary missing
     logs = _load_gemini_usage_logs()
-    _, month_krw, _, _ = _sum_usage_costs(logs)
-    return format_krw_cost(month_krw)
+    tk, mk, _, _ = _sum_usage_costs(logs)
+    return {"today_krw": tk, "month_krw": mk}
+
+
+def get_monthly_gemini_cost_label() -> str:
+    summary = _get_usage_summary_cache()
+    return format_krw_cost(summary.get("month_krw", 0))
 
 
 def _get_usage_limit_status() -> tuple[bool, str]:
-    logs = _load_gemini_usage_logs()
-    today_krw, month_krw, _, _ = _sum_usage_costs(logs)
+    summary = _get_usage_summary_cache()
+    today_krw = summary.get("today_krw", 0)
+    month_krw = summary.get("month_krw", 0)
 
     if today_krw >= GEMINI_DAILY_LIMIT_KRW:
         return (

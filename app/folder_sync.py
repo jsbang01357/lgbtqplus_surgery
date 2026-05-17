@@ -414,30 +414,34 @@ def sync_workspace_once(
             )
         )
 
+    blobs_to_delete = []
+    deleted_records = []
     for relative_path, remote in remote_records.items():
         if relative_path in local_records:
             continue
         blob_name = remote.get("blob_name") or f"{get_sync_prefix()}/{relative_path}"
-        blob = bucket.blob(blob_name)
+        blobs_to_delete.append(bucket.blob(blob_name))
+        deleted_records.append(
+            SyncFileRecord(
+                relative_path=relative_path,
+                blob_name=blob_name,
+                content_hash=remote.get("content_hash", ""),
+                size_bytes=int(remote.get("size_bytes") or 0),
+                mtime_iso=remote.get("mtime_iso", ""),
+                content_type=remote.get("content_type", ""),
+                status="deleted",
+                synced_at=get_now().isoformat(),
+                remote_hash=remote.get("content_hash", ""),
+            )
+        )
+
+    if blobs_to_delete:
         try:
-            if blob.exists():
-                blob.delete()
-                deleted += 1
-                file_records.append(
-                    SyncFileRecord(
-                        relative_path=relative_path,
-                        blob_name=blob_name,
-                        content_hash=remote.get("content_hash", ""),
-                        size_bytes=int(remote.get("size_bytes") or 0),
-                        mtime_iso=remote.get("mtime_iso", ""),
-                        content_type=remote.get("content_type", ""),
-                        status="deleted",
-                        synced_at=get_now().isoformat(),
-                        remote_hash=remote.get("content_hash", ""),
-                    )
-                )
+            bucket.delete_blobs(blobs_to_delete)
+            deleted += len(blobs_to_delete)
+            file_records.extend(deleted_records)
         except Exception:
-            logger.warning("sync delete failed for %s", blob_name, exc_info=True)
+            logger.warning("sync bulk delete failed", exc_info=True)
 
     _write_manifest(bucket, manifest_blob_name, snapshots)
     _write_file_records(bucket, file_records_blob_name, file_records)

@@ -1,11 +1,17 @@
 <section id="ai" data-page="ai" class="product-tile product-tile-dark-2 app-section" aria-labelledby="ai-title">
-  <div class="section-head">
-    <h2 id="ai-title">EMR Intake</h2>
-    <span style="font-size: 0.8rem; background: #005A9E; color: #fff; padding: 2px 6px; border-radius: 4px; margin-left: 8px;">v6 Pipeline</span>
+  <div class="section-head" style="justify-content: space-between; align-items: center; display: flex;">
+    <div>
+      <h2 id="ai-title" style="display:inline-block; margin:0;">EMR Intake</h2>
+      <span id="ai-version-badge" style="font-size: 0.8rem; background: #005A9E; color: #fff; padding: 2px 6px; border-radius: 4px; margin-left: 8px;">v6 Pipeline</span>
+    </div>
+    <div class="ai-mode-toggle" style="background: var(--neutral-20); padding: 4px; border-radius: 8px; display: flex; gap: 4px;">
+      <button id="mode-v6" class="button button-primary is-active" style="padding: 4px 12px; font-size: 0.8rem; min-width: 60px; height: auto;">V6 정규화</button>
+      <button id="mode-v5" class="button button-secondary" style="padding: 4px 12px; font-size: 0.8rem; min-width: 60px; height: auto; border: none; background: transparent;">V5 분석</button>
+    </div>
   </div>
   <div class="ai-workbench">
     <div class="prompt-panel">
-      <div style="margin-bottom: 16px; display: flex; gap: 12px; align-items: flex-end;">
+      <div id="v6-inputs" style="margin-bottom: 16px; display: flex; gap: 12px; align-items: flex-end;">
         <div style="flex: 1;">
           <label for="intake-patient-id" style="display:block; margin-bottom:6px; font-weight:600; color:var(--neutral-90);">Patient ID</label>
           <input type="text" id="intake-patient-id" class="input" value="patient_001" placeholder="e.g. patient_001" required style="width: 100%; padding: 8px;">
@@ -25,8 +31,25 @@
       <div style="margin-bottom: 16px;">
         <textarea id="ai-prompt" class="input" rows="10" placeholder="정제할 EMR 텍스트(검사 결과, 노트, 처방 등)를 붙여넣으세요..." style="font-family: monospace; font-size: 0.9rem; line-height: 1.4;"></textarea>
       </div>
+
+      <div id="v5-prompt-presets" style="display: none; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;">
+        <style>
+          .preset-badge {
+            background: var(--neutral-10); border: 1px solid var(--neutral-30); color: var(--neutral-80);
+            padding: 4px 10px; border-radius: 16px; font-size: 0.8rem; cursor: pointer; transition: all 0.2s;
+          }
+          .preset-badge:hover { background: var(--neutral-20); border-color: var(--neutral-40); }
+          .preset-badge.is-active { background: #005A9E; color: white; border-color: #005A9E; }
+        </style>
+        <button type="button" class="preset-badge" data-preset="선택한 자료의 특정 환자를 교수님 앞에서 1분 안에 발표할 수 있게 SOAP 형식으로 정리해줘.&#10;S/O/A/P를 명확히 나누고, 발표용 말투로 자연스럽게 이어지는 스크립트도 함께 써줘.&#10;핵심 문제, 중요한 수치 변화, 현재 판단, 오늘의 계획이 빠지지 않게 해줘.">SOAP 1분 발표</button>
+        <button type="button" class="preset-badge" data-preset="선택한 자료의 특정 환자에 대해 교수님이 물어볼 가능성이 높은 질문과 모범 답변을 만들어줘.&#10;진단 근거, 감별진단, 검사 해석, 치료 계획, follow-up 포인트를 포함해줘.&#10;질문은 날카로운 순서로 10개 정도, 답변은 실제 구두 답변처럼 짧고 정확하게 써줘.">예상 Q&A</button>
+        <button type="button" class="preset-badge" data-preset="선택한 자료의 특정 환자에 대해 교수님께 물어보면 좋은 질문을 뽑아줘.&#10;단순 확인 질문보다 임상 판단, 치료 방향, 놓치기 쉬운 risk, 다음 decision point에 관한 질문을 우선해줘.&#10;각 질문에 대해 교수님께서 하실 만한 예상 답변도 함께 적어줘.">교수님께 질문</button>
+        <button type="button" class="preset-badge" data-preset="국시 대비 관점에서 중요한 개념을 우선순위로 설명하고, 자주 출제되는 함정 포인트를 같이 정리해줘.">국시 핵심 개념</button>
+        <button type="button" class="preset-badge" data-preset="선택한 자료의 내용을 한글로 요약해줘.&#10;자료의 핵심 주제, 주요 내용, 중요한 수치나 결론을 정리해줘.&#10;특히 내가 국시대비를 위해 꼭 알아야 할 내용이 있다면 더 공부해볼 키워드와 설명을 정리해줘.">자료 요약</button>
+      </div>
       <div class="form-actions">
         <button class="button button-primary" id="run-ai" type="button" style="width: 100%;">Run Normalization Pipeline</button>
+        <button class="button button-primary" id="run-ai-v5" type="button" style="width: 100%; display: none;">Run Gemini Analysis</button>
       </div>
     </div>
     
@@ -34,6 +57,11 @@
       <!-- Results will be injected here -->
     </article>
     
+    <div id="v5-actions" class="form-actions ai-result-actions" style="margin-top: 16px; display: none; padding: 16px; background: var(--neutral-10); border-radius: 8px; border: 1px solid var(--neutral-20); gap: 12px;">
+      <button class="button button-secondary" id="save-ai-memo" type="button" style="flex: 1;">메모로 저장</button>
+      <button class="button button-secondary" id="download-ai-md" type="button" style="flex: 1;">MD 다운로드</button>
+    </div>
+
     <div id="sync-container" class="form-actions ai-result-actions" style="margin-top: 16px; display: none; padding: 16px; background: var(--neutral-10); border-radius: 8px; border: 1px solid var(--neutral-20);">
       <div style="flex: 1; text-align: left;">
         <strong style="display: block; color: var(--neutral-90);">All artifacts verified?</strong>

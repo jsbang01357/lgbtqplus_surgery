@@ -1413,6 +1413,86 @@ async function bootstrap() {
     });
   }
 
+  const modeV6Btn = document.querySelector("#mode-v6");
+  const modeV5Btn = document.querySelector("#mode-v5");
+  const v6Inputs = document.querySelector("#v6-inputs");
+  const runAiV6Btn = document.querySelector("#run-ai");
+  const runAiV5Btn = document.querySelector("#run-ai-v5");
+  const syncContainer = document.querySelector("#sync-container");
+  const v5Actions = document.querySelector("#v5-actions");
+  const v5Presets = document.querySelector("#v5-prompt-presets");
+  const aiVersionBadge = document.querySelector("#ai-version-badge");
+  const aiTitle = document.querySelector("#ai-title");
+
+  let currentAiMode = "v6";
+
+  const updateAiModeUI = () => {
+    if (currentAiMode === "v6") {
+      modeV6Btn.classList.add("is-active", "button-primary");
+      modeV6Btn.classList.remove("button-secondary");
+      modeV6Btn.style.border = "none";
+      modeV6Btn.style.background = "";
+      
+      modeV5Btn.classList.remove("is-active", "button-primary");
+      modeV5Btn.classList.add("button-secondary");
+      modeV5Btn.style.border = "none";
+      modeV5Btn.style.background = "transparent";
+
+      v6Inputs.style.display = "flex";
+      runAiV6Btn.style.display = "block";
+      runAiV5Btn.style.display = "none";
+      v5Actions.style.display = "none";
+      v5Presets.style.display = "none";
+      
+      aiTitle.textContent = "EMR Intake";
+      aiVersionBadge.textContent = "v6 Pipeline";
+      
+      if (state.lastParsedData) syncContainer.style.display = "flex";
+    } else {
+      modeV5Btn.classList.add("is-active", "button-primary");
+      modeV5Btn.classList.remove("button-secondary");
+      modeV5Btn.style.border = "none";
+      modeV5Btn.style.background = "";
+      
+      modeV6Btn.classList.remove("is-active", "button-primary");
+      modeV6Btn.classList.add("button-secondary");
+      modeV6Btn.style.border = "none";
+      modeV6Btn.style.background = "transparent";
+
+      v6Inputs.style.display = "none";
+      runAiV6Btn.style.display = "none";
+      runAiV5Btn.style.display = "block";
+      syncContainer.style.display = "none";
+      v5Presets.style.display = "flex";
+      
+      aiTitle.textContent = "AI Workbench";
+      aiVersionBadge.textContent = "v5 Legacy";
+      
+      if (state.lastAiResult) v5Actions.style.display = "flex";
+    }
+    const aiResult = document.querySelector("#ai-result");
+    aiResult.style.display = "none";
+    aiResult.innerHTML = "";
+  };
+
+  modeV6Btn?.addEventListener("click", () => { currentAiMode = "v6"; updateAiModeUI(); });
+  modeV5Btn?.addEventListener("click", () => { currentAiMode = "v5"; updateAiModeUI(); });
+
+  document.querySelectorAll(".preset-badge").forEach(badge => {
+    badge.addEventListener("click", () => {
+      badge.classList.toggle("is-active");
+      const presetText = badge.dataset.preset;
+      const promptEl = document.querySelector("#ai-prompt");
+      let currentVal = promptEl.value;
+      
+      if (badge.classList.contains("is-active")) {
+        promptEl.value = currentVal ? `${currentVal}\n\n${presetText}` : presetText;
+      } else {
+        promptEl.value = currentVal.replace(`\n\n${presetText}`, "").replace(presetText, "").trim();
+      }
+    });
+  });
+
   document.querySelector("#run-ai")?.addEventListener("click", async () => {
     const rawText = document.querySelector("#ai-prompt").value;
     const patientId = document.querySelector("#intake-patient-id")?.value || "patient_001";
@@ -1430,6 +1510,27 @@ async function bootstrap() {
       
       showToast("정규화 완료");
     } catch(err) { showToast(err.message); } finally { setBusy(btn, "Run Normalization Pipeline", false); }
+  });
+
+  document.querySelector("#run-ai-v5")?.addEventListener("click", async () => {
+    const rawText = document.querySelector("#ai-prompt").value;
+    if (!rawText.trim()) return showToast("분석할 텍스트를 입력해주세요.");
+    
+    const btn = document.querySelector("#run-ai-v5");
+    setBusy(btn, "Gemini 분석 중", true);
+    try {
+      const data = await postJson("/api/ai/analyze", { prompt: rawText });
+      state.lastAiResult = data.result || "결과가 없습니다.";
+      const aiResult = document.querySelector("#ai-result");
+      aiResult.innerHTML = renderMarkdown(state.lastAiResult);
+      aiResult.style.display = "block";
+      document.querySelector("#v5-actions").style.display = "flex";
+      showToast("분석 완료");
+    } catch(err) {
+      showToast(err.message);
+    } finally {
+      setBusy(btn, "Run Gemini Analysis", false);
+    }
   });
 
   document.querySelector("#sync-local")?.addEventListener("click", async () => {

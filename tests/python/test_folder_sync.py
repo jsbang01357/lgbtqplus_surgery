@@ -49,6 +49,10 @@ class FakeBucket:
     def blob(self, name):
         return FakeBlob(self, name)
 
+    def delete_blobs(self, blobs):
+        for blob in blobs:
+            blob.delete()
+
 
 def _manifest_csv(rows):
     buffer = io.StringIO()
