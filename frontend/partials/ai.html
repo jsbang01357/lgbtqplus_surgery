@@ -5,23 +5,41 @@
   </div>
   <div class="ai-workbench">
     <div class="prompt-panel">
-      <div style="margin-bottom: 16px;">
-        <label for="intake-patient-id" style="display:block; margin-bottom:6px; font-weight:600; color:var(--neutral-90);">Patient ID</label>
-        <input type="text" id="intake-patient-id" class="input" value="patient_001" placeholder="e.g. patient_001" required style="width: 100%; max-width: 240px; padding: 8px;">
+      <div style="margin-bottom: 16px; display: flex; gap: 12px; align-items: flex-end;">
+        <div style="flex: 1;">
+          <label for="intake-patient-id" style="display:block; margin-bottom:6px; font-weight:600; color:var(--neutral-90);">Patient ID</label>
+          <input type="text" id="intake-patient-id" class="input" value="patient_001" placeholder="e.g. patient_001" required style="width: 100%; padding: 8px;">
+        </div>
+        <div style="flex: 1;">
+          <label for="intake-department" style="display:block; margin-bottom:6px; font-weight:600; color:var(--neutral-90);">Department (Opt)</label>
+          <input type="text" id="intake-department" class="input" placeholder="e.g. IM, ORL" style="width: 100%; padding: 8px;">
+        </div>
       </div>
+      
+      <div id="intake-dropzone" style="border: 2px dashed var(--neutral-40); background: var(--neutral-10); padding: 24px; border-radius: 8px; text-align: center; margin-bottom: 16px; transition: all 0.2s ease; cursor: pointer;">
+        <svg viewBox="0 0 24 24" width="32" height="32" stroke="var(--neutral-50)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 8px; pointer-events: none;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+        <p style="color: var(--neutral-70); font-weight: 500; margin: 0; pointer-events: none;">텍스트 파일(.txt)을 이곳에 드래그 앤 드롭 하세요.</p>
+        <p style="color: var(--neutral-50); font-size: 0.8rem; margin: 4px 0 0 0; pointer-events: none;">또는 아래 영역에 직접 텍스트를 붙여넣으세요.</p>
+      </div>
+
       <div style="margin-bottom: 16px;">
-        <label for="ai-prompt" style="display:block; margin-bottom:6px; font-weight:600; color:var(--neutral-90);">Raw EMR Text (Paste Data Here)</label>
-        <textarea id="ai-prompt" class="input" rows="12" placeholder="정제할 EMR 텍스트(검사 결과, 노트, 처방 등)를 붙여넣으세요..."></textarea>
+        <textarea id="ai-prompt" class="input" rows="10" placeholder="정제할 EMR 텍스트(검사 결과, 노트, 처방 등)를 붙여넣으세요..." style="font-family: monospace; font-size: 0.9rem; line-height: 1.4;"></textarea>
       </div>
       <div class="form-actions">
-        <button class="button button-primary" id="run-ai" type="button">Run Normalization</button>
+        <button class="button button-primary" id="run-ai" type="button" style="width: 100%;">Run Normalization Pipeline</button>
       </div>
     </div>
-    <article class="ai-result markdown-body" id="ai-result" style="display: none;">
+    
+    <article class="ai-result markdown-body" id="ai-result" style="display: none; background: transparent; padding: 0;">
       <!-- Results will be injected here -->
     </article>
-    <div class="form-actions ai-result-actions" style="margin-top: 16px;">
-      <button class="button button-secondary" id="sync-local" type="button" disabled>Sync to Local Workspace (Phase 3)</button>
+    
+    <div id="sync-container" class="form-actions ai-result-actions" style="margin-top: 16px; display: none; padding: 16px; background: var(--neutral-10); border-radius: 8px; border: 1px solid var(--neutral-20);">
+      <div style="flex: 1; text-align: left;">
+        <strong style="display: block; color: var(--neutral-90);">All artifacts verified?</strong>
+        <span style="font-size: 0.8rem; color: var(--neutral-60);">Send validated files to the Local Sync Daemon via GCS.</span>
+      </div>
+      <button class="button button-primary" id="sync-local" type="button">Sync to Local Workspace (Mac)</button>
     </div>
   </div>
 </section>

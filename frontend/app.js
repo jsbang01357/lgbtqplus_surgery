@@ -1180,6 +1180,37 @@ async function bootstrap() {
     }
   });
 
+  // Drag & Drop for EMR Intake
+  const intakeDropzone = document.querySelector("#intake-dropzone");
+  const promptInput = document.querySelector("#ai-prompt");
+  if (intakeDropzone && promptInput) {
+    intakeDropzone.addEventListener("dragover", e => {
+      e.preventDefault();
+      intakeDropzone.style.borderColor = "var(--blue-50)";
+      intakeDropzone.style.backgroundColor = "rgba(0, 90, 158, 0.05)";
+    });
+    intakeDropzone.addEventListener("dragleave", e => {
+      e.preventDefault();
+      intakeDropzone.style.borderColor = "var(--neutral-40)";
+      intakeDropzone.style.backgroundColor = "var(--neutral-10)";
+    });
+    intakeDropzone.addEventListener("drop", async e => {
+      e.preventDefault();
+      intakeDropzone.style.borderColor = "var(--neutral-40)";
+      intakeDropzone.style.backgroundColor = "var(--neutral-10)";
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        const file = e.dataTransfer.files[0];
+        try {
+          const text = await file.text();
+          promptInput.value = text;
+          showToast(`${file.name} 파일을 불러왔습니다.`);
+        } catch (err) {
+          showToast("텍스트 파일을 읽을 수 없습니다.");
+        }
+      }
+    });
+  }
+
   document.querySelector("#run-ai")?.addEventListener("click", async () => {
     const rawText = document.querySelector("#ai-prompt").value;
     const patientId = document.querySelector("#intake-patient-id")?.value || "patient_001";
@@ -1188,26 +1219,42 @@ async function bootstrap() {
     try {
       const data = await postJson("/api/v6/parse", { patient_id: patientId, raw_text: rawText });
       
-      let html = `<span>Pipeline result</span><h3 style="margin-bottom:12px;">추출된 아티팩트 (${data.documents?.length || 0}개)</h3>`;
+      let html = `<div style="border-bottom: 2px solid var(--neutral-20); padding-bottom: 8px; margin-bottom: 16px;">
+        <span style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: var(--neutral-50);">Pipeline Result</span>
+        <h3 style="margin: 4px 0 0 0; color: var(--neutral-90);">Extracted Artifacts (${data.documents?.length || 0})</h3>
+      </div>`;
+      
       if (data.documents) {
-        html += `<ul style="list-style:none; padding:0; margin:0;">`;
+        html += `<div style="display: flex; flex-direction: column; gap: 16px;">`;
         data.documents.forEach(doc => {
-           html += `<li style="background:var(--neutral-10); padding:12px; margin-bottom:12px; border-radius:6px; border:1px solid var(--neutral-20);">
-             <strong style="color:var(--blue-50);">${doc.relativePath}</strong> <span style="font-size:0.8rem; color:var(--neutral-60); margin-left:4px;">(${doc.kind})</span>
-             <pre style="margin-top:8px; padding:8px; background:#fff; max-height:200px; overflow-y:auto; font-size:0.8rem; border-radius:4px; border:1px solid var(--neutral-20); white-space:pre-wrap;">${doc.content}</pre>
-           </li>`;
+           const isCsv = doc.kind === "lab" || doc.kind === "medication";
+           const icon = isCsv ? '📊' : '📝';
+           html += `<div style="background:#fff; border-radius:8px; border:1px solid var(--neutral-20); box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow: hidden;">
+             <div style="background:var(--neutral-10); padding:10px 16px; border-bottom:1px solid var(--neutral-20); display:flex; justify-content:space-between; align-items:center;">
+               <div style="display:flex; align-items:center; gap:8px;">
+                 <span style="font-size:1.2rem;">${icon}</span>
+                 <strong style="color:var(--neutral-90); font-family:monospace; font-size:0.9rem;">${doc.relativePath}</strong>
+               </div>
+               <span style="font-size:0.75rem; font-weight:600; text-transform:uppercase; background:var(--blue-10); color:var(--blue-70); padding:2px 8px; border-radius:12px;">${doc.kind}</span>
+             </div>
+             <div style="padding:0; margin:0;">
+               <pre style="margin:0; padding:16px; background:#fcfcfc; max-height:250px; overflow-y:auto; font-size:0.85rem; border:none; white-space:pre-wrap; color:var(--neutral-80);">${doc.content}</pre>
+             </div>
+           </div>`;
         });
-        html += `</ul>`;
+        html += `</div>`;
       }
+      
       const resultEl = document.querySelector("#ai-result");
       resultEl.style.display = "block";
       resultEl.innerHTML = html;
       
       state.lastParsedData = data;
-      const syncBtn = document.querySelector("#sync-local");
-      if (syncBtn) syncBtn.disabled = false;
+      const syncContainer = document.querySelector("#sync-container");
+      if (syncContainer) syncContainer.style.display = "flex";
+      
       showToast("정규화 완료");
-    } catch(err) { showToast(err.message); } finally { setBusy(btn, "Run Normalization", false); }
+    } catch(err) { showToast(err.message); } finally { setBusy(btn, "Run Normalization Pipeline", false); }
   });
 
   document.querySelector("#sync-local")?.addEventListener("click", async () => {
