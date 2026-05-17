@@ -1,0 +1,29 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: API Server (Jisong Cloud v6)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "uvicorn",
+            "args": [
+                "api_server:app",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                "8080",
+                "--reload"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "DYLD_FALLBACK_LIBRARY_PATH": "/opt/homebrew/lib"
+            },
+            "justMyCode": true,
+            "serverReadyAction": {
+                "pattern": "Uvicorn running on (http://127.0.0.1:8080).*",
+                "action": "openExternally"
+            }
+        }
+    ]
+}
