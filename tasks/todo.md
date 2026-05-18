@@ -1,4 +1,29 @@
-## 보안 및 인증 레이어 강화 (마일스톤 1)
+## 현재 우선순위
+
+### 문서/운영 기준 정리
+
+- [x] README를 현재 Starlette API + 정적 프론트엔드 구조에 맞게 재정리
+- [x] 빠진 런타임 의존성 `cryptography`를 requirements에 반영
+- [ ] Cloudflare Access 강제 여부와 `cloudbuild.yaml` 기본값을 운영 정책과 다시 맞추기
+- [ ] 로컬 검증 표준을 `.venv` / `unittest` / Node 20 기준으로 문서화하기
+
+### 다음 기능축 후보
+
+- [ ] v6 parser-core 정밀도 개선 우선순위 확정
+- [ ] review UI 범위를 `v6` 중심으로 좁혀 구체화
+- [ ] GCS JSON 로그 파일의 동시성 구조 개선 필요 여부 재평가
+
+## 이번 정리 요약
+
+- 실제 운영 진입점이 `api_server.py`인 현재 구조에 맞춰 README를 다시 작성했다.
+- 예전 Streamlit 중심 설명, `jisong_cloud.py`, `components/` 같은 오래된 구조 설명을 정리했다.
+- 테스트 수집 실패 원인이던 누락 의존성 `cryptography`를 `requirements.txt`에 추가했다.
+
+---
+
+## 이전 작업 기록
+
+### 보안 및 인증 레이어 강화 (마일스톤 1)
 
 - [x] GCS 대체 로그인 비밀번호 PBKDF2-HMAC-SHA256 단방향 안전 암호화 해싱 적용
 - [x] GCS 평문 비밀번호 자동 감지 및 실시간 암호화 마이그레이션(Self-Healing) 구축
@@ -15,7 +40,7 @@
 
 ---
 
-## 프로젝트 전반 기능 파악 및 개선점 20개 도출
+### 프로젝트 전반 기능 파악 및 개선점 20개 도출
 
 ## 요약
 - 전체 프로젝트 디렉토리를 샅샅이 스캔하여 Starlette API 서버([api_server.py](file:///Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/api_server.py)), 파일 관리자([storage.py](file:///Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/app/storage.py)), 메모장([memo.py](file:///Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/app/memo.py)), AI 분석([ai.py](file:///Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/app/ai.py)), 정산 계산기([settlement.py](file:///Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/app/settlement.py)), 텍스트 클리너([text_cleaner.py](file:///Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/app/text_cleaner.py)) 등 핵심 유틸리티 및 컴포넌트들의 코드 분석을 끝마쳤습니다.
@@ -23,7 +48,7 @@
 
 ---
 
-## auth.py render_inline_html 임포트 에러 수정
+### auth.py render_inline_html 임포트 에러 수정
 
 - [x] `app/auth.py`의 `render_inline_html` 누락 에러 확인
 - [x] `app/auth.py`에 `from app.streamlit_compat import render_inline_html` 추가
@@ -37,7 +62,7 @@
 
 ---
 
-## Streamlit 경고 및 모바일 UI 보정
+### Streamlit 경고 및 모바일 UI 보정
 
 - [x] `components.html` 사용 제거 여부 판단
 - [x] 로그인/메모 자동 포커스 스크립트 유지 및 fallback 적용
@@ -60,7 +85,7 @@
 
 ---
 
-## 운영 안정성 개선
+### 운영 안정성 개선
 
 - [x] PPTX/DOCX/XLSX AI 분석을 텍스트 추출 방식으로 변경
 - [x] Gemini 비용 로그 동시 쓰기 충돌 완화
@@ -78,7 +103,7 @@
 
 ---
 
-## 인증 경로 테스트 및 문서 정리
+### 인증 경로 테스트 및 문서 정리
 
 - [x] 계정 로그인 API 성공/실패 테스트 추가
 - [x] 비밀번호 변경 API 성공/실패 테스트 추가
@@ -91,7 +116,7 @@
 
 ---
 
-## UI 점검 및 미구현 기능 제거
+### UI 점검 및 미구현 기능 제거
 
 - [x] Gemini 설정 저장 버튼의 런타임 에러 수정
 - [x] `오늘 뭐 먹지?` 기능 제거
@@ -104,7 +129,7 @@
 
 ---
 
-## Mac mini 병행 서버 Phase 2 구성
+### Mac mini 병행 서버 Phase 2 구성
 
 - [x] 기존 Cloud Run 배포와 로컬 실행 경로 확인
 - [x] Mac mini용 Docker Compose와 환경 변수 샘플 추가
@@ -122,7 +147,7 @@
 
 ---
 
-## Mac mini 로컬 저장소 mirror
+### Mac mini 로컬 저장소 mirror
 
 - [x] GCS 직접 호출 구조 확인
 - [x] 로컬 파일 기반 bucket adapter 추가
@@ -143,7 +168,7 @@
 
 ---
 
-## Mac mini 로컬 컨테이너 기동
+### Mac mini 로컬 컨테이너 기동
 
 - [x] `.streamlit/secrets.toml` 기준으로 `.env.local` 생성
 - [x] Docker용 GCS service account JSON 생성
@@ -160,7 +185,7 @@
 
 ---
 
-## Mac mini tunnel 및 로그 pull 보정
+### Mac mini tunnel 및 로그 pull 보정
 
 - [x] `mac.jisong.dev` static asset 실패 원인 확인
 - [x] Cloudflare dashboard의 `localhost:8501` origin이 컨테이너 내부 localhost를 보던 문제 수정
@@ -175,7 +200,7 @@
 
 ---
 
-## Mac mini 보안 및 자동 기동 점검
+### Mac mini 보안 및 자동 기동 점검
 
 - [x] 외부 도메인 응답과 Cloudflare Access 적용 여부 확인
 - [x] `.env.local` 및 Docker용 service account JSON 권한 축소
@@ -193,7 +218,7 @@
 
 ---
 
-## 프로젝트 전반 개선점 점검
+### 프로젝트 전반 개선점 점검
 
 - [x] 현재 작업트리와 주요 파일 구조 확인
 - [x] AI, 저장소, 메모, 도구, 배포 설정 점검

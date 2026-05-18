@@ -8,3 +8,4 @@ pandas
 markdown
 weasyprint
 google-genai
+cryptography
