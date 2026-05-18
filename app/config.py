@@ -42,21 +42,29 @@ def get_config(key: str, default: str = "") -> str:
     if _SECRETS_CACHE is None:
         _SECRETS_CACHE = _load_secrets_toml()
     
-    if key.lower() in _SECRETS_CACHE:
-        return str(_SECRETS_CACHE[key.lower()])
+    # Try exact match first
+    if key in _SECRETS_CACHE:
+        return str(_SECRETS_CACHE[key])
+
+    # Try case-insensitive top-level match
+    for k, v in _SECRETS_CACHE.items():
+        if k.lower() == key.lower() and not isinstance(v, dict):
+            return str(v)
     
-    # Section check (e.g. [gemini] api_key="...")
+    # Section check
     for section_name, section in _SECRETS_CACHE.items():
         if isinstance(section, dict):
-            # Case 1: Exactly key.lower() in section
-            if key.lower() in section:
-                return str(section[key.lower()])
+            # Try exact match or case-insensitive match inside section
+            for k, v in section.items():
+                if k.lower() == key.lower():
+                    return str(v)
             
             # Case 2: key starts with section_name + "_"
             if key.lower().startswith(section_name.lower() + "_"):
                 short_key = key.lower()[len(section_name) + 1 :]
-                if short_key in section:
-                    return str(section[short_key])
+                for k, v in section.items():
+                    if k.lower() == short_key:
+                        return str(v)
 
     return default
 
