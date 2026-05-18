@@ -1292,7 +1292,7 @@ async function bootstrap() {
     catch (err) { showToast(err.message); }
   });
   // Tools switching
-  document.addEventListener("click", (e) => {
+  document.addEventListener("click", async (e) => {
     const card = e.target.closest(".tool-card");
     if (card) {
       const tool = card.dataset.tool;
@@ -1329,33 +1329,33 @@ async function bootstrap() {
 
     const memoOpen = e.target.closest("[data-memo-open]");
     if (memoOpen) {
-    const memo = getFilteredMemos()[parseInt(memoOpen.dataset.memoOpen)];
-    if (memo) {
-      try {
-        const fullMemo = await loadMemoDetail(memo.fileName);
-        const nextMemo = fullMemo
-          ? {
-            ...memo,
-            title: fullMemo.title || memo.title,
-            body: fullMemo.content || memo.body,
-          }
-          : memo;
-        state.memos = state.memos.map((item) =>
-          item.fileName === memo.fileName ? nextMemo : item,
-        );
-        document.querySelector("#memo-title").value = nextMemo.title;
-        document.querySelector("#memo-body").value = nextMemo.body;
-        document.querySelector("#memo-file-name").value = memo.fileName;
-        state.editingMemoFileName = memo.fileName;
-        if (memoSaveButton) memoSaveButton.textContent = "메모 수정";
-        if (downloadCurrentMemoButton) downloadCurrentMemoButton.disabled = false;
-        renderMemos();
-      } catch (err) {
-        showToast(err.message);
+      const memo = getFilteredMemos()[parseInt(memoOpen.dataset.memoOpen)];
+      if (memo) {
+        try {
+          const fullMemo = await loadMemoDetail(memo.fileName);
+          const nextMemo = fullMemo
+            ? {
+              ...memo,
+              title: fullMemo.title || memo.title,
+              body: fullMemo.content || memo.body,
+            }
+            : memo;
+          state.memos = state.memos.map((item) =>
+            item.fileName === memo.fileName ? nextMemo : item,
+          );
+          document.querySelector("#memo-title").value = nextMemo.title;
+          document.querySelector("#memo-body").value = nextMemo.body;
+          document.querySelector("#memo-file-name").value = memo.fileName;
+          state.editingMemoFileName = memo.fileName;
+          if (memoSaveButton) memoSaveButton.textContent = "메모 수정";
+          if (downloadCurrentMemoButton) downloadCurrentMemoButton.disabled = false;
+          renderMemos();
+        } catch (err) {
+          showToast(err.message);
+        }
       }
+      return;
     }
-    return;
-  }
 
     const memoDelete = e.target.closest("[data-memo-delete]");
     if (memoDelete) {
@@ -1627,7 +1627,7 @@ async function bootstrap() {
       });
       state.lastAiResult = data.result || "결과가 없습니다.";
       const aiResult = document.querySelector("#ai-result");
-      aiResult.innerHTML = renderMarkdown(state.lastAiResult);
+      aiResult.innerHTML = markdownToHtml(state.lastAiResult);
       aiResult.style.display = "block";
       document.querySelector("#v5-actions").style.display = "flex";
       showToast("분석 완료");
