@@ -1,21 +1,6 @@
 import { renderToolPanel } from "./tool-panel.js";
 
-const files = [
-  { name: "SOAP 발표 정리.pdf", type: "PDF", size: "3.4 MB", updated: "오늘 22:14" },
-  { name: "임상 QnA 메모.docx", type: "DOC", size: "980 KB", updated: "어제 19:02" },
-  { name: "검사결과 요약.xlsx", type: "XLS", size: "620 KB", updated: "05/14 08:31" },
-];
 
-const memos = [
-  {
-    title: "교수님께 질문할 내용",
-    body: "치료 우선순위, 추적 검사 기준, 설명할 때 놓치기 쉬운 위험 신호를 확인하기.",
-  },
-  {
-    title: "발표 구조",
-    body: "주호소, 검사 결과, 판단 근거, 계획 순서로 1분 안에 말할 수 있게 정리.",
-  },
-];
 
 const presets = [
   "SOAP 1분 발표",
@@ -78,9 +63,9 @@ const defaultPage = "home";
 function updateClock() {
   const now = new Date();
   if (navTime) {
-    navTime.textContent = now.toLocaleTimeString("ko-KR", { 
-      hour12: true, 
-      hour: "2-digit", 
+    navTime.textContent = now.toLocaleTimeString("ko-KR", {
+      hour12: true,
+      hour: "2-digit",
       minute: "2-digit"
     });
   }
@@ -124,7 +109,7 @@ function formatUpdated(value) {
 function getFileIconHtml(name = "") {
   const ext = (name.split(".").pop() || "").toLowerCase();
   let iconName = "generic";
-  
+
   if (["zip", "tar", "gz", "rar", "7z"].includes(ext)) iconName = "archive";
   else if (["xls", "xlsx", "csv"].includes(ext)) iconName = "excel";
   else if (["jpg", "jpeg", "png", "gif", "svg", "webp"].includes(ext)) iconName = "image";
@@ -331,7 +316,7 @@ function updateHeroPreview() {
       )
       .join("") || `<p class="source-empty">표시할 파일이 없습니다.</p>`;
   }
-  
+
   if (heroMemoPreview) {
     const firstMemo = state.memos[0];
     heroMemoPreview.textContent = firstMemo
@@ -795,20 +780,20 @@ function renderSyncSettings(data = {}) {
   const records = fileRecords.slice(-8).reverse();
   list.innerHTML = records.length
     ? records
-        .map((row) => {
-          const badge = row.status || "skipped";
-          const conflict = row.conflict_blob_name
-            ? `<small>conflict: ${escapeHtml(row.conflict_blob_name)}</small>`
-            : "";
-          return `
+      .map((row) => {
+        const badge = row.status || "skipped";
+        const conflict = row.conflict_blob_name
+          ? `<small>conflict: ${escapeHtml(row.conflict_blob_name)}</small>`
+          : "";
+        return `
             <article class="settings-row">
               <strong>${escapeHtml(row.relative_path || row.blob_name || "-")}</strong>
               <span>${escapeHtml(badge)} · ${escapeHtml(row.synced_at || "-")}</span>
               ${conflict}
             </article>
           `;
-        })
-        .join("")
+      })
+      .join("")
     : `<p class="empty-state">동기화 기록이 없습니다.</p>`;
 }
 
@@ -918,12 +903,11 @@ function renderMemos() {
           <p>${highlightMatch(memo.body, state.memoQuery)}</p>
           <div class="memo-actions">
             ${memo.updated ? `<small>${escapeHtml(memo.updated)}</small>` : "<small>미리보기</small>"}
-            ${
-              memo.fileName
-                ? `<button class="text-button" type="button" data-memo-open="${index}">열기</button>
+            ${memo.fileName
+          ? `<button class="text-button" type="button" data-memo-open="${index}">열기</button>
                    <button class="text-button" type="button" data-memo-delete="${index}">삭제</button>`
-                : ""
-            }
+          : ""
+        }
           </div>
         </article>
       `,
@@ -958,7 +942,7 @@ function renderPresets() {
 function renderParsedDocuments() {
   const data = state.lastParsedData;
   if (!data || !data.documents) return;
-  
+
   let html = `<div style="border-bottom: 2px solid var(--neutral-20); padding-bottom: 8px; margin-bottom: 16px; display:flex; justify-content:space-between; align-items:center;">
     <div>
       <span style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: var(--neutral-50);">Pipeline Result</span>
@@ -966,15 +950,15 @@ function renderParsedDocuments() {
     </div>
     <span style="font-size:0.75rem; color:var(--neutral-50);">* 검수 완료 후 동기화하세요</span>
   </div>`;
-  
+
   html += `<div style="display: flex; flex-direction: column; gap: 16px;">`;
   data.documents.forEach((doc, index) => {
-     const isEditing = state.editingDocIdx === index;
-     const isCsv = doc.kind === "lab" || doc.kind === "medication";
-     const icon = isCsv ? '📊' : '📝';
-     
-     if (isEditing) {
-       html += `
+    const isEditing = state.editingDocIdx === index;
+    const isCsv = doc.kind === "lab" || doc.kind === "medication";
+    const icon = isCsv ? '📊' : '📝';
+
+    if (isEditing) {
+      html += `
        <div style="background:#fff; border-radius:8px; border:2px solid var(--blue-50); box-shadow: 0 4px 12px rgba(0,90,158,0.15); overflow: hidden;">
          <div style="background:var(--neutral-10); padding:12px 16px; border-bottom:1px solid var(--neutral-20);">
            <div style="display:flex; flex-direction:column; gap:8px;">
@@ -1005,8 +989,8 @@ function renderParsedDocuments() {
            </div>
          </div>
        </div>`;
-     } else {
-       html += `
+    } else {
+      html += `
        <div style="background:#fff; border-radius:8px; border:1px solid var(--neutral-20); box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow: hidden;">
          <div style="background:var(--neutral-10); padding:10px 16px; border-bottom:1px solid var(--neutral-20); display:flex; justify-content:space-between; align-items:center;">
            <div style="display:flex; align-items:center; gap:8px;">
@@ -1022,10 +1006,10 @@ function renderParsedDocuments() {
            <pre style="margin:0; padding:16px; background:#fcfcfc; max-height:250px; overflow-y:auto; font-size:0.85rem; border:none; white-space:pre-wrap; color:var(--neutral-80);">${escapeHtml(doc.content)}</pre>
          </div>
        </div>`;
-     }
+    }
   });
   html += `</div>`;
-  
+
   const resultEl = document.querySelector("#ai-result");
   if (resultEl) {
     resultEl.style.display = "block";
@@ -1043,16 +1027,16 @@ async function sha256(message) {
 async function rebuildManifests() {
   const data = state.lastParsedData;
   if (!data || !data.documents) return [];
-  
+
   const manifests = [];
   for (let i = 0; i < data.documents.length; i++) {
     const doc = data.documents[i];
     const originalManifest = data.manifest && data.manifest[i] ? data.manifest[i] : {};
-    
+
     const checksum = await sha256(doc.content);
     const sourceArtId = doc.metadata?.sourceArtifactId || originalManifest.sourceArtifactId || "api-upload";
     const patientId = doc.metadata?.patientId || originalManifest.patientId || "unknown";
-    
+
     manifests.push({
       documentId: `${sourceArtId}:${doc.relativePath}`,
       patientId: patientId,
@@ -1074,33 +1058,33 @@ function renderAiSources() {
   if (aiFileSources) {
     aiFileSources.innerHTML = realFiles.length
       ? realFiles
-          .slice(0, 8)
-          .map(
-            (file, index) => `
+        .slice(0, 8)
+        .map(
+          (file, index) => `
               <label class="source-option">
                 <input type="checkbox" value="${escapeHtml(file.blobName)}" data-ai-file />
                 <span>${escapeHtml(file.name)}</span>
                 <small>${escapeHtml(file.size)}</small>
               </label>
             `,
-          )
-          .join("")
+        )
+        .join("")
       : `<p class="source-empty">인증 후 파일을 선택할 수 있습니다.</p>`;
   }
   if (aiMemoSources) {
     aiMemoSources.innerHTML = realMemos.length
       ? realMemos
-          .slice(0, 8)
-          .map(
-            (memo) => `
+        .slice(0, 8)
+        .map(
+          (memo) => `
               <label class="source-option">
                 <input type="checkbox" value="${escapeHtml(memo.fileName)}" data-ai-memo />
                 <span>${escapeHtml(memo.title)}</span>
                 <small>${escapeHtml(memo.updated || "메모")}</small>
               </label>
             `,
-          )
-          .join("")
+        )
+        .join("")
       : `<p class="source-empty">인증 후 메모를 선택할 수 있습니다.</p>`;
   }
   updateAiSourceStatus();
@@ -1169,16 +1153,16 @@ async function bootstrap() {
   renderAiSources();
   renderToolPanel("cleaner", { showToast, setBusy, postJson, downloadPostBlob, selectedValues });
   renderSettingsAuth(session);
-  
+
   if (session?.authorized) {
     await Promise.all([loadFiles(), loadMemos(), loadUsageSummary()]);
-    
+
     // Auto polling for stale data
     setInterval(async () => {
       await Promise.all([loadFiles(), loadMemos(), loadUsageSummary(), loadSettings()]);
     }, 60000);
   }
-  
+
   // Event listeners that require session
   document.querySelector("#upload-form")?.addEventListener("submit", e => {
     e.preventDefault();
@@ -1186,8 +1170,8 @@ async function bootstrap() {
   });
   document.querySelector("#file-input")?.addEventListener("change", e => uploadSelectedFiles(e.target));
   document.querySelector("#download-all")?.addEventListener("click", async () => {
-    try { await downloadFromApi("/api/files/zip", "jisong-cloud-files.zip"); showToast("ZIP 다운로드 시작"); } 
-    catch(err) { showToast(err.message); }
+    try { await downloadFromApi("/api/files/zip", "jisong-cloud-files.zip"); showToast("ZIP 다운로드 시작"); }
+    catch (err) { showToast(err.message); }
   });
   navPasskeyRegister?.addEventListener("click", registerPasskey);
   navLoginButton?.addEventListener("click", loginWithPasskey);
@@ -1198,7 +1182,7 @@ async function bootstrap() {
     state.memoQuery = query;
     renderFiles();
     renderMemos();
-    
+
     // Auto-navigate to files if searching from dashboard
     const current = document.documentElement.getAttribute("data-active-page");
     if (query && !["files", "memos"].includes(current)) {
@@ -1212,12 +1196,12 @@ async function bootstrap() {
     const password = document.querySelector("#account-password-input").value;
     const btn = e.target.querySelector("button");
     setBusy(btn, "로그인 중", true);
-    try { 
+    try {
       await postJson("/api/auth/account/login", { account_id: email, password });
       await loadSession();
-      showToast("로그인 성공"); 
-    } catch(err) { 
-      showToast(err.message); 
+      showToast("로그인 성공");
+    } catch (err) {
+      showToast(err.message);
     } finally {
       setBusy(btn, "로그인 중", false);
     }
@@ -1231,7 +1215,7 @@ async function bootstrap() {
       await postJson("/api/settings/password", { new_password: newPassword });
       showToast("비밀번호가 변경되었습니다.");
       document.querySelector("#new-password-input").value = "";
-    } catch(err) {
+    } catch (err) {
       showToast(err.message);
     } finally {
       setBusy(btn, "저장 중", false);
@@ -1254,13 +1238,13 @@ async function bootstrap() {
   });
   document.querySelector("#access-log-clear")?.addEventListener("click", async () => {
     if (!confirm("삭제하시겠습니까?")) return;
-    try { await postJson("/api/settings/access-logs/clear"); await loadSettings(); showToast("삭제 완료"); } catch(err) { showToast(err.message); }
+    try { await postJson("/api/settings/access-logs/clear"); await loadSettings(); showToast("삭제 완료"); } catch (err) { showToast(err.message); }
   });
   document.querySelector("#file-search")?.addEventListener("input", e => { state.fileQuery = e.target.value; renderFiles(); });
   document.querySelector("#memo-search")?.addEventListener("input", e => { state.memoQuery = e.target.value; renderMemos(); });
   document.querySelector("#download-memos")?.addEventListener("click", async () => {
-    try { await downloadFromApi("/api/memos/zip", "jisong-cloud-memos.zip"); showToast("ZIP 다운로드 시작"); } 
-    catch(err) { showToast(err.message); }
+    try { await downloadFromApi("/api/memos/zip", "jisong-cloud-memos.zip"); showToast("ZIP 다운로드 시작"); }
+    catch (err) { showToast(err.message); }
   });
   // Tools switching
   document.addEventListener("click", (e) => {
@@ -1339,7 +1323,7 @@ async function bootstrap() {
       const pathVal = document.querySelector("#edit-doc-path")?.value.trim();
       const kindVal = document.querySelector("#edit-doc-kind")?.value;
       const contentVal = document.querySelector("#edit-doc-content")?.value;
-      
+
       if (pathVal && kindVal && contentVal !== undefined) {
         state.lastParsedData.documents[idx].relativePath = pathVal;
         state.lastParsedData.documents[idx].kind = kindVal;
@@ -1432,7 +1416,7 @@ async function bootstrap() {
       modeV6Btn.classList.remove("button-secondary");
       modeV6Btn.style.border = "none";
       modeV6Btn.style.background = "";
-      
+
       modeV5Btn.classList.remove("is-active", "button-primary");
       modeV5Btn.classList.add("button-secondary");
       modeV5Btn.style.border = "none";
@@ -1443,17 +1427,17 @@ async function bootstrap() {
       runAiV5Btn.style.display = "none";
       v5Actions.style.display = "none";
       v5Presets.style.display = "none";
-      
+
       aiTitle.textContent = "EMR Intake";
       aiVersionBadge.textContent = "v6 Pipeline";
-      
+
       if (state.lastParsedData) syncContainer.style.display = "flex";
     } else {
       modeV5Btn.classList.add("is-active", "button-primary");
       modeV5Btn.classList.remove("button-secondary");
       modeV5Btn.style.border = "none";
       modeV5Btn.style.background = "";
-      
+
       modeV6Btn.classList.remove("is-active", "button-primary");
       modeV6Btn.classList.add("button-secondary");
       modeV6Btn.style.border = "none";
@@ -1464,10 +1448,10 @@ async function bootstrap() {
       runAiV5Btn.style.display = "block";
       syncContainer.style.display = "none";
       v5Presets.style.display = "flex";
-      
+
       aiTitle.textContent = "AI Workbench";
       aiVersionBadge.textContent = "v5 Legacy";
-      
+
       if (state.lastAiResult) v5Actions.style.display = "flex";
     }
     const aiResult = document.querySelector("#ai-result");
@@ -1484,7 +1468,7 @@ async function bootstrap() {
       const presetText = badge.dataset.preset;
       const promptEl = document.querySelector("#ai-prompt");
       let currentVal = promptEl.value;
-      
+
       if (badge.classList.contains("is-active")) {
         promptEl.value = currentVal ? `${currentVal}\n\n${presetText}` : presetText;
       } else {
@@ -1502,20 +1486,20 @@ async function bootstrap() {
       const data = await postJson("/api/v6/parse", { patient_id: patientId, raw_text: rawText });
       state.lastParsedData = data;
       state.editingDocIdx = null;
-      
+
       renderParsedDocuments();
-      
+
       const syncContainer = document.querySelector("#sync-container");
       if (syncContainer) syncContainer.style.display = "flex";
-      
+
       showToast("정규화 완료");
-    } catch(err) { showToast(err.message); } finally { setBusy(btn, "Run Normalization Pipeline", false); }
+    } catch (err) { showToast(err.message); } finally { setBusy(btn, "Run Normalization Pipeline", false); }
   });
 
   document.querySelector("#run-ai-v5")?.addEventListener("click", async () => {
     const rawText = document.querySelector("#ai-prompt").value;
     if (!rawText.trim()) return showToast("분석할 텍스트를 입력해주세요.");
-    
+
     const btn = document.querySelector("#run-ai-v5");
     setBusy(btn, "Gemini 분석 중", true);
     try {
@@ -1526,7 +1510,7 @@ async function bootstrap() {
       aiResult.style.display = "block";
       document.querySelector("#v5-actions").style.display = "flex";
       showToast("분석 완료");
-    } catch(err) {
+    } catch (err) {
       showToast(err.message);
     } finally {
       setBusy(btn, "Run Gemini Analysis", false);
@@ -1545,7 +1529,7 @@ async function bootstrap() {
       };
       const data = await postJson("/api/v6/publish", payload);
       showToast(`${data.synced_count}개의 파일이 동기화 큐(GCS)에 발행되었습니다.`);
-    } catch(err) {
+    } catch (err) {
       showToast(err.message);
     } finally {
       setBusy(btn, "Sync to Local Workspace (Phase 3)", false);
@@ -1555,7 +1539,7 @@ async function bootstrap() {
   saveAiMemoButton?.addEventListener("click", async () => {
     if (!state.lastAiResult) return;
     try { await postJson("/api/memos", { title: "AI 분석 결과", content: state.lastAiResult }); await loadMemos(); showToast("메모로 저장되었습니다."); }
-    catch(err) { showToast(err.message); }
+    catch (err) { showToast(err.message); }
   });
   downloadAiMdButton?.addEventListener("click", () => {
     const blob = new Blob([state.lastAiResult], { type: "text/markdown" });
@@ -1564,13 +1548,13 @@ async function bootstrap() {
   });
   downloadAiPdfButton?.addEventListener("click", async () => {
     try { await downloadPostBlob("/api/tools/markdown-pdf", { markdown: state.lastAiResult }, "ai-result.pdf"); showToast("PDF 다운로드 시작"); }
-    catch(err) { showToast(err.message); }
+    catch (err) { showToast(err.message); }
   });
   downloadCurrentMemoButton?.addEventListener("click", async () => {
     const fileName = document.querySelector("#memo-file-name").value;
     if (!fileName) return;
     try { await downloadFromApi(`/api/memos/${fileName}/download`, "memo.txt"); }
-    catch(err) { showToast(err.message); }
+    catch (err) { showToast(err.message); }
   });
 
   setActivePage(pageFromLocation(), { skipHistory: true });
