@@ -47,6 +47,24 @@
         <button type="button" class="preset-badge" data-preset="국시 대비 관점에서 중요한 개념을 우선순위로 설명하고, 자주 출제되는 함정 포인트를 같이 정리해줘.">국시 핵심 개념</button>
         <button type="button" class="preset-badge" data-preset="선택한 자료의 내용을 한글로 요약해줘.&#10;자료의 핵심 주제, 주요 내용, 중요한 수치나 결론을 정리해줘.&#10;특히 내가 국시대비를 위해 꼭 알아야 할 내용이 있다면 더 공부해볼 키워드와 설명을 정리해줘.">자료 요약</button>
       </div>
+      <div id="v5-source-picker" style="display: none; margin-bottom: 16px;">
+        <div class="ai-source-grid">
+          <div>
+            <div class="source-heading">
+              <strong>파일 선택</strong>
+              <small id="ai-file-status">선택 없음</small>
+            </div>
+            <div class="source-list" id="ai-file-sources"></div>
+          </div>
+          <div>
+            <div class="source-heading">
+              <strong>메모 선택</strong>
+              <small id="ai-memo-status">선택 없음</small>
+            </div>
+            <div class="source-list" id="ai-memo-sources"></div>
+          </div>
+        </div>
+      </div>
       <div class="form-actions">
         <button class="button button-primary" id="run-ai" type="button" style="width: 100%;">Run Normalization Pipeline</button>
         <button class="button button-primary" id="run-ai-v5" type="button" style="width: 100%; display: none;">Run Gemini Analysis</button>
@@ -60,6 +78,7 @@
     <div id="v5-actions" class="form-actions ai-result-actions" style="margin-top: 16px; display: none; padding: 16px; background: var(--neutral-10); border-radius: 8px; border: 1px solid var(--neutral-20); gap: 12px;">
       <button class="button button-secondary" id="save-ai-memo" type="button" style="flex: 1;">메모로 저장</button>
       <button class="button button-secondary" id="download-ai-md" type="button" style="flex: 1;">MD 다운로드</button>
+      <button class="button button-secondary" id="download-ai-pdf" type="button" style="flex: 1;">PDF 다운로드</button>
     </div>
 
     <div id="sync-container" class="form-actions ai-result-actions" style="margin-top: 16px; display: none; padding: 16px; background: var(--neutral-10); border-radius: 8px; border: 1px solid var(--neutral-20);">

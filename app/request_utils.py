@@ -5,7 +5,14 @@ def get_client_ip(headers, fallback: str | None = None) -> str:
         if first:
             return first
 
-    for key in ("cf-connecting-ip", "CF-Connecting-IP", "remote-addr", "Remote-Addr"):
+    for key in (
+        "cf-connecting-ip",
+        "CF-Connecting-IP",
+        "x-real-ip",
+        "X-Real-IP",
+        "remote-addr",
+        "Remote-Addr",
+    ):
         value = headers.get(key, "")
         if value:
             return str(value).strip()

@@ -363,8 +363,9 @@ async def usage_summary(request: Request):
         logs = _load_gemini_usage_logs()
         today_krw, month_krw, today_usd, month_usd = _sum_usage_costs(logs)
 
-        today_adjusted = today_usd * exchange_rate * multiplier
-        month_adjusted = month_usd * exchange_rate * multiplier
+        base_multiplier = 10.0 * multiplier
+        today_adjusted = today_usd * exchange_rate * base_multiplier
+        month_adjusted = month_usd * exchange_rate * base_multiplier
 
         return _json(
             {
@@ -678,12 +679,13 @@ async def settings_gemini_usage(request: Request):
         row["cost_usd"] += _entry_cost_usd(entry)
 
     daily_rows = sorted(daily.values(), key=lambda row: row["date"], reverse=True)[:10]
+    base_multiplier = 10.0 * multiplier
     for row in daily_rows:
-        adjusted_cost = row["cost_usd"] * exchange_rate * multiplier
+        adjusted_cost = row["cost_usd"] * exchange_rate * base_multiplier
         row["cost_label"] = format_krw_cost(adjusted_cost)
 
-    today_adjusted = today_usd * exchange_rate * multiplier
-    month_adjusted = month_usd * exchange_rate * multiplier
+    today_adjusted = today_usd * exchange_rate * base_multiplier
+    month_adjusted = month_usd * exchange_rate * base_multiplier
 
     return _json(
         {

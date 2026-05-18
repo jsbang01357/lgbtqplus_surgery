@@ -23,6 +23,8 @@ const state = {
   selectedDocIndices: [],
 };
 
+const DEFAULT_GEMINI_COST_MULTIPLIER = "1.0";
+
 const fileList = document.querySelector("#file-list");
 const memoList = document.querySelector("#memo-list");
 const fileCount = document.querySelector("#file-count");
@@ -556,6 +558,12 @@ async function loadMemos() {
   renderMemos();
   updateHeroPreview();
   renderAiSources();
+}
+
+async function loadMemoDetail(fileName) {
+  if (!fileName) return null;
+  const data = await apiJson(`/api/memos/${encodeURIComponent(fileName)}`);
+  return data.memo || null;
 }
 
 async function loadUsageSummary() {
@@ -1218,6 +1226,11 @@ async function bootstrap() {
       setActivePage("files");
     }
   });
+  document.addEventListener("change", (e) => {
+    if (e.target.matches("[data-ai-file], [data-ai-memo]")) {
+      updateAiSourceStatus();
+    }
+  });
 
   document.querySelector("#account-id-form")?.addEventListener("submit", async e => {
     e.preventDefault();
@@ -1316,18 +1329,33 @@ async function bootstrap() {
 
     const memoOpen = e.target.closest("[data-memo-open]");
     if (memoOpen) {
-      const memo = getFilteredMemos()[parseInt(memoOpen.dataset.memoOpen)];
-      if (memo) {
-        document.querySelector("#memo-title").value = memo.title;
-        document.querySelector("#memo-body").value = memo.body;
+    const memo = getFilteredMemos()[parseInt(memoOpen.dataset.memoOpen)];
+    if (memo) {
+      try {
+        const fullMemo = await loadMemoDetail(memo.fileName);
+        const nextMemo = fullMemo
+          ? {
+            ...memo,
+            title: fullMemo.title || memo.title,
+            body: fullMemo.content || memo.body,
+          }
+          : memo;
+        state.memos = state.memos.map((item) =>
+          item.fileName === memo.fileName ? nextMemo : item,
+        );
+        document.querySelector("#memo-title").value = nextMemo.title;
+        document.querySelector("#memo-body").value = nextMemo.body;
         document.querySelector("#memo-file-name").value = memo.fileName;
         state.editingMemoFileName = memo.fileName;
         if (memoSaveButton) memoSaveButton.textContent = "메모 수정";
         if (downloadCurrentMemoButton) downloadCurrentMemoButton.disabled = false;
         renderMemos();
+      } catch (err) {
+        showToast(err.message);
       }
-      return;
     }
+    return;
+  }
 
     const memoDelete = e.target.closest("[data-memo-delete]");
     if (memoDelete) {
@@ -1482,6 +1510,7 @@ async function bootstrap() {
   const modeV6Btn = document.querySelector("#mode-v6");
   const modeV5Btn = document.querySelector("#mode-v5");
   const v6Inputs = document.querySelector("#v6-inputs");
+  const v5SourcePicker = document.querySelector("#v5-source-picker");
   const runAiV6Btn = document.querySelector("#run-ai");
   const runAiV5Btn = document.querySelector("#run-ai-v5");
   const syncContainer = document.querySelector("#sync-container");
@@ -1509,6 +1538,7 @@ async function bootstrap() {
       runAiV5Btn.style.display = "none";
       v5Actions.style.display = "none";
       v5Presets.style.display = "none";
+      if (v5SourcePicker) v5SourcePicker.style.display = "none";
 
       aiTitle.textContent = "EMR Intake";
       aiVersionBadge.textContent = "v6 Pipeline";
@@ -1530,6 +1560,7 @@ async function bootstrap() {
       runAiV5Btn.style.display = "block";
       syncContainer.style.display = "none";
       v5Presets.style.display = "flex";
+      if (v5SourcePicker) v5SourcePicker.style.display = "block";
 
       aiTitle.textContent = "AI Workbench";
       aiVersionBadge.textContent = "v5 Legacy";
@@ -1580,12 +1611,20 @@ async function bootstrap() {
 
   document.querySelector("#run-ai-v5")?.addEventListener("click", async () => {
     const rawText = document.querySelector("#ai-prompt").value;
-    if (!rawText.trim()) return showToast("분석할 텍스트를 입력해주세요.");
+    const selectedBlobNames = selectedValues("[data-ai-file]");
+    const selectedMemoFileNames = selectedValues("[data-ai-memo]");
+    if (!rawText.trim() && !selectedBlobNames.length && !selectedMemoFileNames.length) {
+      return showToast("질문을 입력하거나 파일/메모를 하나 이상 선택해주세요.");
+    }
 
     const btn = document.querySelector("#run-ai-v5");
     setBusy(btn, "Gemini 분석 중", true);
     try {
-      const data = await postJson("/api/ai/analyze", { prompt: rawText });
+      const data = await postJson("/api/ai/analyze", {
+        prompt: rawText,
+        blob_names: selectedBlobNames,
+        memo_file_names: selectedMemoFileNames,
+      });
       state.lastAiResult = data.result || "결과가 없습니다.";
       const aiResult = document.querySelector("#ai-result");
       aiResult.innerHTML = renderMarkdown(state.lastAiResult);
@@ -1672,15 +1711,14 @@ async function bootstrap() {
 
   if (geminiSettingsSaveBtn) {
     if (geminiExchangeRateInput) geminiExchangeRateInput.value = localStorage.getItem("geminiExchangeRate") || "1400";
-    if (geminiCostMultiplierInput) geminiCostMultiplierInput.value = localStorage.getItem("geminiCostMultiplier") || "1.0";
+    if (geminiCostMultiplierInput) geminiCostMultiplierInput.value = localStorage.getItem("geminiCostMultiplier") || DEFAULT_GEMINI_COST_MULTIPLIER;
 
     geminiSettingsSaveBtn.addEventListener("click", async () => {
       if (geminiExchangeRateInput && geminiExchangeRateInput.value) {
         localStorage.setItem("geminiExchangeRate", geminiExchangeRateInput.value);
       }
-      if (geminiCostMultiplierInput && geminiCostMultiplierInput.value) {
-        localStorage.setItem("geminiCostMultiplier", geminiCostMultiplierInput.value);
-      }
+      const multiplierValue = geminiCostMultiplierInput?.value || DEFAULT_GEMINI_COST_MULTIPLIER;
+      localStorage.setItem("geminiCostMultiplier", multiplierValue);
       showToast("Gemini 요금 설정이 저장되었습니다.");
       await Promise.all([loadUsageSummary(), loadSettings()]);
     });
