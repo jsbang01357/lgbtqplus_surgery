@@ -61,7 +61,7 @@ from app.gcs_helper import get_bucket
 from app.core_utils import get_now
 from app.request_utils import get_client_ip
 from app.md_pdf import markdown_to_pdf_bytes
-from app.access_logger import get_access_logs, clear_access_logs
+from app.access_logger import get_access_logs, clear_access_logs, log_access_request
 from app.text_cleaner import (
     _clean_ai_mode,
     _apply_basic_cleaning_options,
@@ -241,18 +241,44 @@ async def session(request: Request):
     )
 
 
+import time
+
+# Simple in-memory rate limiter for login
+login_attempts = {}  # {ip: [timestamp1, timestamp2, ...]}
+
+
 async def account_login(request: Request):
     if not allow_account_id_fallback():
         return _json({"error": "계정 ID fallback이 꺼져 있습니다."}, status_code=403)
+
+    client_ip = get_client_ip(
+        request.headers, request.client.host if request.client else None
+    )
+    now = time.time()
+    # Clean up old attempts (older than 10 minutes)
+    attempts = [t for t in login_attempts.get(client_ip, []) if now - t < 600]
+    if len(attempts) >= 10:
+        return _json(
+            {"error": "너무 많은 로그인 시도가 있었습니다. 잠시 후 다시 시도해주세요."},
+            status_code=429,
+        )
+
     payload = await request.json()
     login_id = (
         str(payload.get("account_id") or payload.get("email") or "").strip().lower()
     )
     password = str(payload.get("password") or "")
+
     if login_id != account_login_id() or not verify_account_password(password):
+        attempts.append(now)
+        login_attempts[client_ip] = attempts
         return _json(
             {"error": "계정 ID 또는 비밀번호가 올바르지 않습니다."}, status_code=401
         )
+
+    # Success, clear attempts
+    if client_ip in login_attempts:
+        del login_attempts[client_ip]
     email = owner_email()
     token = _create_account_session(email)
     response = _json(
@@ -962,7 +988,17 @@ async def frontend(request: Request):
     if not target.exists():
         target = FRONTEND_DIR / "index.html"
     if target == (FRONTEND_DIR / "index.html").resolve():
-        return Response(_render_frontend_html(), media_type="text/html")
+        response = Response(_render_frontend_html(), media_type="text/html")
+        if not request.cookies.get("jisong_access_logged"):
+            client_ip = get_client_ip(
+                request.headers, request.client.host if request.client else None
+            )
+            headers_dict = dict(request.headers)
+            response.background = BackgroundTask(
+                log_access_request, headers_dict, client_ip
+            )
+            response.set_cookie("jisong_access_logged", "1", max_age=3600 * 24)
+        return response
     media_type = mimetypes.guess_type(target.name)[0]
     return FileResponse(target, media_type=media_type)
 
@@ -1012,9 +1048,24 @@ routes = [
 ]
 
 
+def _cleanup_expired_sessions():
+    try:
+        # Note: This is a simple cleanup. In a real multi-worker env, 
+        # this might need more robust locking or a separate cron job.
+        sessions = _load_account_sessions()
+        # The session store currently doesn't store 'expires_at'.
+        # For now, this is a placeholder for future session-expiry logic.
+        # If we had expires_at, we would filter here.
+        # logger.info("Cleaning up expired sessions...")
+        pass
+    except Exception:
+        pass
+
+
 @asynccontextmanager
 async def lifespan(_app):
     start_folder_sync_service()
+    _cleanup_expired_sessions()
     try:
         yield
     finally:

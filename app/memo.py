@@ -130,9 +130,15 @@ def save_memo_txt(title, content, original_file_name=None):
         blob = bucket.blob(blob_name)
 
         created_at = timestamp
+        generation = 0
         if blob.exists():
-            old = load_single_memo_content(original_file_name)
-            created_at = old["created_at"] or timestamp
+            try:
+                blob.reload()
+                generation = blob.generation or 0
+                old = load_single_memo_content(original_file_name)
+                created_at = old.get("created_at") or timestamp
+            except Exception:
+                generation = 0
 
         payload = _build_memo_payload(title, content, created_at, timestamp)
         blob.metadata = {
@@ -140,9 +146,15 @@ def save_memo_txt(title, content, original_file_name=None):
             "created_at": created_at,
             "updated_at": timestamp,
         }
-        blob.upload_from_string(
-            payload.encode("utf-8"), content_type="text/plain; charset=utf-8"
-        )
+        try:
+            blob.upload_from_string(
+                payload.encode("utf-8"),
+                content_type="text/plain; charset=utf-8",
+                if_generation_match=generation,
+            )
+        except Exception as exc:
+            logger.warning(f"메모 저장 중 동시성 충돌 발생: {exc}")
+            raise RuntimeError("다른 사용자가 이 메모를 수정했습니다. 다시 시도해주세요.")
 
         load_memo_list_cached.clear()
         load_single_memo_content.clear()

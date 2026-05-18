@@ -4,14 +4,14 @@
 
 - [x] README를 현재 Starlette API + 정적 프론트엔드 구조에 맞게 재정리
 - [x] 빠진 런타임 의존성 `cryptography`를 requirements에 반영
-- [ ] Cloudflare Access 강제 여부와 `cloudbuild.yaml` 기본값을 운영 정책과 다시 맞추기
-- [ ] 로컬 검증 표준을 `.venv` / `unittest` / Node 20 기준으로 문서화하기
+- [x] Cloudflare Access 강제 여부와 `cloudbuild.yaml` 기본값을 운영 정책과 다시 맞추기
+- [x] 로컬 검증 표준을 `.venv` / `unittest` / Node 20 기준으로 문서화하기
 
 ### 다음 기능축 후보
 
-- [ ] v6 parser-core 정밀도 개선 우선순위 확정
-- [ ] review UI 범위를 `v6` 중심으로 좁혀 구체화
-- [ ] GCS JSON 로그 파일의 동시성 구조 개선 필요 여부 재평가
+- [x] v6 parser-core 정밀도 개선 우선순위 확정 (Date normalization, UNIT_RE 확장, Section splitting 보강)
+- [x] review UI 범위를 `v6` 중심으로 좁혀 구체화 (Metadata 편집 필드 추가, Bulk actions 반영)
+- [x] GCS JSON 로그 파일의 동시성 구조 개선 및 API 서버 연동 완료
 
 ## 이번 정리 요약
 

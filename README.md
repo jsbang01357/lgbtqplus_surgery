@@ -271,6 +271,7 @@ npm run check
 
 ## 관련 문서
 
+- [docs/local-dev.md](/Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/docs/local-dev.md)
 - [DESIGN.md](/Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/DESIGN.md)
 - [docs/gcp-security-plan.md](/Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/docs/gcp-security-plan.md)
 - [docs/v6-parser-core-plan.md](/Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/docs/v6-parser-core-plan.md)

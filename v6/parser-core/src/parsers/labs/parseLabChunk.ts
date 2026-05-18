@@ -1,7 +1,7 @@
 import { PARSER_VERSION } from "../../core/constants";
 import { BaseMetadata, LabRow, ParsedChunk, StructuredLabDocument } from "../../schemas/documents";
 
-const UNIT_RE = /^(?:mg\/dL|mmol\/L|mEq\/L|g\/dL|U\/L|IU\/L|ng\/mL|pg\/mL|%|fL|pg|sec|cells\/HPF|\/LPF|×10[³\^]3?\/㎕|×10\^6\/㎕|g\/㎗|mm\/h|mL\/min\/1\.73m²)$/i;
+const UNIT_RE = /^(?:mg\/dL|mmol\/L|mEq\/L|g\/dL|U\/L|IU\/L|ng\/mL|pg\/mL|%|fL|pg|sec|cells\/HPF|\/LPF|×10[³\^]3?\/㎕|×10\^6\/㎕|g\/㎗|mm\/h|mL\/min\/1\.73m²|copies\/mL|log\s+copies\/mL|Ratio|Index|units|mIU\/L|nmol\/L|μg\/dL|mcg\/dL|μU\/mL|mU\/L)$/i;
 const FLAG_RE = /^[▲▼HL]$/i;
 const COLUMN_HEADER_RE = /^\s*(검사명|Test)\s+/i;
 

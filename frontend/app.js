@@ -20,6 +20,7 @@ const state = {
   lastAiResult: "",
   lastParsedData: null,
   editingDocIdx: null,
+  selectedDocIndices: [],
 };
 
 const fileList = document.querySelector("#file-list");
@@ -948,52 +949,78 @@ function renderParsedDocuments() {
       <span style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: var(--neutral-50);">Pipeline Result</span>
       <h3 style="margin: 4px 0 0 0; color: var(--neutral-90);">Extracted Artifacts (${data.documents.length})</h3>
     </div>
-    <span style="font-size:0.75rem; color:var(--neutral-50);">* 검수 완료 후 동기화하세요</span>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <span style="font-size:0.75rem; color:var(--neutral-50);">* 검수 완료 후 동기화하세요</span>
+    </div>
   </div>`;
+
+  if (state.selectedDocIndices.length > 0) {
+    html += `
+    <div style="background: var(--blue-50); color: white; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 12px rgba(0,90,158,0.2);">
+      <span style="font-weight: 600; font-size: 0.9rem;">${state.selectedDocIndices.length}개 선택됨</span>
+      <div style="display: flex; gap: 8px;">
+        <button type="button" class="button" id="bulk-add-tag" style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 4px 10px; font-size: 0.8rem;">태그 추가</button>
+        <button type="button" class="button" id="bulk-delete" style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 4px 10px; font-size: 0.8rem;">삭제</button>
+        <button type="button" class="button" id="bulk-clear" style="background: transparent; border: none; color: white; padding: 4px 10px; font-size: 0.8rem; text-decoration: underline;">취소</button>
+      </div>
+    </div>`;
+  }
 
   html += `<div style="display: flex; flex-direction: column; gap: 16px;">`;
   data.documents.forEach((doc, index) => {
     const isEditing = state.editingDocIdx === index;
+    const isSelected = state.selectedDocIndices.includes(index);
     const isCsv = doc.kind === "lab" || doc.kind === "medication";
-    const icon = isCsv ? '📊' : '📝';
+    const icon = isCsv ? "📊" : "📝";
 
     if (isEditing) {
       html += `
-       <div style="background:#fff; border-radius:8px; border:2px solid var(--blue-50); box-shadow: 0 4px 12px rgba(0,90,158,0.15); overflow: hidden;">
-         <div style="background:var(--neutral-10); padding:12px 16px; border-bottom:1px solid var(--neutral-20);">
-           <div style="display:flex; flex-direction:column; gap:8px;">
-             <div>
-               <label style="display:block; font-size:0.75rem; font-weight:600; color:var(--neutral-60); margin-bottom:4px;">File Relative Path</label>
-               <input type="text" id="edit-doc-path" class="input" value="${escapeHtml(doc.relativePath)}" style="width:100%; font-family:monospace; font-size:0.85rem; padding:6px 10px;">
-             </div>
-             <div style="display:flex; gap:12px;">
-               <div style="flex:1;">
-                 <label style="display:block; font-size:0.75rem; font-weight:600; color:var(--neutral-60); margin-bottom:4px;">Modality Kind</label>
-                 <select id="edit-doc-kind" class="input" style="width:100%; padding:6px 10px;">
-                   <option value="notes" ${doc.kind === 'notes' ? 'selected' : ''}>notes (MD)</option>
-                   <option value="lab" ${doc.kind === 'lab' ? 'selected' : ''}>lab (CSV)</option>
-                   <option value="medication" ${doc.kind === 'medication' ? 'selected' : ''}>medication (CSV)</option>
-                   <option value="imaging" ${doc.kind === 'imaging' ? 'selected' : ''}>imaging (MD)</option>
-                   <option value="pathology" ${doc.kind === 'pathology' ? 'selected' : ''}>pathology (MD)</option>
-                 </select>
-               </div>
-             </div>
-           </div>
-         </div>
-         <div style="padding:16px;">
-           <label style="display:block; font-size:0.75rem; font-weight:600; color:var(--neutral-60); margin-bottom:6px;">Document Content</label>
-           <textarea id="edit-doc-content" class="input" rows="12" style="width:100%; font-family:monospace; font-size:0.85rem; line-height:1.4; padding:12px; white-space:pre-wrap;">${escapeHtml(doc.content)}</textarea>
-           <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">
-             <button type="button" class="button button-secondary" data-doc-cancel style="padding:6px 12px; font-size:0.85rem;">취소</button>
-             <button type="button" class="button button-primary" data-doc-save="${index}" style="padding:6px 12px; font-size:0.85rem;">적용</button>
-           </div>
-         </div>
-       </div>`;
+        <div style="background:#fff; border-radius:8px; border:2px solid var(--blue-50); box-shadow: 0 4px 12px rgba(0,90,158,0.15); overflow: hidden;">
+          <div style="background:var(--neutral-10); padding:12px 16px; border-bottom:1px solid var(--neutral-20);">
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <div>
+                <label style="display:block; font-size:0.75rem; font-weight:600; color:var(--neutral-60); margin-bottom:4px;">File Relative Path</label>
+                <input type="text" id="edit-doc-path" class="input" value="${escapeHtml(doc.relativePath)}" style="width:100%; font-family:monospace; font-size:0.85rem; padding:6px 10px;">
+              </div>
+              <div style="display:flex; gap:12px;">
+                <div style="flex:1;">
+                  <label style="display:block; font-size:0.75rem; font-weight:600; color:var(--neutral-60); margin-bottom:4px;">Title</label>
+                  <input type="text" id="edit-doc-title" class="input" value="${escapeHtml(doc.metadata.title)}" style="width:100%; font-size:0.85rem; padding:6px 10px;">
+                </div>
+                <div style="flex:1;">
+                  <label style="display:block; font-size:0.75rem; font-weight:600; color:var(--neutral-60); margin-bottom:4px;">Tags (comma separated)</label>
+                  <input type="text" id="edit-doc-tags" class="input" value="${escapeHtml(doc.metadata.tags?.join(", "))}" style="width:100%; font-size:0.85rem; padding:6px 10px;">
+                </div>
+              </div>
+              <div style="display:flex; gap:12px;">
+                <div style="flex:1;">
+                  <label style="display:block; font-size:0.75rem; font-weight:600; color:var(--neutral-60); margin-bottom:4px;">Modality Kind</label>
+                  <select id="edit-doc-kind" class="input" style="width:100%; padding:6px 10px;">
+                    <option value="note" ${doc.kind === "note" ? "selected" : ""}>note (MD)</option>
+                    <option value="lab" ${doc.kind === "lab" ? "selected" : ""}>lab (CSV)</option>
+                    <option value="medication" ${doc.kind === "medication" ? "selected" : ""}>medication (CSV)</option>
+                    <option value="imaging" ${doc.kind === "imaging" ? "selected" : ""}>imaging (MD)</option>
+                    <option value="pathology" ${doc.kind === "pathology" ? "selected" : ""}>pathology (MD)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="padding:16px;">
+            <label style="display:block; font-size:0.75rem; font-weight:600; color:var(--neutral-60); margin-bottom:6px;">Document Content</label>
+            <textarea id="edit-doc-content" class="input" rows="12" style="width:100%; font-family:monospace; font-size:0.85rem; line-height:1.4; padding:12px; white-space:pre-wrap;">${escapeHtml(doc.content)}</textarea>
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">
+              <button type="button" class="button button-secondary" data-doc-cancel style="padding:6px 12px; font-size:0.85rem;">취소</button>
+              <button type="button" class="button button-primary" data-doc-save="${index}" style="padding:6px 12px; font-size:0.85rem;">적용</button>
+            </div>
+          </div>
+        </div>`;
     } else {
       html += `
-       <div style="background:#fff; border-radius:8px; border:1px solid var(--neutral-20); box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow: hidden;">
-         <div style="background:var(--neutral-10); padding:10px 16px; border-bottom:1px solid var(--neutral-20); display:flex; justify-content:space-between; align-items:center;">
-           <div style="display:flex; align-items:center; gap:8px;">
+       <div style="background:#fff; border-radius:8px; border:1px solid ${isSelected ? "var(--blue-50)" : "var(--neutral-20)"}; box-shadow: ${isSelected ? "0 4px 12px rgba(0,90,158,0.1)" : "0 1px 3px rgba(0,0,0,0.05)"}; overflow: hidden; transition: all 0.2s;">
+         <div style="background: ${isSelected ? "rgba(0,90,158,0.03)" : "var(--neutral-10)"}; padding:10px 16px; border-bottom:1px solid var(--neutral-20); display:flex; justify-content:space-between; align-items:center;">
+           <div style="display:flex; align-items:center; gap:12px;">
+             <input type="checkbox" data-doc-select="${index}" ${isSelected ? "checked" : ""} style="width:16px; height:16px; cursor:pointer;">
              <span style="font-size:1.2rem;">${icon}</span>
              <strong style="color:var(--neutral-90); font-family:monospace; font-size:0.9rem;">${escapeHtml(doc.relativePath)}</strong>
            </div>
@@ -1009,7 +1036,6 @@ function renderParsedDocuments() {
     }
   });
   html += `</div>`;
-
   const resultEl = document.querySelector("#ai-result");
   if (resultEl) {
     resultEl.style.display = "block";
@@ -1323,15 +1349,64 @@ async function bootstrap() {
       const pathVal = document.querySelector("#edit-doc-path")?.value.trim();
       const kindVal = document.querySelector("#edit-doc-kind")?.value;
       const contentVal = document.querySelector("#edit-doc-content")?.value;
+      const titleVal = document.querySelector("#edit-doc-title")?.value.trim();
+      const tagsVal = document.querySelector("#edit-doc-tags")?.value.split(",").map(t => t.trim()).filter(Boolean);
 
       if (pathVal && kindVal && contentVal !== undefined) {
         state.lastParsedData.documents[idx].relativePath = pathVal;
         state.lastParsedData.documents[idx].kind = kindVal;
         state.lastParsedData.documents[idx].content = contentVal;
+        if (titleVal) state.lastParsedData.documents[idx].metadata.title = titleVal;
+        if (tagsVal) state.lastParsedData.documents[idx].metadata.tags = tagsVal;
         showToast("임시 수정사항이 반영되었습니다.");
       }
+
       state.editingDocIdx = null;
       renderParsedDocuments();
+      return;
+    }
+
+    const docSelect = e.target.closest("[data-doc-select]");
+    if (docSelect) {
+      const idx = parseInt(docSelect.getAttribute("data-doc-select"));
+      if (state.selectedDocIndices.includes(idx)) {
+        state.selectedDocIndices = state.selectedDocIndices.filter(i => i !== idx);
+      } else {
+        state.selectedDocIndices.push(idx);
+      }
+      renderParsedDocuments();
+      return;
+    }
+
+    if (e.target.id === "bulk-clear") {
+      state.selectedDocIndices = [];
+      renderParsedDocuments();
+      return;
+    }
+
+    if (e.target.id === "bulk-delete") {
+      if (confirm(`${state.selectedDocIndices.length}개의 항목을 삭제하시겠습니까?`)) {
+        state.lastParsedData.documents = state.lastParsedData.documents.filter((_, i) => !state.selectedDocIndices.includes(i));
+        state.selectedDocIndices = [];
+        renderParsedDocuments();
+        showToast("선택한 항목이 삭제되었습니다.");
+      }
+      return;
+    }
+
+    if (e.target.id === "bulk-add-tag") {
+      const tag = prompt("추가할 태그를 입력하세요:");
+      if (tag) {
+        state.selectedDocIndices.forEach(idx => {
+          const doc = state.lastParsedData.documents[idx];
+          if (!doc.metadata.tags) doc.metadata.tags = [];
+          if (!doc.metadata.tags.includes(tag)) {
+            doc.metadata.tags.push(tag);
+          }
+        });
+        renderParsedDocuments();
+        showToast("태그가 추가되었습니다.");
+      }
       return;
     }
   });
@@ -1372,26 +1447,27 @@ async function bootstrap() {
   if (intakeDropzone && promptInput) {
     intakeDropzone.addEventListener("dragover", e => {
       e.preventDefault();
-      intakeDropzone.style.borderColor = "var(--blue-50)";
-      intakeDropzone.style.backgroundColor = "rgba(0, 90, 158, 0.05)";
+      intakeDropzone.classList.add("drag-over");
     });
     intakeDropzone.addEventListener("dragleave", e => {
       e.preventDefault();
-      intakeDropzone.style.borderColor = "var(--neutral-40)";
-      intakeDropzone.style.backgroundColor = "var(--neutral-10)";
+      intakeDropzone.classList.remove("drag-over");
     });
     intakeDropzone.addEventListener("drop", async e => {
       e.preventDefault();
-      intakeDropzone.style.borderColor = "var(--neutral-40)";
-      intakeDropzone.style.backgroundColor = "var(--neutral-10)";
+      intakeDropzone.classList.remove("drag-over");
       if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
         const file = e.dataTransfer.files[0];
+        if (!file.name.toLowerCase().endsWith(".txt")) {
+          showToast("텍스트 파일(.txt)만 처리할 수 있습니다.");
+          return;
+        }
         try {
           const text = await file.text();
           promptInput.value = text;
           showToast(`${file.name} 파일을 불러왔습니다.`);
         } catch (err) {
-          showToast("텍스트 파일을 읽을 수 없습니다.");
+          showToast("파일을 읽는 중 오류가 발생했습니다.");
         }
       }
     });
