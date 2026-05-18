@@ -142,6 +142,11 @@ def _request_email(request: Request) -> str:
     return get_access_context(request.headers).email or owner_email()
 
 
+def _request_client_host(request: Request) -> str | None:
+    client = getattr(request, "client", None)
+    return getattr(client, "host", None)
+
+
 def _passkey_token(request: Request) -> str:
     header = request.headers.get("authorization", "")
     if header.lower().startswith("bearer "):
@@ -263,9 +268,7 @@ async def session(request: Request):
             "account_id_fallback_allowed": allow_account_id_fallback(),
             "google_auth_fallback_allowed": allow_google_auth_fallback(),
             "account_login_id": account_login_id(),
-            "client_ip": get_client_ip(
-                request.headers, request.client.host if request.client else None
-            ),
+            "client_ip": get_client_ip(request.headers, _request_client_host(request)),
             "cloudflare_access": {
                 "email": access_context.email,
                 "has_jwt": access_context.has_jwt,
@@ -287,9 +290,7 @@ async def account_login(request: Request):
     if not allow_account_id_fallback():
         return _json({"error": "계정 ID fallback이 꺼져 있습니다."}, status_code=403)
 
-    client_ip = get_client_ip(
-        request.headers, request.client.host if request.client else None
-    )
+    client_ip = get_client_ip(request.headers, _request_client_host(request))
     now = time.time()
     # Clean up old attempts (older than 10 minutes)
     attempts = [t for t in login_attempts.get(client_ip, []) if now - t < 600]
@@ -1039,9 +1040,7 @@ async def frontend(request: Request):
     if target == (FRONTEND_DIR / "index.html").resolve():
         response = Response(_render_frontend_html(), media_type="text/html")
         if not request.cookies.get("jisong_access_logged"):
-            client_ip = get_client_ip(
-                request.headers, request.client.host if request.client else None
-            )
+            client_ip = get_client_ip(request.headers, _request_client_host(request))
             headers_dict = dict(request.headers)
             response.background = BackgroundTask(
                 log_access_request, headers_dict, client_ip

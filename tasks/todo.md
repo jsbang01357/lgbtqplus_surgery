@@ -15,9 +15,16 @@
 
 ## 이번 정리 요약
 
+- v6 브랜치 로그인 불가 원인을 점검했고, `frontend/app.js` 초기 전역 참조로 인한 부팅 크래시를 복구했다.
 - 실제 운영 진입점이 `api_server.py`인 현재 구조에 맞춰 README를 다시 작성했다.
 - 예전 Streamlit 중심 설명, `jisong_cloud.py`, `components/` 같은 오래된 구조 설명을 정리했다.
 - 테스트 수집 실패 원인이던 누락 의존성 `cryptography`를 `requirements.txt`에 추가했다.
+
+### 로그인 복구 (v6 branch)
+
+- [x] 현재 브랜치와 auth/login 연결 경로 확인
+- [x] 프런트엔드 부팅 크래시로 로그인 핸들러 미바인딩 원인 수정
+- [x] 브라우저/테스트 기준 기본 회귀 검증
 
 ---
 

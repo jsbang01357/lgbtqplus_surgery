@@ -10,8 +10,8 @@ const presets = [
 ];
 
 const state = {
-  files: [...files],
-  memos: [...memos],
+  files: [],
+  memos: [],
   session: null,
   usesDemoData: true,
   fileQuery: "",
