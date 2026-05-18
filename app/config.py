@@ -98,6 +98,10 @@ def get_bucket_name() -> str:
     return get_config("GCS_BUCKET_NAME", "jisong-cloud-storage")
 
 
+def get_gdrive_folder_id() -> str:
+    return get_config("GDRIVE_FOLDER_ID", "1CwDmMwubRla-8NbbKKXgQOoEvzxuMKzF")
+
+
 def get_bool_config(key: str, default: bool = False) -> bool:
     raw = os.getenv(key)
     if raw is None or raw.strip() == "":

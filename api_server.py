@@ -57,6 +57,7 @@ from app.ai import (
     _sum_usage_costs,
 )
 from app.folder_sync import get_folder_sync_service, start_folder_sync_service, stop_folder_sync_service
+from app.drive_sync import start_gdrive_sync_service
 from app.gcs_helper import get_bucket
 from app.core_utils import get_now
 from app.request_utils import get_client_ip
@@ -1120,6 +1121,7 @@ def _cleanup_expired_sessions():
 @asynccontextmanager
 async def lifespan(_app):
     start_folder_sync_service()
+    start_gdrive_sync_service()
     _cleanup_expired_sessions()
     try:
         yield

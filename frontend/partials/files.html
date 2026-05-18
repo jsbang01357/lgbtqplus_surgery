@@ -1,26 +1,44 @@
 <section id="files" data-page="files" class="product-tile product-tile-parchment app-section" aria-labelledby="files-title">
   <div class="section-head">
     <h2 id="files-title">웹하드</h2>
-    
   </div>
-  <div class="utility-layout">
-    <form class="utility-card upload-card" id="upload-form">
-      <label for="file-input">파일 올리기</label>
-      <input id="file-input" name="file-input" type="file" multiple />
-      
-    </form>
-    <div class="utility-card utility-card-large">
-      <div class="card-toolbar">
-        <div>
-          <h3>최근 파일</h3>
-          <small id="file-list-status">전체 파일</small>
-        </div>
-        <div class="toolbar-actions">
-          <input class="search-input" id="file-search" type="search" placeholder="파일 검색" autocomplete="off" />
-          <button class="button button-pearl" id="download-all" type="button">ZIP</button>
-        </div>
+  
+  <div class="utility-layout explorer-layout">
+    <!-- Sidebar for Folder Tree -->
+    <aside class="utility-card explorer-sidebar" id="explorer-sidebar">
+      <div class="sidebar-header">
+        <h3>탐색기</h3>
+        <select class="storage-selector" id="storage-selector">
+          <option value="uploads">클라우드 업로드</option>
+          <option value="workspace">워크스페이스 동기화</option>
+        </select>
       </div>
-      <div class="file-list" id="file-list"></div>
+      <div class="tree-container" id="tree-container">
+        <!-- Tree will be rendered here -->
+        <div class="loading-state">불러오는 중...</div>
+      </div>
+    </aside>
+
+    <div class="explorer-main">
+      <form class="utility-card upload-card" id="upload-form">
+        <label for="file-input">파일 올리기</label>
+        <input id="file-input" name="file-input" type="file" multiple />
+        <p class="settings-note">GCS uploads/ 폴더에 저장됩니다.</p>
+      </form>
+
+      <div class="utility-card utility-card-large">
+        <div class="card-toolbar">
+          <div>
+            <h3 id="current-folder-name">전체 파일</h3>
+            <small id="file-list-status">불러오는 중...</small>
+          </div>
+          <div class="toolbar-actions">
+            <input class="search-input" id="file-search" type="search" placeholder="파일 검색" autocomplete="off" />
+            <button class="button button-pearl" id="download-all" type="button">ZIP</button>
+          </div>
+        </div>
+        <div class="file-list" id="file-list"></div>
+      </div>
     </div>
   </div>
 </section>

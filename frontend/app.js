@@ -11,6 +11,7 @@ const presets = [
 
 const state = {
   files: [],
+  workspaceFiles: [], // Add workspace files to state
   memos: [],
   session: null,
   usesDemoData: true,
@@ -21,9 +22,14 @@ const state = {
   lastParsedData: null,
   editingDocIdx: null,
   selectedDocIndices: [],
+  currentStorage: "uploads", // Add current storage type
+  currentPath: "", // Add current selected path
 };
 
 const fileList = document.querySelector("#file-list");
+const treeContainer = document.querySelector("#tree-container");
+const storageSelector = document.querySelector("#storage-selector");
+const currentFolderName = document.querySelector("#current-folder-name");
 const memoList = document.querySelector("#memo-list");
 const fileCount = document.querySelector("#file-count");
 const memoCount = document.querySelector("#memo-count");
@@ -202,9 +208,84 @@ function bindRoutes() {
 }
 
 function getFilteredFiles() {
-  return state.files.filter((file) =>
-    includesQuery(file.name, file.ext, file.updated, state.fileQuery),
-  );
+  const sourceFiles = state.currentStorage === "uploads" ? state.files : state.workspaceFiles;
+  return sourceFiles.filter((file) => {
+    const matchesQuery = includesQuery(file.name, file.ext, file.updated, state.fileQuery);
+    const matchesPath = state.currentStorage === "uploads" || !state.currentPath || file.relativePath?.startsWith(state.currentPath);
+    return matchesQuery && matchesPath;
+  });
+}
+
+function buildFileTree(files) {
+  const root = { name: "Root", children: {}, type: "folder", path: "" };
+  files.forEach((file) => {
+    const parts = (file.relativePath || "").split("/").filter(Boolean);
+    let current = root;
+    parts.forEach((part, i) => {
+      const isLast = i === parts.length - 1;
+      const path = parts.slice(0, i + 1).join("/");
+      
+      // We only care about folders in the tree view for navigation
+      if (!isLast) {
+        if (!current.children[part]) {
+          current.children[part] = { name: part, children: {}, type: "folder", path };
+        }
+        current = current.children[part];
+      }
+    });
+  });
+  return root;
+}
+
+function renderTree(node, container, depth = 0) {
+  if (depth === 0) {
+    container.innerHTML = "";
+    // Add Root/All entry
+    const rootItem = document.createElement("div");
+    rootItem.className = `tree-item ${state.currentPath === "" ? "is-active" : ""}`;
+    rootItem.innerHTML = `
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+      <span>전체 파일</span>
+    `;
+    rootItem.onclick = () => {
+      state.currentPath = "";
+      renderFiles();
+      renderTree(node, container);
+    };
+    container.appendChild(rootItem);
+  }
+
+  const keys = Object.keys(node.children).sort();
+  if (keys.length === 0 && depth === 0 && state.currentStorage === "workspace") {
+    container.innerHTML += '<p class="source-empty">폴더가 없습니다.</p>';
+    return;
+  }
+
+  const childrenContainer = document.createElement("div");
+  childrenContainer.className = "tree-children";
+  
+  keys.forEach((key) => {
+    const child = node.children[key];
+    const item = document.createElement("div");
+    item.className = `tree-item ${state.currentPath === child.path ? "is-active" : ""}`;
+    item.innerHTML = `
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+      <span>${escapeHtml(child.name)}</span>
+    `;
+    item.onclick = (e) => {
+      e.stopPropagation();
+      state.currentPath = child.path;
+      renderFiles();
+      renderTree(buildFileTree(state.workspaceFiles), container);
+    };
+    
+    const nodeWrapper = document.createElement("div");
+    nodeWrapper.className = "tree-node";
+    nodeWrapper.appendChild(item);
+    
+    container.appendChild(nodeWrapper);
+    renderTree(child, nodeWrapper, depth + 1);
+  });
 }
 
 function getFilteredMemos() {
@@ -258,6 +339,7 @@ async function downloadFile(index) {
     showToast("다운로드 실패: " + error.message);
   }
 }
+
 
 async function saveMemo(silent = false) {
   const t = document.querySelector("#memo-title").value;
@@ -521,8 +603,12 @@ async function loadSession() {
 
 async function loadFiles() {
   try {
-    const data = await apiJson("/api/files");
-    state.files = data.files.map((file) => ({
+    const [filesData, syncData] = await Promise.all([
+      apiJson("/api/files"),
+      apiJson("/api/sync/status").catch(() => ({ file_records: [] }))
+    ]);
+
+    state.files = filesData.files.map((file) => ({
       name: file.name,
       blobName: file.blob_name,
       ext: (file.name.split(".").pop() || "").toLowerCase(),
@@ -530,14 +616,42 @@ async function loadFiles() {
       updated: formatUpdated(file.updated),
       downloadUrl: file.download_url,
     }));
+
+    state.workspaceFiles = (syncData.file_records || []).map((file) => ({
+      name: file.relative_path.split("/").pop(),
+      relativePath: file.relative_path,
+      blobName: file.blob_name,
+      ext: (file.relative_path.split(".").pop() || "").toLowerCase(),
+      size: formatBytes(file.size_bytes),
+      updated: formatUpdated(file.synced_at),
+      status: file.status,
+    }));
+
     state.usesDemoData = false;
   } catch (error) {
     state.files = [];
+    state.workspaceFiles = [];
     state.usesDemoData = false;
   }
   renderFiles();
+  renderWorkspaceTree();
   updateHeroPreview();
   renderAiSources();
+}
+
+function renderWorkspaceTree() {
+  if (!treeContainer) return;
+  if (state.currentStorage === "uploads") {
+    treeContainer.innerHTML = `
+      <div class="tree-item is-active">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+        <span>전체 업로드</span>
+      </div>
+    `;
+    return;
+  }
+  const tree = buildFileTree(state.workspaceFiles);
+  renderTree(tree, treeContainer);
 }
 
 async function loadMemos() {
@@ -854,6 +968,13 @@ function renderFiles() {
   const visibleFiles = getFilteredFiles().sort((a, b) => {
     return new Date(b.updated || 0) - new Date(a.updated || 0);
   });
+
+  if (currentFolderName) {
+    currentFolderName.textContent = state.currentStorage === "uploads" 
+      ? "클라우드 업로드" 
+      : (state.currentPath || "워크스페이스 전체");
+  }
+
   fileList.innerHTML = visibleFiles
     .map(
       (file, index) => `
@@ -861,7 +982,8 @@ function renderFiles() {
           <span class="file-icon" style="padding:0;background:transparent;border:none;">${getFileIconHtml(file.name)}</span>
           <div>
             <strong>${highlightMatch(file.name, state.fileQuery)}</strong>
-            <small>${escapeHtml(file.updated)} · ${escapeHtml(file.size)}</small>
+            <small>${escapeHtml(file.updated)} · ${escapeHtml(file.size)}${file.status ? ` · <span style="color:var(--color-primary)">${file.status}</span>` : ""}</small>
+            ${file.relativePath && file.relativePath.includes("/") ? `<small style="display:block; color:var(--color-muted); font-family:monospace;">${escapeHtml(file.relativePath)}</small>` : ""}
           </div>
           <div class="row-actions">
             <button class="icon-button" type="button" data-download="${index}" aria-label="${file.name} 다운로드">
@@ -884,13 +1006,17 @@ function renderFiles() {
           <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
           <polyline points="13 2 13 9 20 9"></polyline>
         </svg>
-        <p>아직 업로드된 파일이 없습니다.</p>
+        <p>선택한 폴더에 파일이 없습니다.</p>
       </div>
     `;
-  fileCount.textContent = String(state.files.length);
-  fileListStatus.textContent = state.fileQuery
-    ? `${visibleFiles.length}개 표시 · 전체 ${state.files.length}개`
-    : `전체 ${state.files.length}개`;
+  
+  const totalCount = state.currentStorage === "uploads" ? state.files.length : state.workspaceFiles.length;
+  if (fileCount) fileCount.textContent = String(totalCount);
+  if (fileListStatus) {
+    fileListStatus.textContent = state.fileQuery
+      ? `${visibleFiles.length}개 표시 · 전체 ${totalCount}개`
+      : `전체 ${totalCount}개`;
+  }
   updateHeroPreview();
 }
 
@@ -1182,6 +1308,13 @@ async function bootstrap() {
   renderAiSources();
   renderToolPanel("cleaner", { showToast, setBusy, postJson, downloadPostBlob, selectedValues });
   renderSettingsAuth(session);
+
+  document.querySelector("#storage-selector")?.addEventListener("change", (e) => {
+    state.currentStorage = e.target.value;
+    state.currentPath = "";
+    renderWorkspaceTree();
+    renderFiles();
+  });
 
   if (session?.authorized) {
     await Promise.all([loadFiles(), loadMemos(), loadUsageSummary()]);
