@@ -158,14 +158,33 @@ def _verify_account_session(request: Request, email: str) -> bool:
     if not token:
         return False
     sessions = _load_account_sessions()
-    return sessions.get(token) == email
+    session_data = sessions.get(token)
+    if not session_data:
+        return False
+    
+    # Handle legacy string format {"token": "email"}
+    if isinstance(session_data, str):
+        return session_data == email
+        
+    # Handle new dict format {"token": {"email": "...", "expires_at": ...}}
+    if isinstance(session_data, dict):
+        if session_data.get("expires_at", 0) < time.time():
+            return False
+        return session_data.get("email") == email
+        
+    return False
 
 
 def _create_account_session(email: str) -> str:
     global _SESSIONS_CACHE
     token = secrets.token_urlsafe(32)
     sessions = _load_account_sessions()
-    sessions[token] = email
+    
+    sessions[token] = {
+        "email": email,
+        "expires_at": time.time() + ACCOUNT_SESSION_TTL_SECONDS
+    }
+    
     _save_account_sessions(sessions)
     _SESSIONS_CACHE = sessions
     return token
@@ -280,24 +299,37 @@ async def account_login(request: Request):
             status_code=429,
         )
 
-    payload = await request.json()
+    try:
+        payload = await request.json()
+    except Exception:
+        return _json({"error": "잘못된 요청 형식입니다."}, status_code=400)
+
     login_id = (
         str(payload.get("account_id") or payload.get("email") or "").strip().lower()
     )
     password = str(payload.get("password") or "")
 
-    if login_id != account_login_id() or not verify_account_password(password):
-        attempts.append(now)
-        login_attempts[client_ip] = attempts
-        return _json(
-            {"error": "계정 ID 또는 비밀번호가 올바르지 않습니다."}, status_code=401
-        )
+    try:
+        if login_id != account_login_id() or not verify_account_password(password):
+            attempts.append(now)
+            login_attempts[client_ip] = attempts
+            return _json(
+                {"error": "계정 ID 또는 비밀번호가 올바르지 않습니다."}, status_code=401
+            )
+    except Exception as exc:
+        logger.exception("Login verification error")
+        return _json({"error": "인증 처리 중 오류가 발생했습니다."}, status_code=500)
 
     # Success, clear attempts
     if client_ip in login_attempts:
         del login_attempts[client_ip]
     email = owner_email()
-    token = _create_account_session(email)
+    try:
+        token = _create_account_session(email)
+    except Exception as exc:
+        logger.exception("Failed to create session")
+        return _json({"error": "세션 생성에 실패했습니다."}, status_code=500)
+
     response = _json(
         {"ok": True, "email": email, "expires_in": ACCOUNT_SESSION_TTL_SECONDS}
     )
@@ -1067,14 +1099,21 @@ routes = [
 
 def _cleanup_expired_sessions():
     try:
-        # Note: This is a simple cleanup. In a real multi-worker env, 
-        # this might need more robust locking or a separate cron job.
+        global _SESSIONS_CACHE
         sessions = _load_account_sessions()
-        # The session store currently doesn't store 'expires_at'.
-        # For now, this is a placeholder for future session-expiry logic.
-        # If we had expires_at, we would filter here.
-        # logger.info("Cleaning up expired sessions...")
-        pass
+        now = time.time()
+        
+        expired_tokens = []
+        for token, data in sessions.items():
+            if isinstance(data, dict) and data.get("expires_at", 0) < now:
+                expired_tokens.append(token)
+                
+        if expired_tokens:
+            for token in expired_tokens:
+                del sessions[token]
+            _save_account_sessions(sessions)
+            _SESSIONS_CACHE = sessions
+            # logger.info(f"Cleaned up {len(expired_tokens)} expired sessions.")
     except Exception:
         pass
 
