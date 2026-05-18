@@ -1164,7 +1164,7 @@ async function bootstrap() {
   document.querySelector("#login-form-account")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const btn = document.querySelector("#login-button-account");
-    const email = document.querySelector("#login-email").value;
+    const email = document.querySelector("#login-email").value.trim().toLowerCase();
     const password = document.querySelector("#login-password").value;
     setBusy(btn, "로그인 중", true);
     try {
@@ -1183,6 +1183,10 @@ async function bootstrap() {
   });
 
   const session = await loadSession();
+  const loginEmailInput = document.querySelector("#login-email");
+  if (loginEmailInput && !loginEmailInput.value && session?.account_login_id) {
+    loginEmailInput.value = session.account_login_id;
+  }
   renderFiles();
   renderMemos();
   updateHeroPreview();
