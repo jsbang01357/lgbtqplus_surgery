@@ -262,6 +262,7 @@ async def health(_request: Request):
 async def session(request: Request):
     state = _auth_state(request)
     access_context = state["access_context"]
+    email = state["email"]
     return _json(
         {
             "cloudflare_access_required": require_cloudflare_access(),
@@ -269,6 +270,7 @@ async def session(request: Request):
             "google_auth_fallback_allowed": allow_google_auth_fallback(),
             "account_login_id": account_login_id(),
             "client_ip": get_client_ip(request.headers, _request_client_host(request)),
+            "passkey_registered": passkeys.has_registered_credential(email),
             "cloudflare_access": {
                 "email": access_context.email,
                 "has_jwt": access_context.has_jwt,

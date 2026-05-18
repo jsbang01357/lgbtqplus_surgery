@@ -1,4 +1,6 @@
 import unittest
+import tempfile
+import json
 from unittest.mock import patch
 
 import app.gcs_helper as gcs_helper
@@ -24,6 +26,26 @@ class GcsHelperTests(unittest.TestCase):
 
     def test_get_logs_blob_name_is_stable(self):
         self.assertEqual(gcs_helper.get_logs_blob_name(), "logs/access_log.json")
+
+    def test_load_service_account_info_accepts_raw_json(self):
+        info = gcs_helper._load_service_account_info('{"project_id":"demo","private_key":"line1\\\\nline2"}')
+
+        self.assertEqual(info["project_id"], "demo")
+        self.assertEqual(info["private_key"], "line1\nline2")
+
+    def test_load_service_account_info_accepts_file_path(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
+            json.dump({"project_id": "demo-file", "private_key": "line1\\nline2"}, handle)
+            path = handle.name
+
+        try:
+            info = gcs_helper._load_service_account_info(path)
+        finally:
+            import os
+            os.unlink(path)
+
+        self.assertEqual(info["project_id"], "demo-file")
+        self.assertEqual(info["private_key"], "line1\nline2")
 
 
 if __name__ == "__main__":

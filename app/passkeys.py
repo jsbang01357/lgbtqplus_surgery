@@ -83,6 +83,17 @@ def _cleanup_expired(data: dict[str, Any]):
     }
 
 
+def has_registered_credential(email: str) -> bool:
+    if not email:
+        return False
+    try:
+        data = _load_store()
+    except Exception:
+        return False
+    _cleanup_expired(data)
+    return any(item.get("email") == email for item in data.get("credentials", []))
+
+
 def _new_challenge(data: dict[str, Any], purpose: str, email: str) -> str:
     challenge = b64url_encode(secrets.token_bytes(PASSKEY_CHALLENGE_BYTES))
     expires_at = (get_now() + timedelta(seconds=PASSKEY_CHALLENGE_TTL_SECONDS)).isoformat()

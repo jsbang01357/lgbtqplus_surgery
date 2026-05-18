@@ -81,6 +81,26 @@ class ApiAuthTests(unittest.TestCase):
         self.assertFalse(state["access_ok"])
         self.assertFalse(state["authorized"])
 
+    def test_session_includes_passkey_registered_flag(self):
+        request = DummyRequest()
+
+        with patch.object(api_server, "_auth_state", return_value={
+            "email": "jsbang01357@gmail.com",
+            "access_context": type("Ctx", (), {"email": "", "has_jwt": False, "allowed": False})(),
+            "authorized": False,
+            "auth_method": "",
+            "passkey_ok": False,
+            "account_id_ok": False,
+            "google_fallback_ok": False,
+        }), \
+            patch.object(api_server.passkeys, "has_registered_credential", return_value=True), \
+            patch.object(api_server, "account_login_id", return_value="jsbang01357@gmail.com"), \
+            patch.object(api_server, "get_client_ip", return_value="127.0.0.1"):
+            response = __import__("asyncio").run(api_server.session(request))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'"passkey_registered":true', response.body)
+
 
 if __name__ == "__main__":
     unittest.main()

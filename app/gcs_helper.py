@@ -1,11 +1,33 @@
 import json
 import logging
+import os
 from google.cloud import storage
 from google.oauth2 import service_account
 from app.config import get_config, get_bucket_name as config_bucket_name
 
 _GCS_CLIENT_CACHE = None
 logger = logging.getLogger(__name__)
+
+
+def _load_service_account_info(raw_value: str) -> dict | None:
+    if not raw_value:
+        return None
+
+    candidate = raw_value.strip()
+    if not candidate:
+        return None
+
+    if candidate.startswith("{"):
+        info = json.loads(candidate)
+    elif os.path.exists(candidate):
+        with open(candidate, "r", encoding="utf-8") as handle:
+            info = json.load(handle)
+    else:
+        raise ValueError("GCP_SERVICE_ACCOUNT_JSON must be raw JSON or a readable file path.")
+
+    if "private_key" in info and isinstance(info["private_key"], str):
+        info["private_key"] = info["private_key"].replace("\\n", "\n")
+    return info
 
 def get_gcs_client() -> storage.Client:
     global _GCS_CLIENT_CACHE
@@ -29,7 +51,7 @@ def get_gcs_client() -> storage.Client:
 
     if sa_json:
         try:
-            info = json.loads(sa_json)
+            info = _load_service_account_info(sa_json)
             credentials = service_account.Credentials.from_service_account_info(info)
             _GCS_CLIENT_CACHE = storage.Client(credentials=credentials, project=info["project_id"])
             return _GCS_CLIENT_CACHE

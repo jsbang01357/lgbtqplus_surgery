@@ -472,7 +472,7 @@ function setSessionChip(session) {
   }
 
   // Handle buttons visibility
-  if (navPasskeyRegister) navPasskeyRegister.hidden = !authorized;
+  if (navPasskeyRegister) navPasskeyRegister.hidden = !authorized || !!session?.passkey_registered;
   if (navLoginButton) navLoginButton.hidden = authorized;
   if (navLogoutButton) navLogoutButton.hidden = !authorized;
 
