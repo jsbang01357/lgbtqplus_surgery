@@ -81,16 +81,33 @@ ACCOUNT_SESSION_COOKIE = "jisong_account_session"
 ACCOUNT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 30
 ACCOUNT_SESSIONS_BLOB = "auth/account_sessions.json"
 
+import threading
+import time
+
+_SESSIONS_CACHE = None
+_SESSIONS_CACHE_EXPIRY = 0
+_SESSIONS_LOCK = threading.Lock()
 
 def _load_account_sessions() -> dict[str, str]:
-    try:
-        bucket = get_bucket()
-        blob = bucket.blob(ACCOUNT_SESSIONS_BLOB)
-        if blob.exists():
-            return json.loads(blob.download_as_text(encoding="utf-8"))
-    except Exception:
-        pass
-    return {}
+    global _SESSIONS_CACHE, _SESSIONS_CACHE_EXPIRY
+    if _SESSIONS_CACHE is not None and time.time() < _SESSIONS_CACHE_EXPIRY:
+        return _SESSIONS_CACHE
+        
+    with _SESSIONS_LOCK:
+        if _SESSIONS_CACHE is not None and time.time() < _SESSIONS_CACHE_EXPIRY:
+            return _SESSIONS_CACHE
+        try:
+            bucket = get_bucket()
+            blob = bucket.blob(ACCOUNT_SESSIONS_BLOB)
+            if blob.exists():
+                _SESSIONS_CACHE = json.loads(blob.download_as_text(encoding="utf-8"))
+            else:
+                _SESSIONS_CACHE = {}
+        except Exception:
+            _SESSIONS_CACHE = {} if _SESSIONS_CACHE is None else _SESSIONS_CACHE
+            
+        _SESSIONS_CACHE_EXPIRY = time.time() + 60
+        return _SESSIONS_CACHE
 
 
 def _save_account_sessions(sessions: dict[str, str]):
@@ -145,10 +162,12 @@ def _verify_account_session(request: Request, email: str) -> bool:
 
 
 def _create_account_session(email: str) -> str:
+    global _SESSIONS_CACHE
     token = secrets.token_urlsafe(32)
     sessions = _load_account_sessions()
     sessions[token] = email
     _save_account_sessions(sessions)
+    _SESSIONS_CACHE = sessions
     return token
 
 
@@ -240,8 +259,6 @@ async def session(request: Request):
         }
     )
 
-
-import time
 
 # Simple in-memory rate limiter for login
 login_attempts = {}  # {ip: [timestamp1, timestamp2, ...]}
