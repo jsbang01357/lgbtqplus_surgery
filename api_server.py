@@ -57,6 +57,7 @@ from app.ai import (
     _sum_usage_costs,
 )
 from app.folder_sync import get_folder_sync_service, start_folder_sync_service, stop_folder_sync_service
+from app.drive_sync import start_gdrive_sync_service
 from app.gcs_helper import get_bucket
 from app.core_utils import get_now
 from app.request_utils import get_client_ip
@@ -71,8 +72,24 @@ from app.text_cleaner import (
 from app.settlement import calculate_settlement
 from app.v6_bridge import ParserBridgeError, parser_bridge_available, run_v6_parse
 import json
+from google_auth_oauthlib.flow import Flow
+from google.oauth2.credentials import Credentials
 
 logger = logging.getLogger(__name__)
+
+# Suppress common warnings
+logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.ERROR)
+import mimetypes
+import os
+
+mimetypes.init()
+
+# Allow HTTP for OAuth2 during local development
+if os.getenv("GDRIVE_REDIRECT_URI", "").startswith("http://localhost"):
+    os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+
+GDRIVE_TOKEN_BLOB = "auth/gdrive_token.json"
+GDRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
 
 FRONTEND_DIR = (Path(__file__).resolve().parent / "frontend").resolve()
 MENU_JSON_PATH = Path(__file__).resolve().parent / "data" / "menu_list.json"
@@ -121,6 +138,10 @@ def _save_account_sessions(sessions: dict[str, str]):
 
 def _json(data, status_code=200):
     return JSONResponse(data, status_code=status_code)
+
+
+def _error(message, status_code=400):
+    return JSONResponse({"error": message}, status_code=status_code)
 
 
 def _render_frontend_html() -> str:
@@ -783,6 +804,92 @@ async def auth_logout(request: Request):
     return response
 
 
+async def gdrive_auth_url(request: Request):
+    try:
+        ok, message = _is_authorized(request)
+        if not ok:
+            return _error(message, 401)
+            
+        from app.config import get_gdrive_oauth_config
+        config = get_gdrive_oauth_config()
+        
+        if not config["client_id"] or not config["client_secret"]:
+            return _error("GDRIVE_CLIENT_ID 및 GDRIVE_CLIENT_SECRET이 설정되지 않았습니다.")
+            
+        client_config = {
+            "web": {
+                "client_id": config["client_id"],
+                "client_secret": config["client_secret"],
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+            }
+        }
+        
+        flow = Flow.from_client_config(
+            client_config,
+            scopes=GDRIVE_SCOPES,
+            redirect_uri=config["redirect_uri"]
+        )
+        
+        auth_url, _ = flow.authorization_url(access_type='offline', include_granted_scopes='true', prompt='consent')
+        return _json({"url": auth_url})
+    except Exception as e:
+        logger.exception("Failed to generate GDrive auth URL")
+        return _error(f"인증 URL 생성 중 오류가 발생했습니다: {str(e)}", 500)
+
+
+async def gdrive_auth_callback(request: Request):
+    try:
+        code = request.query_params.get("code")
+        if not code:
+            error_param = request.query_params.get("error")
+            if error_param:
+                return Response(f"<html><body><h3>Google 인증 거부됨</h3><p>{error_param}</p></body></html>", media_type="text/html")
+            return _error("Authorization code not found", 400)
+            
+        from app.config import get_gdrive_oauth_config
+        config = get_gdrive_oauth_config()
+        
+        client_config = {
+            "web": {
+                "client_id": config["client_id"],
+                "client_secret": config["client_secret"],
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+            }
+        }
+        
+        flow = Flow.from_client_config(
+            client_config,
+            scopes=GDRIVE_SCOPES,
+            redirect_uri=config["redirect_uri"]
+        )
+        
+        flow.fetch_token(code=code)
+        creds = flow.credentials
+        
+        # Save token to GCS
+        token_data = {
+            'token': creds.token,
+            'refresh_token': creds.refresh_token,
+            'token_uri': creds.token_uri,
+            'client_id': creds.client_id,
+            'client_secret': creds.client_secret,
+            'scopes': creds.scopes
+        }
+        bucket = get_bucket()
+        blob = bucket.blob(GDRIVE_TOKEN_BLOB)
+        blob.upload_from_string(json.dumps(token_data), content_type="application/json")
+        
+        return Response(
+            "<html><head><meta charset='UTF-8'></head><body><h3>Google Drive 연결 성공!</h3><p>이 창을 닫고 앱을 새로고침 하세요.</p><script>setTimeout(() => window.close(), 3000)</script></body></html>",
+            media_type="text/html"
+        )
+    except Exception as e:
+        logger.exception("GDrive callback failed")
+        return Response(f"<html><body><h3>오류 발생</h3><p>{str(e)}</p></body></html>", media_type="text/html")
+
+
 async def files_list(request: Request):
     ok, message = _is_authorized(request)
     if not ok:
@@ -898,6 +1005,59 @@ async def files_zip(request: Request):
         filename="jisong-cloud-files.zip",
         background=BackgroundTask(os.remove, zip_path)
     )
+
+
+async def files_get_content(request: Request):
+    ok, message = _is_authorized(request)
+    if not ok:
+        return _json({"error": message}, status_code=401)
+    
+    blob_name = request.query_params.get("blob_name")
+    if not blob_name:
+        return _json({"error": "blob_name is required"}, status_code=400)
+        
+    try:
+        bucket = get_bucket()
+        blob = bucket.blob(blob_name)
+        if not blob.exists():
+            return _json({"error": "File not found"}, status_code=404)
+            
+        content = blob.download_as_text(encoding="utf-8")
+        return _json({"content": content})
+    except Exception as e:
+        return _json({"error": str(e)}, status_code=500)
+
+
+async def files_save_content(request: Request):
+    ok, message = _is_authorized(request)
+    if not ok:
+        return _json({"error": message}, status_code=401)
+    
+    try:
+        payload = await request.json()
+        blob_name = payload.get("blob_name")
+        content = payload.get("content")
+        
+        if not blob_name:
+            return _json({"error": "blob_name is required"}, status_code=400)
+            
+        bucket = get_bucket()
+        blob = bucket.blob(blob_name)
+        
+        # Determine content type
+        content_type = "text/plain; charset=utf-8"
+        if blob_name.lower().endswith(".md"):
+            content_type = "text/markdown; charset=utf-8"
+            
+        blob.upload_from_string(content, content_type=content_type)
+        
+        # Invalidate caches
+        list_uploaded_files_cached.clear()
+        load_memo_list_cached.clear()
+        
+        return _json({"status": "ok"})
+    except Exception as e:
+        return _json({"error": str(e)}, status_code=500)
 
 
 async def memos_list(request: Request):
@@ -1078,11 +1238,15 @@ routes = [
     Route("/api/auth/passkey/login/verify", passkey_login_verify, methods=["POST"]),
     Route("/api/auth/logout", auth_logout, methods=["POST"]),
     Route("/api/auth/account/login", account_login, methods=["POST"]),
+    Route("/api/auth/gdrive/url", gdrive_auth_url, methods=["GET"]),
+    Route("/api/auth/gdrive/callback", gdrive_auth_callback, methods=["GET"]),
     Route("/api/files", files_list, methods=["GET"]),
     Route("/api/files", files_upload, methods=["POST"]),
     Route("/api/files/download", files_download, methods=["GET"]),
     Route("/api/files/delete", files_delete, methods=["POST"]),
     Route("/api/files/zip", files_zip, methods=["GET"]),
+    Route("/api/files/content", files_get_content, methods=["GET"]),
+    Route("/api/files/content", files_save_content, methods=["POST"]),
     Route("/api/memos", memos_list, methods=["GET"]),
     Route("/api/memos", memo_save, methods=["POST"]),
     Route("/api/memos/delete", memo_delete, methods=["POST"]),
@@ -1124,6 +1288,7 @@ def _cleanup_expired_sessions():
 @asynccontextmanager
 async def lifespan(_app):
     start_folder_sync_service()
+    start_gdrive_sync_service()
     _cleanup_expired_sessions()
     try:
         yield

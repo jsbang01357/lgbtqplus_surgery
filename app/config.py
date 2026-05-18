@@ -98,6 +98,18 @@ def get_bucket_name() -> str:
     return get_config("GCS_BUCKET_NAME", "jisong-cloud-storage")
 
 
+def get_gdrive_folder_id() -> str:
+    return get_config("GDRIVE_FOLDER_ID", "1CwDmMwubRla-8NbbKKXgQOoEvzxuMKzF")
+
+
+def get_gdrive_oauth_config() -> dict:
+    return {
+        "client_id": get_config("GDRIVE_CLIENT_ID", ""),
+        "client_secret": get_config("GDRIVE_CLIENT_SECRET", ""),
+        "redirect_uri": get_config("GDRIVE_REDIRECT_URI", "http://localhost:8080/api/auth/gdrive/callback"),
+    }
+
+
 def get_bool_config(key: str, default: bool = False) -> bool:
     raw = os.getenv(key)
     if raw is None or raw.strip() == "":
