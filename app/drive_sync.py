@@ -1,11 +1,12 @@
 import io
+import json
 import logging
 import threading
 import time
 from datetime import datetime
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
-from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials
 
 from app.config import get_bucket_name, get_gdrive_folder_id, get_secrets_dict
 from app.gcs_helper import get_bucket
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 # --- Configuration ---
 SYNC_INTERVAL = 300  # 5 minutes
-SYNC_STATE_BLOB = "auth/drive_sync_state.json"
+GDRIVE_TOKEN_BLOB = "auth/gdrive_token.json"
 
 class GDriveSyncService:
     def __init__(self):
@@ -28,22 +29,33 @@ class GDriveSyncService:
 
     def _get_drive_service(self):
         if self._drive_service:
+            # Check if token needs refresh (discovery build handles some of this, 
+            # but we should ideally refresh if expired)
             return self._drive_service
         
-        secrets = get_secrets_dict()
-        sa_info = secrets.get("gcp_service_account")
-        if not sa_info:
-            logger.error("Service account info not found in secrets.")
-            return None
-        
         try:
-            creds = service_account.Credentials.from_service_account_info(
-                sa_info, scopes=["https://www.googleapis.com/auth/drive"]
+            bucket = get_bucket()
+            blob = bucket.blob(GDRIVE_TOKEN_BLOB)
+            if not blob.exists():
+                logger.warning("Google Drive OAuth token not found in GCS. Sync disabled.")
+                return None
+            
+            token_data = json.loads(blob.download_as_text())
+            creds = Credentials(
+                token=token_data.get('token'),
+                refresh_token=token_data.get('refresh_token'),
+                token_uri=token_data.get('token_uri'),
+                client_id=token_data.get('client_id'),
+                client_secret=token_data.get('client_secret'),
+                scopes=token_data.get('scopes')
             )
+            
+            # Discovery build will use the credentials and automatically refresh if needed 
+            # (if refresh_token is present)
             self._drive_service = build("drive", "v3", credentials=creds)
             return self._drive_service
         except Exception as e:
-            logger.error(f"Failed to initialize Drive API: {e}")
+            logger.error(f"Failed to initialize Drive API via OAuth2: {e}")
             return None
 
     def _get_or_create_folder(self, path_parts):
@@ -85,55 +97,54 @@ class GDriveSyncService:
         if not service:
             return
 
-        logger.info("Starting GCS to Drive sync...")
+        logger.info("Starting GCS to Drive sync (OAuth2)...")
         bucket = get_bucket()
         blobs = bucket.list_blobs()
         
-        # Get existing files in the root folder to compare
-        # In a production environment, we'd use a state file or more efficient queries.
-        # For now, we'll traverse and sync.
-        
         sync_count = 0
         for blob in blobs:
-            if blob.name.endswith("/") or blob.name == SYNC_STATE_BLOB:
+            if blob.name.endswith("/") or blob.name.startswith("auth/"):
                 continue
 
             path_parts = blob.name.split("/")
             file_name = path_parts.pop()
             parent_id = self._get_or_create_folder(path_parts) if path_parts else self.folder_id
 
-            # Check if file exists and compare MD5
-            # Note: GCS md5_hash is base64 encoded, Drive md5Checksum is hex.
-            # However, Drive API 'list' is expensive. Let's try to get the specific file.
+            # Check if file exists and compare size
             query = f"name = '{file_name}' and '{parent_id}' in parents and trashed = false"
-            results = service.files().list(q=query, fields='files(id, md5Checksum, size)').execute()
-            drive_files = results.get('files', [])
+            try:
+                results = service.files().list(q=query, fields='files(id, md5Checksum, size)').execute()
+                drive_files = results.get('files', [])
+            except Exception as e:
+                logger.error(f"Failed to list files in Drive for {blob.name}: {e}")
+                continue
 
             needs_upload = True
             drive_file_id = None
             if drive_files:
                 drive_file = drive_files[0]
                 drive_file_id = drive_file['id']
-                # If size matches, we assume it's same for simplicity in this version
-                # Better: compare MD5
                 if int(drive_file.get('size', 0)) == blob.size:
                     needs_upload = False
 
             if needs_upload:
                 logger.info(f"Syncing {blob.name} to Drive...")
-                blob_data = blob.download_as_bytes()
-                fh = io.BytesIO(blob_data)
-                media = MediaIoBaseUpload(fh, mimetype=blob.content_type, resumable=True)
-                
-                if drive_file_id:
-                    # Update existing file
-                    service.files().update(fileId=drive_file_id, media_body=media).execute()
-                else:
-                    # Create new file
-                    file_metadata = {'name': file_name, 'parents': [parent_id]}
-                    service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-                
-                sync_count += 1
+                try:
+                    blob_data = blob.download_as_bytes()
+                    fh = io.BytesIO(blob_data)
+                    media = MediaIoBaseUpload(fh, mimetype=blob.content_type, resumable=True)
+                    
+                    if drive_file_id:
+                        # Update existing file
+                        service.files().update(fileId=drive_file_id, media_body=media).execute()
+                    else:
+                        # Create new file
+                        file_metadata = {'name': file_name, 'parents': [parent_id]}
+                        service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+                    
+                    sync_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to upload {blob.name} to Drive: {e}")
 
         logger.info(f"GCS to Drive sync finished. Updated {sync_count} files.")
 

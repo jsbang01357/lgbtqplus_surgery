@@ -224,7 +224,7 @@ function buildFileTree(files) {
     parts.forEach((part, i) => {
       const isLast = i === parts.length - 1;
       const path = parts.slice(0, i + 1).join("/");
-      
+
       // We only care about folders in the tree view for navigation
       if (!isLast) {
         if (!current.children[part]) {
@@ -256,14 +256,9 @@ function renderTree(node, container, depth = 0) {
   }
 
   const keys = Object.keys(node.children).sort();
-  if (keys.length === 0 && depth === 0 && state.currentStorage === "workspace") {
-    container.innerHTML += '<p class="source-empty">폴더가 없습니다.</p>';
-    return;
-  }
-
   const childrenContainer = document.createElement("div");
   childrenContainer.className = "tree-children";
-  
+
   keys.forEach((key) => {
     const child = node.children[key];
     const item = document.createElement("div");
@@ -276,13 +271,13 @@ function renderTree(node, container, depth = 0) {
       e.stopPropagation();
       state.currentPath = child.path;
       renderFiles();
-      renderTree(buildFileTree(state.workspaceFiles), container);
+      renderTree(buildFileTree(state.unifiedFiles), container);
     };
-    
+
     const nodeWrapper = document.createElement("div");
     nodeWrapper.className = "tree-node";
     nodeWrapper.appendChild(item);
-    
+
     container.appendChild(nodeWrapper);
     renderTree(child, nodeWrapper, depth + 1);
   });
@@ -970,8 +965,8 @@ function renderFiles() {
   });
 
   if (currentFolderName) {
-    currentFolderName.textContent = state.currentStorage === "uploads" 
-      ? "클라우드 업로드" 
+    currentFolderName.textContent = state.currentStorage === "uploads"
+      ? "클라우드 업로드"
       : (state.currentPath || "워크스페이스 전체");
   }
 
@@ -1009,7 +1004,7 @@ function renderFiles() {
         <p>선택한 폴더에 파일이 없습니다.</p>
       </div>
     `;
-  
+
   const totalCount = state.currentStorage === "uploads" ? state.files.length : state.workspaceFiles.length;
   if (fileCount) fileCount.textContent = String(totalCount);
   if (fileListStatus) {
@@ -1388,6 +1383,14 @@ async function bootstrap() {
   });
   document.querySelector("#settings-refresh")?.addEventListener("click", async () => {
     await loadSession(); await loadSettings(); showToast("새로고침 완료");
+  });
+  document.querySelector("#gdrive-connect-btn")?.addEventListener("click", async () => {
+    try {
+      const data = await apiJson("/api/auth/gdrive/url");
+      window.open(data.url, "_blank", "width=600,height=700");
+    } catch (err) {
+      showToast("인증 URL 생성 실패: " + err.message);
+    }
   });
   folderSyncRescanButton?.addEventListener("click", async () => {
     try {
@@ -1819,4 +1822,29 @@ async function bootstrap() {
     });
   }
 }
+bootstrap();
+tener("input", () => {
+  if (!state.editingMemoFileName) return;
+  clearTimeout(autoSaveTimeout);
+  autoSaveTimeout = setTimeout(() => {
+    saveMemo(true); // silent save
+  }, 2000);
+});
+
+if (geminiSettingsSaveBtn) {
+  if (geminiExchangeRateInput) geminiExchangeRateInput.value = localStorage.getItem("geminiExchangeRate") || "1400";
+  if (geminiCostMultiplierInput) geminiCostMultiplierInput.value = localStorage.getItem("geminiCostMultiplier") || "1.0";
+
+  geminiSettingsSaveBtn.addEventListener("click", async () => {
+    if (geminiExchangeRateInput && geminiExchangeRateInput.value) {
+      localStorage.setItem("geminiExchangeRate", geminiExchangeRateInput.value);
+    }
+    if (geminiCostMultiplierInput && geminiCostMultiplierInput.value) {
+      localStorage.setItem("geminiCostMultiplier", geminiCostMultiplierInput.value);
+    }
+    showToast("Gemini 요금 설정이 저장되었습니다.");
+    await Promise.all([loadUsageSummary(), loadSettings()]);
+  });
+}
+
 bootstrap();

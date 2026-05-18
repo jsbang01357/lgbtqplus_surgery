@@ -1969,3 +1969,20 @@ body:not(.is-authorized) .footer {
     max-height: none;
   }
 }
+
+/* Editor Overlay */
+.memo-editor-overlay {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
+  border: 2px solid var(--color-primary);
+  animation: fadeIn 0.3s ease;
+}
+
+.memo-editor-overlay textarea {
+  min-height: 400px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 15px;
+  line-height: 1.6;
+}
