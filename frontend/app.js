@@ -156,6 +156,8 @@ function setActivePage(page = pageFromLocation(), options = {}) {
 
   // Toggle global navigation and footer visibility
   const isLoginPage = nextPage === "login";
+  document.documentElement.setAttribute("data-active-page", nextPage);
+  document.body.setAttribute("data-router-ready", "true");
   document.querySelectorAll(".global-nav, .sub-nav, .footer").forEach((el) => {
     el.hidden = isLoginPage;
   });
@@ -1125,6 +1127,7 @@ function updateAiSourceStatus() {
 
 async function bootstrap() {
   bindRoutes();
+  setActivePage("login", { skipHistory: true });
 
   // Login page logic
   const loginTabs = document.querySelectorAll(".login-tab");
@@ -1161,8 +1164,8 @@ async function bootstrap() {
       const session = await loadSession();
       if (session?.authorized) {
         showToast("로그인 성공");
-        await Promise.all([loadFiles(), loadMemos(), loadUsageSummary()]);
         setActivePage("home");
+        await Promise.all([loadFiles(), loadMemos(), loadUsageSummary()]);
       }
     } catch (error) {
       showToast(error.message);
@@ -1224,8 +1227,11 @@ async function bootstrap() {
     setBusy(btn, "로그인 중", true);
     try {
       await postJson("/api/auth/account/login", { account_id: email, password });
-      await loadSession();
-      showToast("로그인 성공");
+      const session = await loadSession();
+      if (session?.authorized) {
+        setActivePage("settings");
+        showToast("로그인 성공");
+      }
     } catch (err) {
       showToast(err.message);
     } finally {
@@ -1633,7 +1639,7 @@ async function bootstrap() {
     catch (err) { showToast(err.message); }
   });
 
-  setActivePage(pageFromLocation(), { skipHistory: true });
+  setActivePage(session?.authorized ? pageFromLocation() : "login", { skipHistory: true });
 
   // Drag & Drop
   const filesSection = document.querySelector("#files");

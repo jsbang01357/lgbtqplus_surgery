@@ -81,6 +81,17 @@ body {
   min-height: 100vh;
 }
 
+body[data-router-ready="false"] .global-nav,
+body[data-router-ready="false"] .sub-nav,
+body[data-router-ready="false"] .footer,
+body[data-router-ready="false"] [data-page] {
+  display: none !important;
+}
+
+body[data-router-ready="false"] [data-page="login"] {
+  display: flex !important;
+}
+
 main {
   flex: 1;
 }
