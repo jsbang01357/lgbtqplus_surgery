@@ -6,7 +6,7 @@
     <title>jCloud</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body>
+  <body data-router-ready="false">
     <header class="global-nav" aria-label="Global">
       <div class="nav-left">
         <div class="system-info">
@@ -54,7 +54,7 @@
         <nav class="sub-links" aria-label="Workspace">
           <a href="/files" data-route="files">웹하드</a>
           <a href="/memos" data-route="memos">메모장</a>
-          <a href="/ai" data-route="ai">AI</a>
+          <a href="/ai" data-route="ai">Intake</a>
           <a href="/tools" data-route="tools">도구모음</a>
         </nav>
       </div>
@@ -79,8 +79,7 @@
     </main>
 
     <footer class="footer">
-      <p>jCloud · Cloud Run</p>
-      <p>Passkey, Account ID, GCS, Gemini 기준으로 동작합니다.</p>
+      <p>jCloud · V 6.0 / 260518</p>
     </footer>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>

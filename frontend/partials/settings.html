@@ -87,6 +87,18 @@
     <article class="utility-card settings-card settings-card-wide">
       <div class="card-toolbar">
         <div>
+          <h3>폴더 자동싱크</h3>
+          <small id="sync-status">로컬 폴더와 GCS 상태</small>
+        </div>
+        <button class="button button-secondary button-small" id="folder-sync-rescan" type="button">지금 동기화</button>
+      </div>
+      <div class="tool-metrics settings-metrics" id="folder-sync-metrics"></div>
+      <div class="settings-list" id="folder-sync-list"></div>
+    </article>
+
+    <article class="utility-card settings-card settings-card-wide">
+      <div class="card-toolbar">
+        <div>
           <h3>접속 기록 분석</h3>
           <small id="access-log-status">최근 접속 기록</small>
         </div>

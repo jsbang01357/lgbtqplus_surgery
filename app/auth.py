@@ -3,6 +3,7 @@ import time
 import streamlit as st
 
 from app.config import get_admin_password
+from app.streamlit_compat import render_inline_html
 
 MAX_LOGIN_FAILURES = 5
 LOGIN_LOCK_SECONDS = 600
@@ -87,14 +88,26 @@ def login_screen():
         <script>
         // unique execution: {time.time()}
         function focusInput() {{
-            var doc = window.parent.document;
-            var input = doc.querySelector('input[type="password"]');
-            if (input) {{ input.focus(); return true; }}
+            var docs = [document];
+            try {{
+                if (window.parent && window.parent !== window) {{
+                    docs.push(window.parent.document);
+                }}
+            }} catch (e) {{}}
+            for (var i = 0; i < docs.length; i++) {{
+                var input = docs[i].querySelector('input[type="password"]');
+                if (input) {{ input.focus(); return true; }}
+            }}
             return false;
         }}
         if (!focusInput()) {{
-            var interval = setInterval(function() {{ if (focusInput()) {{ clearInterval(interval); }} }}, 100);
-            setTimeout(function() {{ clearInterval(interval); }}, 2000);
+            var attempts = 0;
+            var interval = setInterval(function() {{
+                attempts += 1;
+                if (focusInput() || attempts >= 20) {{
+                    clearInterval(interval);
+                }}
+            }}, 100);
         }}
         </script>
         """,

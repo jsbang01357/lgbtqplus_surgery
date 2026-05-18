@@ -5,11 +5,12 @@ import zipfile
 import io
 import time
 import random
+import tempfile
+import os
 from pathlib import PurePosixPath
 
 from app.core_utils import get_now, safe_filename, slugify, ttl_cache
 from app.streamlit_compat import render_inline_html
-from components.custom_copy_btn import copy_to_clipboard
 from app.gcs_helper import get_bucket
 
 MEMO_PREFIX = "memos"
@@ -129,9 +130,15 @@ def save_memo_txt(title, content, original_file_name=None):
         blob = bucket.blob(blob_name)
 
         created_at = timestamp
+        generation = 0
         if blob.exists():
-            old = load_single_memo_content(original_file_name)
-            created_at = old["created_at"] or timestamp
+            try:
+                blob.reload()
+                generation = blob.generation or 0
+                old = load_single_memo_content(original_file_name)
+                created_at = old.get("created_at") or timestamp
+            except Exception:
+                generation = 0
 
         payload = _build_memo_payload(title, content, created_at, timestamp)
         blob.metadata = {
@@ -139,9 +146,15 @@ def save_memo_txt(title, content, original_file_name=None):
             "created_at": created_at,
             "updated_at": timestamp,
         }
-        blob.upload_from_string(
-            payload.encode("utf-8"), content_type="text/plain; charset=utf-8"
-        )
+        try:
+            blob.upload_from_string(
+                payload.encode("utf-8"),
+                content_type="text/plain; charset=utf-8",
+                if_generation_match=generation,
+            )
+        except Exception as exc:
+            logger.warning(f"메모 저장 중 동시성 충돌 발생: {exc}")
+            raise RuntimeError("다른 사용자가 이 메모를 수정했습니다. 다시 시도해주세요.")
 
         load_memo_list_cached.clear()
         load_single_memo_content.clear()
@@ -188,9 +201,9 @@ def delete_memo_txt(file_name):
 def clear_all_memos():
     bucket = get_bucket()
     blobs = list(bucket.list_blobs(prefix=f"{MEMO_PREFIX}/"))
-    for blob in blobs:
-        blob.delete()
-
+    if blobs:
+        bucket.delete_blobs(blobs)
+    
     load_memo_list_cached.clear()
     load_single_memo_content.clear()
     create_zip_of_memos.clear()
@@ -201,16 +214,18 @@ def create_zip_of_memos(memo_list):
     if not memo_list:
         return None
 
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+    bucket = get_bucket()
+    fd, temp_path = tempfile.mkstemp(suffix=".zip")
+    os.close(fd)
+
+    with zipfile.ZipFile(temp_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for m in memo_list:
             memo_full = load_single_memo_content(m["file_name"])
             safe_name = safe_filename(memo_full["title"]) or "memo"
             file_name = f"{safe_name}.txt"
             zf.writestr(file_name, memo_full["content"].encode("utf-8"))
 
-    zip_buffer.seek(0)
-    return zip_buffer
+    return temp_path
 
 
 def _memo_preview(content: str, limit: int = 120) -> str:
@@ -322,11 +337,15 @@ def render_memo_manager():
     if not memos_list:
         st.info("저장된 메모가 없습니다.")
 
-    memo_query = st.text_input(
-        "메모 검색",
-        placeholder="제목이나 내용으로 찾기",
-        key="memo_search_query",
-    ).strip().lower()
+    memo_query = (
+        st.text_input(
+            "메모 검색",
+            placeholder="제목이나 내용으로 찾기",
+            key="memo_search_query",
+        )
+        .strip()
+        .lower()
+    )
 
     filtered_memos = []
     for memo in memos_list:
@@ -382,11 +401,15 @@ def render_memo_manager():
                     f"수정시간: {memo_full['updated_at']}\n\n"
                     f"{cont}"
                 )
-                copy_to_clipboard(
-                    text=copy_text,
-                    before_copy_label="복사",
-                    after_copy_label="✅ 완료",
-                    key=f"out_copy_{fname}",
+
+                # Fallback for missing custom_copy_btn component
+                render_inline_html(
+                    f"""
+                    <button onclick="navigator.clipboard.writeText(`{html.escape(copy_text)}`); this.innerText='✅ 완료'; setTimeout(() => this.innerText='복사', 2000);" 
+                            style="padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; font-size: 0.8rem;">
+                        복사
+                    </button>
+                    """
                 )
 
             with col_dl:
@@ -416,7 +439,9 @@ def render_memo_manager():
                 )
 
                 edit_title = st.text_input(
-                    "제목 수정", value=memo_full["title"], key=f"edit_title_{idx}_{fname}"
+                    "제목 수정",
+                    value=memo_full["title"],
+                    key=f"edit_title_{idx}_{fname}",
                 )
 
                 line_count = cont.count("\n") + 1

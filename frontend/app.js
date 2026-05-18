@@ -1,19 +1,6 @@
-const files = [
-  { name: "SOAP 발표 정리.pdf", type: "PDF", size: "3.4 MB", updated: "오늘 22:14" },
-  { name: "임상 QnA 메모.docx", type: "DOC", size: "980 KB", updated: "어제 19:02" },
-  { name: "검사결과 요약.xlsx", type: "XLS", size: "620 KB", updated: "05/14 08:31" },
-];
+import { renderToolPanel } from "./tool-panel.js";
 
-const memos = [
-  {
-    title: "교수님께 질문할 내용",
-    body: "치료 우선순위, 추적 검사 기준, 설명할 때 놓치기 쉬운 위험 신호를 확인하기.",
-  },
-  {
-    title: "발표 구조",
-    body: "주호소, 검사 결과, 판단 근거, 계획 순서로 1분 안에 말할 수 있게 정리.",
-  },
-];
+
 
 const presets = [
   "SOAP 1분 발표",
@@ -23,15 +10,20 @@ const presets = [
 ];
 
 const state = {
-  files: [...files],
-  memos: [...memos],
+  files: [],
+  memos: [],
   session: null,
   usesDemoData: true,
   fileQuery: "",
   memoQuery: "",
   editingMemoFileName: "",
   lastAiResult: "",
+  lastParsedData: null,
+  editingDocIdx: null,
+  selectedDocIndices: [],
 };
+
+const DEFAULT_GEMINI_COST_MULTIPLIER = "1.0";
 
 const fileList = document.querySelector("#file-list");
 const memoList = document.querySelector("#memo-list");
@@ -57,13 +49,12 @@ const downloadAiMdButton = document.querySelector("#download-ai-md");
 const downloadAiPdfButton = document.querySelector("#download-ai-pdf");
 const downloadCurrentMemoButton = document.querySelector("#download-current-memo");
 const toolOutput = document.querySelector("#tool-output");
-const heroFileSummary = document.querySelector("#hero-file-summary");
 const heroFileList = document.querySelector("#hero-file-list");
 const heroMemoPreview = document.querySelector("#hero-memo-preview");
-const heroMemoSummary = document.querySelector("#hero-memo-summary");
 const geminiExchangeRateInput = document.querySelector("#gemini-exchange-rate");
 const geminiCostMultiplierInput = document.querySelector("#gemini-cost-multiplier");
 const geminiSettingsSaveBtn = document.querySelector("#gemini-settings-save");
+const folderSyncRescanButton = document.querySelector("#folder-sync-rescan");
 const aiFileSources = document.querySelector("#ai-file-sources");
 const aiMemoSources = document.querySelector("#ai-memo-sources");
 const aiFileStatus = document.querySelector("#ai-file-status");
@@ -75,9 +66,9 @@ const defaultPage = "home";
 function updateClock() {
   const now = new Date();
   if (navTime) {
-    navTime.textContent = now.toLocaleTimeString("ko-KR", { 
-      hour12: true, 
-      hour: "2-digit", 
+    navTime.textContent = now.toLocaleTimeString("ko-KR", {
+      hour12: true,
+      hour: "2-digit",
       minute: "2-digit"
     });
   }
@@ -121,7 +112,7 @@ function formatUpdated(value) {
 function getFileIconHtml(name = "") {
   const ext = (name.split(".").pop() || "").toLowerCase();
   let iconName = "generic";
-  
+
   if (["zip", "tar", "gz", "rar", "7z"].includes(ext)) iconName = "archive";
   else if (["xls", "xlsx", "csv"].includes(ext)) iconName = "excel";
   else if (["jpg", "jpeg", "png", "gif", "svg", "webp"].includes(ext)) iconName = "image";
@@ -167,6 +158,8 @@ function setActivePage(page = pageFromLocation(), options = {}) {
 
   // Toggle global navigation and footer visibility
   const isLoginPage = nextPage === "login";
+  document.documentElement.setAttribute("data-active-page", nextPage);
+  document.body.setAttribute("data-router-ready", "true");
   document.querySelectorAll(".global-nav, .sub-nav, .footer").forEach((el) => {
     el.hidden = isLoginPage;
   });
@@ -328,7 +321,7 @@ function updateHeroPreview() {
       )
       .join("") || `<p class="source-empty">표시할 파일이 없습니다.</p>`;
   }
-  
+
   if (heroMemoPreview) {
     const firstMemo = state.memos[0];
     heroMemoPreview.textContent = firstMemo
@@ -519,6 +512,9 @@ async function loadSession() {
     return session;
   } catch (error) {
     console.error("Session load failed:", error);
+    state.session = null;
+    setSessionChip(null);
+    renderSettingsAuth(null);
     if (navStatusText) navStatusText.textContent = "오프라인";
     if (navStatusIndicator) navStatusIndicator.className = "status-indicator is-locked";
     return null;
@@ -562,6 +558,12 @@ async function loadMemos() {
   renderMemos();
   updateHeroPreview();
   renderAiSources();
+}
+
+async function loadMemoDetail(fileName) {
+  if (!fileName) return null;
+  const data = await apiJson(`/api/memos/${encodeURIComponent(fileName)}`);
+  return data.memo || null;
 }
 
 async function loadUsageSummary() {
@@ -715,6 +717,7 @@ async function loadSettings() {
   if (!state.session?.authorized) {
     renderAccessLogSettings({ logs: [] });
     renderGeminiUsageSettings({ daily: [] });
+    renderSyncSettings({ file_records: [] });
     return;
   }
   try {
@@ -728,8 +731,10 @@ async function loadSettings() {
       apiJson("/api/settings/access-logs"),
       apiJson(`/api/settings/gemini-usage?${query.toString()}`),
     ]);
+    const syncStatus = await apiJson("/api/sync/status");
     renderAccessLogSettings(accessLogs);
     renderGeminiUsageSettings(geminiUsage);
+    renderSyncSettings(syncStatus);
   } catch (error) {
     showToast(error.message);
   }
@@ -762,6 +767,45 @@ function renderSettingsStorage() {
     <article><span>저장소</span><strong>GCS</strong></article>
     <article><span>런타임</span><strong>Cloud Run</strong></article>
   `;
+}
+
+function renderSyncSettings(data = {}) {
+  const metrics = document.querySelector("#folder-sync-metrics");
+  const list = document.querySelector("#folder-sync-list");
+  const status = document.querySelector("#sync-status");
+  if (!metrics || !list || !status) return;
+
+  const lastResult = data.last_result || {};
+  const fileRecords = data.file_records || [];
+  status.textContent = data.enabled
+    ? `${data.root || "-"} · ${data.running ? "실행 중" : "대기"}`
+    : "비활성";
+
+  metrics.innerHTML = `
+    <article><span>상태</span><strong>${data.enabled ? (data.running ? "Running" : "Idle") : "Off"}</strong></article>
+    <article><span>루트</span><strong>${escapeHtml(data.root || "-")}</strong></article>
+    <article><span>업로드</span><strong>${Number(lastResult.uploaded || 0).toLocaleString()}</strong></article>
+    <article><span>충돌</span><strong>${Number(lastResult.conflicts || 0).toLocaleString()}</strong></article>
+  `;
+
+  const records = fileRecords.slice(-8).reverse();
+  list.innerHTML = records.length
+    ? records
+      .map((row) => {
+        const badge = row.status || "skipped";
+        const conflict = row.conflict_blob_name
+          ? `<small>conflict: ${escapeHtml(row.conflict_blob_name)}</small>`
+          : "";
+        return `
+            <article class="settings-row">
+              <strong>${escapeHtml(row.relative_path || row.blob_name || "-")}</strong>
+              <span>${escapeHtml(badge)} · ${escapeHtml(row.synced_at || "-")}</span>
+              ${conflict}
+            </article>
+          `;
+      })
+      .join("")
+    : `<p class="empty-state">동기화 기록이 없습니다.</p>`;
 }
 
 function renderAccessLogSettings(data) {
@@ -870,12 +914,11 @@ function renderMemos() {
           <p>${highlightMatch(memo.body, state.memoQuery)}</p>
           <div class="memo-actions">
             ${memo.updated ? `<small>${escapeHtml(memo.updated)}</small>` : "<small>미리보기</small>"}
-            ${
-              memo.fileName
-                ? `<button class="text-button" type="button" data-memo-open="${index}">열기</button>
+            ${memo.fileName
+          ? `<button class="text-button" type="button" data-memo-open="${index}">열기</button>
                    <button class="text-button" type="button" data-memo-delete="${index}">삭제</button>`
-                : ""
-            }
+          : ""
+        }
           </div>
         </article>
       `,
@@ -907,39 +950,177 @@ function renderPresets() {
     .join("");
 }
 
+function renderParsedDocuments() {
+  const data = state.lastParsedData;
+  if (!data || !data.documents) return;
+
+  let html = `<div style="border-bottom: 2px solid var(--neutral-20); padding-bottom: 8px; margin-bottom: 16px; display:flex; justify-content:space-between; align-items:center;">
+    <div>
+      <span style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: var(--neutral-50);">Pipeline Result</span>
+      <h3 style="margin: 4px 0 0 0; color: var(--neutral-90);">Extracted Artifacts (${data.documents.length})</h3>
+    </div>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <span style="font-size:0.75rem; color:var(--neutral-50);">* 검수 완료 후 동기화하세요</span>
+    </div>
+  </div>`;
+
+  if (state.selectedDocIndices.length > 0) {
+    html += `
+    <div style="background: var(--blue-50); color: white; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 12px rgba(0,90,158,0.2);">
+      <span style="font-weight: 600; font-size: 0.9rem;">${state.selectedDocIndices.length}개 선택됨</span>
+      <div style="display: flex; gap: 8px;">
+        <button type="button" class="button" id="bulk-add-tag" style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 4px 10px; font-size: 0.8rem;">태그 추가</button>
+        <button type="button" class="button" id="bulk-delete" style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 4px 10px; font-size: 0.8rem;">삭제</button>
+        <button type="button" class="button" id="bulk-clear" style="background: transparent; border: none; color: white; padding: 4px 10px; font-size: 0.8rem; text-decoration: underline;">취소</button>
+      </div>
+    </div>`;
+  }
+
+  html += `<div style="display: flex; flex-direction: column; gap: 16px;">`;
+  data.documents.forEach((doc, index) => {
+    const isEditing = state.editingDocIdx === index;
+    const isSelected = state.selectedDocIndices.includes(index);
+    const isCsv = doc.kind === "lab" || doc.kind === "medication";
+    const icon = isCsv ? "📊" : "📝";
+
+    if (isEditing) {
+      html += `
+        <div style="background:#fff; border-radius:8px; border:2px solid var(--blue-50); box-shadow: 0 4px 12px rgba(0,90,158,0.15); overflow: hidden;">
+          <div style="background:var(--neutral-10); padding:12px 16px; border-bottom:1px solid var(--neutral-20);">
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <div>
+                <label style="display:block; font-size:0.75rem; font-weight:600; color:var(--neutral-60); margin-bottom:4px;">File Relative Path</label>
+                <input type="text" id="edit-doc-path" class="input" value="${escapeHtml(doc.relativePath)}" style="width:100%; font-family:monospace; font-size:0.85rem; padding:6px 10px;">
+              </div>
+              <div style="display:flex; gap:12px;">
+                <div style="flex:1;">
+                  <label style="display:block; font-size:0.75rem; font-weight:600; color:var(--neutral-60); margin-bottom:4px;">Title</label>
+                  <input type="text" id="edit-doc-title" class="input" value="${escapeHtml(doc.metadata.title)}" style="width:100%; font-size:0.85rem; padding:6px 10px;">
+                </div>
+                <div style="flex:1;">
+                  <label style="display:block; font-size:0.75rem; font-weight:600; color:var(--neutral-60); margin-bottom:4px;">Tags (comma separated)</label>
+                  <input type="text" id="edit-doc-tags" class="input" value="${escapeHtml(doc.metadata.tags?.join(", "))}" style="width:100%; font-size:0.85rem; padding:6px 10px;">
+                </div>
+              </div>
+              <div style="display:flex; gap:12px;">
+                <div style="flex:1;">
+                  <label style="display:block; font-size:0.75rem; font-weight:600; color:var(--neutral-60); margin-bottom:4px;">Modality Kind</label>
+                  <select id="edit-doc-kind" class="input" style="width:100%; padding:6px 10px;">
+                    <option value="note" ${doc.kind === "note" ? "selected" : ""}>note (MD)</option>
+                    <option value="lab" ${doc.kind === "lab" ? "selected" : ""}>lab (CSV)</option>
+                    <option value="medication" ${doc.kind === "medication" ? "selected" : ""}>medication (CSV)</option>
+                    <option value="imaging" ${doc.kind === "imaging" ? "selected" : ""}>imaging (MD)</option>
+                    <option value="pathology" ${doc.kind === "pathology" ? "selected" : ""}>pathology (MD)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="padding:16px;">
+            <label style="display:block; font-size:0.75rem; font-weight:600; color:var(--neutral-60); margin-bottom:6px;">Document Content</label>
+            <textarea id="edit-doc-content" class="input" rows="12" style="width:100%; font-family:monospace; font-size:0.85rem; line-height:1.4; padding:12px; white-space:pre-wrap;">${escapeHtml(doc.content)}</textarea>
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">
+              <button type="button" class="button button-secondary" data-doc-cancel style="padding:6px 12px; font-size:0.85rem;">취소</button>
+              <button type="button" class="button button-primary" data-doc-save="${index}" style="padding:6px 12px; font-size:0.85rem;">적용</button>
+            </div>
+          </div>
+        </div>`;
+    } else {
+      html += `
+       <div style="background:#fff; border-radius:8px; border:1px solid ${isSelected ? "var(--blue-50)" : "var(--neutral-20)"}; box-shadow: ${isSelected ? "0 4px 12px rgba(0,90,158,0.1)" : "0 1px 3px rgba(0,0,0,0.05)"}; overflow: hidden; transition: all 0.2s;">
+         <div style="background: ${isSelected ? "rgba(0,90,158,0.03)" : "var(--neutral-10)"}; padding:10px 16px; border-bottom:1px solid var(--neutral-20); display:flex; justify-content:space-between; align-items:center;">
+           <div style="display:flex; align-items:center; gap:12px;">
+             <input type="checkbox" data-doc-select="${index}" ${isSelected ? "checked" : ""} style="width:16px; height:16px; cursor:pointer;">
+             <span style="font-size:1.2rem;">${icon}</span>
+             <strong style="color:var(--neutral-90); font-family:monospace; font-size:0.9rem;">${escapeHtml(doc.relativePath)}</strong>
+           </div>
+           <div style="display:flex; align-items:center; gap:12px;">
+             <span style="font-size:0.75rem; font-weight:600; text-transform:uppercase; background:var(--blue-10); color:var(--blue-70); padding:2px 8px; border-radius:12px;">${escapeHtml(doc.kind)}</span>
+             <button type="button" class="text-button" data-doc-edit="${index}" style="font-size:0.8rem; font-weight:600;">수정</button>
+           </div>
+         </div>
+         <div style="padding:0; margin:0;">
+           <pre style="margin:0; padding:16px; background:#fcfcfc; max-height:250px; overflow-y:auto; font-size:0.85rem; border:none; white-space:pre-wrap; color:var(--neutral-80);">${escapeHtml(doc.content)}</pre>
+         </div>
+       </div>`;
+    }
+  });
+  html += `</div>`;
+  const resultEl = document.querySelector("#ai-result");
+  if (resultEl) {
+    resultEl.style.display = "block";
+    resultEl.innerHTML = html;
+  }
+}
+
+async function sha256(message) {
+  const msgBuffer = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function rebuildManifests() {
+  const data = state.lastParsedData;
+  if (!data || !data.documents) return [];
+
+  const manifests = [];
+  for (let i = 0; i < data.documents.length; i++) {
+    const doc = data.documents[i];
+    const originalManifest = data.manifest && data.manifest[i] ? data.manifest[i] : {};
+
+    const checksum = await sha256(doc.content);
+    const sourceArtId = doc.metadata?.sourceArtifactId || originalManifest.sourceArtifactId || "api-upload";
+    const patientId = doc.metadata?.patientId || originalManifest.patientId || "unknown";
+
+    manifests.push({
+      documentId: `${sourceArtId}:${doc.relativePath}`,
+      patientId: patientId,
+      type: doc.kind,
+      relativePath: doc.relativePath,
+      checksum: checksum,
+      generatedAt: new Date().toISOString(),
+      sourceArtifactId: sourceArtId,
+      reviewRequired: doc.metadata?.reviewRequired ?? originalManifest.reviewRequired ?? false,
+      tags: doc.metadata?.tags || originalManifest.tags || [],
+    });
+  }
+  return manifests;
+}
+
 function renderAiSources() {
   const realFiles = state.files.filter((file) => file.blobName);
   const realMemos = state.memos.filter((memo) => memo.fileName);
   if (aiFileSources) {
     aiFileSources.innerHTML = realFiles.length
       ? realFiles
-          .slice(0, 8)
-          .map(
-            (file, index) => `
+        .slice(0, 8)
+        .map(
+          (file, index) => `
               <label class="source-option">
                 <input type="checkbox" value="${escapeHtml(file.blobName)}" data-ai-file />
                 <span>${escapeHtml(file.name)}</span>
                 <small>${escapeHtml(file.size)}</small>
               </label>
             `,
-          )
-          .join("")
+        )
+        .join("")
       : `<p class="source-empty">인증 후 파일을 선택할 수 있습니다.</p>`;
   }
   if (aiMemoSources) {
     aiMemoSources.innerHTML = realMemos.length
       ? realMemos
-          .slice(0, 8)
-          .map(
-            (memo) => `
+        .slice(0, 8)
+        .map(
+          (memo) => `
               <label class="source-option">
                 <input type="checkbox" value="${escapeHtml(memo.fileName)}" data-ai-memo />
                 <span>${escapeHtml(memo.title)}</span>
                 <small>${escapeHtml(memo.updated || "메모")}</small>
               </label>
             `,
-          )
-          .join("")
+        )
+        .join("")
       : `<p class="source-empty">인증 후 메모를 선택할 수 있습니다.</p>`;
   }
   updateAiSourceStatus();
@@ -952,209 +1133,9 @@ function updateAiSourceStatus() {
   if (aiMemoStatus) aiMemoStatus.textContent = mCount ? `${mCount}개 선택` : "선택 없음";
 }
 
-function renderTool(tool) {
-  const templates = {
-    cleaner: `
-      <div class="tool-panel">
-        <h3>텍스트 클리너</h3>
-        <textarea id="tool-cleaner-input" rows="7" placeholder="정리할 텍스트를 붙여넣으세요."></textarea>
-        <div class="tool-options">
-          <label><input type="radio" name="cleaner-mode" value="basic" checked> 기본 정리</label>
-          <label><input type="radio" name="cleaner-mode" value="plain"> Markdown → Plain</label>
-          <label><input type="radio" name="cleaner-mode" value="word"> Markdown → Word</label>
-        </div>
-        <div id="cleaner-basic-options" class="tool-sub-options">
-          <label><input type="checkbox" id="cleaner-ai-mode" checked> AI 모드 (불릿/구분선)</label>
-          <label><input type="checkbox" id="cleaner-ai-dash"> 번호를 '- '로 변환</label>
-        </div>
-        <div class="form-actions">
-          <button class="button button-primary" id="tool-cleaner-run" type="button">정리하기</button>
-          <button class="button button-secondary" id="tool-copy-output" type="button">결과 복사</button>
-        </div>
-        <div id="tool-cleaner-metrics" class="tool-metrics" style="display:none; margin-top:1rem;">
-           <article><span>원본</span><strong id="cleaner-orig-len">0</strong></article>
-           <article><span>정리 후</span><strong id="cleaner-new-len">0</strong></article>
-           <article><span>변화</span><strong id="cleaner-diff-len">0</strong></article>
-        </div>
-        <pre id="tool-result">결과가 여기에 표시됩니다.</pre>
-      </div>
-    `,
-    "md-pdf": `
-      <div class="tool-panel">
-        <h3>MD to PDF</h3>
-        <textarea id="tool-md-input" rows="8" placeholder="# 제목&#10;&#10;마크다운 내용을 입력하세요."></textarea>
-        <button class="button button-primary" id="tool-md-run" type="button">PDF 다운로드</button>
-      </div>
-    `,
-    counter: `
-      <div class="tool-panel">
-        <h3>글자수 카운터</h3>
-        <textarea id="tool-counter-input" rows="7" placeholder="계산할 텍스트를 입력하세요."></textarea>
-        <div class="tool-metrics" id="tool-counter-result">
-          <article><span>공백 포함</span><strong>0</strong></article>
-          <article><span>공백 제외</span><strong>0</strong></article>
-          <article><span>단어</span><strong>0</strong></article>
-          <article><span>예상 A4</span><strong>0</strong></article>
-        </div>
-      </div>
-    `,
-    settlement: `
-      <div class="tool-panel">
-        <h3>정산 계산기</h3>
-        <div class="tool-input-group">
-          <label>사람 목록 (쉼표 또는 줄바꿈)</label>
-          <input type="text" id="tool-settlement-people" placeholder="지송, 민수, 서연">
-        </div>
-        <div class="tool-input-group">
-          <label>지출 내역 (항목, 돈낸사람, 비용, n빵할사람 순서 무관 - 텍스트 기반 입력)</label>
-          <textarea id="tool-settlement-input" rows="5" placeholder="저녁 지송 50000&#10;택시 민수 12000"></textarea>
-        </div>
-        <button class="button button-primary" id="tool-settlement-run" type="button">정산 계산하기</button>
-        <div id="tool-settlement-result-container" style="display:none; margin-top:1rem;">
-          <h4>사람별 잔액</h4>
-          <pre id="tool-settlement-summary"></pre>
-          <h4>최소 송금 목록</h4>
-          <pre id="tool-settlement-transfers"></pre>
-        </div>
-      </div>
-    `,
-  };
-  if (toolOutput) {
-    toolOutput.innerHTML = templates[tool] || templates.cleaner;
-    bindToolPanel(tool);
-    toolOutput.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }
-}
-
-function bindToolPanel(tool) {
-  if (tool === "cleaner") {
-    const runBtn = document.querySelector("#tool-cleaner-run");
-    const modeInputs = document.querySelectorAll('input[name="cleaner-mode"]');
-    const basicOptions = document.querySelector("#cleaner-basic-options");
-
-    modeInputs.forEach((input) => {
-      input.addEventListener("change", (e) => {
-        basicOptions.style.display = e.target.value === "basic" ? "block" : "none";
-      });
-    });
-
-    runBtn.addEventListener("click", async () => {
-      const text = document.querySelector("#tool-cleaner-input").value;
-      if (!text.trim()) {
-        showToast("텍스트를 입력하세요.");
-        return;
-      }
-      const mode = document.querySelector('input[name="cleaner-mode"]:checked').value;
-      const options = {
-        ai_mode: document.querySelector("#cleaner-ai-mode").checked,
-        ai_numbered_to_dash: document.querySelector("#cleaner-ai-dash").checked,
-      };
-
-      setBusy(runBtn, "정리 중", true);
-      try {
-        const data = await postJson("/api/tools/text-cleaner", { text, mode, options });
-        document.querySelector("#tool-result").textContent = data.cleaned;
-        document.querySelector("#tool-cleaner-metrics").style.display = "flex";
-        document.querySelector("#cleaner-orig-len").textContent = data.original_len;
-        document.querySelector("#cleaner-new-len").textContent = data.cleaned_len;
-        const diff = data.cleaned_len - data.original_len;
-        document.querySelector("#cleaner-diff-len").textContent = (diff >= 0 ? "+" : "") + diff;
-      } catch (error) {
-        showToast(error.message);
-      } finally {
-        setBusy(runBtn, "정리 중", false);
-      }
-    });
-
-    document.querySelector("#tool-copy-output").addEventListener("click", async () => {
-      const result = document.querySelector("#tool-result").textContent;
-      if (!result || result === "결과가 여기에 표시됩니다.") return;
-      try {
-        await navigator.clipboard.writeText(result);
-        showToast("결과를 복사했습니다.");
-      } catch {
-        showToast("복사에 실패했습니다.");
-      }
-    });
-  }
-  if (tool === "md-pdf") {
-    document.querySelector("#tool-md-run").addEventListener("click", async () => {
-      try {
-        await downloadPostBlob(
-          "/api/tools/markdown-pdf",
-          { markdown: document.querySelector("#tool-md-input").value },
-          "jisong-markdown.pdf",
-        );
-        showToast("PDF 다운로드를 시작합니다.");
-      } catch (error) {
-        showToast(error.message);
-      }
-    });
-  }
-  if (tool === "counter") {
-    const input = document.querySelector("#tool-counter-input");
-    const render = () => {
-      const text = input.value;
-      const words = text.trim() ? text.trim().split(/\s+/).length : 0;
-      const a4 = (text.length / 1500).toFixed(2);
-      document.querySelector("#tool-counter-result").innerHTML = `
-        <article><span>공백 포함</span><strong>${text.length}</strong></article>
-        <article><span>공백 제외</span><strong>${text.replace(/\s/g, "").length}</strong></article>
-        <article><span>단어</span><strong>${words}</strong></article>
-        <article><span>예상 A4</span><strong>${a4}쪽</strong></article>
-      `;
-    };
-    input.addEventListener("input", render);
-  }
-  if (tool === "settlement") {
-    const runBtn = document.querySelector("#tool-settlement-run");
-    runBtn.addEventListener("click", async () => {
-      const peopleText = document.querySelector("#tool-settlement-people").value;
-      const expenseText = document.querySelector("#tool-settlement-input").value;
-      if (!peopleText.trim()) {
-        showToast("사람 목록을 입력하세요.");
-        return;
-      }
-      
-      const people = peopleText.split(/[,\n]/).map(p => p.trim()).filter(Boolean);
-      const lines = expenseText.split("\n").filter(l => l.trim());
-      const expenses = lines.map(line => {
-        const parts = line.trim().split(/\s+/);
-        let amount = 0;
-        let payer = "";
-        let item = "";
-        parts.forEach(p => {
-          const num = parseInt(p.replace(/,/g, ""));
-          if (!isNaN(num) && num > 100) amount = num;
-          else if (people.includes(p)) payer = p;
-          else item = p;
-        });
-        return { 항목: item, 돈낸사람: payer, 비용: amount };
-      });
-
-      setBusy(runBtn, "계산 중", true);
-      try {
-        const data = await postJson("/api/tools/settlement", { people, expenses });
-        const container = document.querySelector("#tool-settlement-result-container");
-        container.style.display = "block";
-        document.querySelector("#tool-settlement-summary").textContent = data.summary_rows
-          .map(r => `${r.사람}: ${r.잔액 >= 0 ? "+" : ""}${r.잔액.toLocaleString()}원 (${r["낸 금액"]}원 냄)`)
-          .join("\n");
-        document.querySelector("#tool-settlement-transfers").textContent = data.transfer_rows.length 
-          ? data.transfer_rows.map(t => `${t["보내는 사람"]} → ${t["받는 사람"]}: ${t["금액"].toLocaleString()}원`).join("\n")
-          : "추가 송금이 필요 없습니다.";
-        if (data.errors && data.errors.length) showToast(data.errors[0]);
-      } catch (error) {
-        showToast(error.message);
-      } finally {
-        setBusy(runBtn, "계산 중", false);
-      }
-    });
-  }
-}
-
 async function bootstrap() {
   bindRoutes();
+  setActivePage("login", { skipHistory: true });
 
   // Login page logic
   const loginTabs = document.querySelectorAll(".login-tab");
@@ -1191,8 +1172,8 @@ async function bootstrap() {
       const session = await loadSession();
       if (session?.authorized) {
         showToast("로그인 성공");
-        await Promise.all([loadFiles(), loadMemos(), loadUsageSummary()]);
         setActivePage("home");
+        await Promise.all([loadFiles(), loadMemos(), loadUsageSummary()]);
       }
     } catch (error) {
       showToast(error.message);
@@ -1207,18 +1188,18 @@ async function bootstrap() {
   updateHeroPreview();
   renderPresets();
   renderAiSources();
-  renderTool("cleaner");
+  renderToolPanel("cleaner", { showToast, setBusy, postJson, downloadPostBlob, selectedValues });
   renderSettingsAuth(session);
-  
+
   if (session?.authorized) {
     await Promise.all([loadFiles(), loadMemos(), loadUsageSummary()]);
-    
+
     // Auto polling for stale data
     setInterval(async () => {
       await Promise.all([loadFiles(), loadMemos(), loadUsageSummary(), loadSettings()]);
     }, 60000);
   }
-  
+
   // Event listeners that require session
   document.querySelector("#upload-form")?.addEventListener("submit", e => {
     e.preventDefault();
@@ -1226,8 +1207,8 @@ async function bootstrap() {
   });
   document.querySelector("#file-input")?.addEventListener("change", e => uploadSelectedFiles(e.target));
   document.querySelector("#download-all")?.addEventListener("click", async () => {
-    try { await downloadFromApi("/api/files/zip", "jisong-cloud-files.zip"); showToast("ZIP 다운로드 시작"); } 
-    catch(err) { showToast(err.message); }
+    try { await downloadFromApi("/api/files/zip", "jisong-cloud-files.zip"); showToast("ZIP 다운로드 시작"); }
+    catch (err) { showToast(err.message); }
   });
   navPasskeyRegister?.addEventListener("click", registerPasskey);
   navLoginButton?.addEventListener("click", loginWithPasskey);
@@ -1238,28 +1219,34 @@ async function bootstrap() {
     state.memoQuery = query;
     renderFiles();
     renderMemos();
-    
+
     // Auto-navigate to files if searching from dashboard
     const current = document.documentElement.getAttribute("data-active-page");
     if (query && !["files", "memos"].includes(current)) {
       setActivePage("files");
     }
   });
+  document.addEventListener("change", (e) => {
+    if (e.target.matches("[data-ai-file], [data-ai-memo]")) {
+      updateAiSourceStatus();
+    }
+  });
 
-  document.querySelector("#passkey-register")?.addEventListener("click", registerPasskey);
-  document.querySelector("#passkey-login")?.addEventListener("click", loginWithPasskey);
   document.querySelector("#account-id-form")?.addEventListener("submit", async e => {
     e.preventDefault();
     const email = document.querySelector("#account-id-input").value;
     const password = document.querySelector("#account-password-input").value;
     const btn = e.target.querySelector("button");
     setBusy(btn, "로그인 중", true);
-    try { 
+    try {
       await postJson("/api/auth/account/login", { account_id: email, password });
-      await loadSession();
-      showToast("로그인 성공"); 
-    } catch(err) { 
-      showToast(err.message); 
+      const session = await loadSession();
+      if (session?.authorized) {
+        setActivePage("settings");
+        showToast("로그인 성공");
+      }
+    } catch (err) {
+      showToast(err.message);
     } finally {
       setBusy(btn, "로그인 중", false);
     }
@@ -1273,7 +1260,7 @@ async function bootstrap() {
       await postJson("/api/settings/password", { new_password: newPassword });
       showToast("비밀번호가 변경되었습니다.");
       document.querySelector("#new-password-input").value = "";
-    } catch(err) {
+    } catch (err) {
       showToast(err.message);
     } finally {
       setBusy(btn, "저장 중", false);
@@ -1282,15 +1269,27 @@ async function bootstrap() {
   document.querySelector("#settings-refresh")?.addEventListener("click", async () => {
     await loadSession(); await loadSettings(); showToast("새로고침 완료");
   });
+  folderSyncRescanButton?.addEventListener("click", async () => {
+    try {
+      setBusy(folderSyncRescanButton, "동기화 중", true);
+      await postJson("/api/sync/rescan");
+      await loadSettings();
+      showToast("동기화 완료");
+    } catch (err) {
+      showToast(err.message);
+    } finally {
+      setBusy(folderSyncRescanButton, "지금 동기화", false);
+    }
+  });
   document.querySelector("#access-log-clear")?.addEventListener("click", async () => {
     if (!confirm("삭제하시겠습니까?")) return;
-    try { await postJson("/api/settings/access-logs/clear"); await loadSettings(); showToast("삭제 완료"); } catch(err) { showToast(err.message); }
+    try { await postJson("/api/settings/access-logs/clear"); await loadSettings(); showToast("삭제 완료"); } catch (err) { showToast(err.message); }
   });
   document.querySelector("#file-search")?.addEventListener("input", e => { state.fileQuery = e.target.value; renderFiles(); });
   document.querySelector("#memo-search")?.addEventListener("input", e => { state.memoQuery = e.target.value; renderMemos(); });
   document.querySelector("#download-memos")?.addEventListener("click", async () => {
-    try { await downloadFromApi("/api/memos/zip", "jisong-cloud-memos.zip"); showToast("ZIP 다운로드 시작"); } 
-    catch(err) { showToast(err.message); }
+    try { await downloadFromApi("/api/memos/zip", "jisong-cloud-memos.zip"); showToast("ZIP 다운로드 시작"); }
+    catch (err) { showToast(err.message); }
   });
   // Tools switching
   document.addEventListener("click", (e) => {
@@ -1299,7 +1298,7 @@ async function bootstrap() {
       const tool = card.dataset.tool;
       document.querySelectorAll(".tool-card").forEach(c => c.classList.remove("is-selected"));
       card.classList.add("is-selected");
-      renderTool(tool);
+      renderToolPanel(tool, { showToast, setBusy, postJson, downloadPostBlob, selectedValues });
     }
 
     const shortcut = e.target.closest("[data-tool-shortcut]");
@@ -1330,22 +1329,118 @@ async function bootstrap() {
 
     const memoOpen = e.target.closest("[data-memo-open]");
     if (memoOpen) {
-      const memo = getFilteredMemos()[parseInt(memoOpen.dataset.memoOpen)];
-      if (memo) {
-        document.querySelector("#memo-title").value = memo.title;
-        document.querySelector("#memo-body").value = memo.body;
+    const memo = getFilteredMemos()[parseInt(memoOpen.dataset.memoOpen)];
+    if (memo) {
+      try {
+        const fullMemo = await loadMemoDetail(memo.fileName);
+        const nextMemo = fullMemo
+          ? {
+            ...memo,
+            title: fullMemo.title || memo.title,
+            body: fullMemo.content || memo.body,
+          }
+          : memo;
+        state.memos = state.memos.map((item) =>
+          item.fileName === memo.fileName ? nextMemo : item,
+        );
+        document.querySelector("#memo-title").value = nextMemo.title;
+        document.querySelector("#memo-body").value = nextMemo.body;
         document.querySelector("#memo-file-name").value = memo.fileName;
         state.editingMemoFileName = memo.fileName;
         if (memoSaveButton) memoSaveButton.textContent = "메모 수정";
         if (downloadCurrentMemoButton) downloadCurrentMemoButton.disabled = false;
         renderMemos();
+      } catch (err) {
+        showToast(err.message);
       }
-      return;
     }
+    return;
+  }
 
     const memoDelete = e.target.closest("[data-memo-delete]");
     if (memoDelete) {
       deleteMemo(parseInt(memoDelete.dataset.memoDelete));
+      return;
+    }
+
+    const docEdit = e.target.closest("[data-doc-edit]");
+    if (docEdit) {
+      state.editingDocIdx = parseInt(docEdit.getAttribute("data-doc-edit"));
+      renderParsedDocuments();
+      return;
+    }
+
+    const docCancel = e.target.closest("[data-doc-cancel]");
+    if (docCancel) {
+      state.editingDocIdx = null;
+      renderParsedDocuments();
+      return;
+    }
+
+    const docSave = e.target.closest("[data-doc-save]");
+    if (docSave) {
+      const idx = parseInt(docSave.getAttribute("data-doc-save"));
+      const pathVal = document.querySelector("#edit-doc-path")?.value.trim();
+      const kindVal = document.querySelector("#edit-doc-kind")?.value;
+      const contentVal = document.querySelector("#edit-doc-content")?.value;
+      const titleVal = document.querySelector("#edit-doc-title")?.value.trim();
+      const tagsVal = document.querySelector("#edit-doc-tags")?.value.split(",").map(t => t.trim()).filter(Boolean);
+
+      if (pathVal && kindVal && contentVal !== undefined) {
+        state.lastParsedData.documents[idx].relativePath = pathVal;
+        state.lastParsedData.documents[idx].kind = kindVal;
+        state.lastParsedData.documents[idx].content = contentVal;
+        if (titleVal) state.lastParsedData.documents[idx].metadata.title = titleVal;
+        if (tagsVal) state.lastParsedData.documents[idx].metadata.tags = tagsVal;
+        showToast("임시 수정사항이 반영되었습니다.");
+      }
+
+      state.editingDocIdx = null;
+      renderParsedDocuments();
+      return;
+    }
+
+    const docSelect = e.target.closest("[data-doc-select]");
+    if (docSelect) {
+      const idx = parseInt(docSelect.getAttribute("data-doc-select"));
+      if (state.selectedDocIndices.includes(idx)) {
+        state.selectedDocIndices = state.selectedDocIndices.filter(i => i !== idx);
+      } else {
+        state.selectedDocIndices.push(idx);
+      }
+      renderParsedDocuments();
+      return;
+    }
+
+    if (e.target.id === "bulk-clear") {
+      state.selectedDocIndices = [];
+      renderParsedDocuments();
+      return;
+    }
+
+    if (e.target.id === "bulk-delete") {
+      if (confirm(`${state.selectedDocIndices.length}개의 항목을 삭제하시겠습니까?`)) {
+        state.lastParsedData.documents = state.lastParsedData.documents.filter((_, i) => !state.selectedDocIndices.includes(i));
+        state.selectedDocIndices = [];
+        renderParsedDocuments();
+        showToast("선택한 항목이 삭제되었습니다.");
+      }
+      return;
+    }
+
+    if (e.target.id === "bulk-add-tag") {
+      const tag = prompt("추가할 태그를 입력하세요:");
+      if (tag) {
+        state.selectedDocIndices.forEach(idx => {
+          const doc = state.lastParsedData.documents[idx];
+          if (!doc.metadata.tags) doc.metadata.tags = [];
+          if (!doc.metadata.tags.includes(tag)) {
+            doc.metadata.tags.push(tag);
+          }
+        });
+        renderParsedDocuments();
+        showToast("태그가 추가되었습니다.");
+      }
       return;
     }
   });
@@ -1380,23 +1475,192 @@ async function bootstrap() {
     }
   });
 
+  // Drag & Drop for EMR Intake
+  const intakeDropzone = document.querySelector("#intake-dropzone");
+  const promptInput = document.querySelector("#ai-prompt");
+  if (intakeDropzone && promptInput) {
+    intakeDropzone.addEventListener("dragover", e => {
+      e.preventDefault();
+      intakeDropzone.classList.add("drag-over");
+    });
+    intakeDropzone.addEventListener("dragleave", e => {
+      e.preventDefault();
+      intakeDropzone.classList.remove("drag-over");
+    });
+    intakeDropzone.addEventListener("drop", async e => {
+      e.preventDefault();
+      intakeDropzone.classList.remove("drag-over");
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        const file = e.dataTransfer.files[0];
+        if (!file.name.toLowerCase().endsWith(".txt")) {
+          showToast("텍스트 파일(.txt)만 처리할 수 있습니다.");
+          return;
+        }
+        try {
+          const text = await file.text();
+          promptInput.value = text;
+          showToast(`${file.name} 파일을 불러왔습니다.`);
+        } catch (err) {
+          showToast("파일을 읽는 중 오류가 발생했습니다.");
+        }
+      }
+    });
+  }
+
+  const modeV6Btn = document.querySelector("#mode-v6");
+  const modeV5Btn = document.querySelector("#mode-v5");
+  const v6Inputs = document.querySelector("#v6-inputs");
+  const v5SourcePicker = document.querySelector("#v5-source-picker");
+  const runAiV6Btn = document.querySelector("#run-ai");
+  const runAiV5Btn = document.querySelector("#run-ai-v5");
+  const syncContainer = document.querySelector("#sync-container");
+  const v5Actions = document.querySelector("#v5-actions");
+  const v5Presets = document.querySelector("#v5-prompt-presets");
+  const aiVersionBadge = document.querySelector("#ai-version-badge");
+  const aiTitle = document.querySelector("#ai-title");
+
+  let currentAiMode = "v6";
+
+  const updateAiModeUI = () => {
+    if (currentAiMode === "v6") {
+      modeV6Btn.classList.add("is-active", "button-primary");
+      modeV6Btn.classList.remove("button-secondary");
+      modeV6Btn.style.border = "none";
+      modeV6Btn.style.background = "";
+
+      modeV5Btn.classList.remove("is-active", "button-primary");
+      modeV5Btn.classList.add("button-secondary");
+      modeV5Btn.style.border = "none";
+      modeV5Btn.style.background = "transparent";
+
+      v6Inputs.style.display = "flex";
+      runAiV6Btn.style.display = "block";
+      runAiV5Btn.style.display = "none";
+      v5Actions.style.display = "none";
+      v5Presets.style.display = "none";
+      if (v5SourcePicker) v5SourcePicker.style.display = "none";
+
+      aiTitle.textContent = "EMR Intake";
+      aiVersionBadge.textContent = "v6 Pipeline";
+
+      if (state.lastParsedData) syncContainer.style.display = "flex";
+    } else {
+      modeV5Btn.classList.add("is-active", "button-primary");
+      modeV5Btn.classList.remove("button-secondary");
+      modeV5Btn.style.border = "none";
+      modeV5Btn.style.background = "";
+
+      modeV6Btn.classList.remove("is-active", "button-primary");
+      modeV6Btn.classList.add("button-secondary");
+      modeV6Btn.style.border = "none";
+      modeV6Btn.style.background = "transparent";
+
+      v6Inputs.style.display = "none";
+      runAiV6Btn.style.display = "none";
+      runAiV5Btn.style.display = "block";
+      syncContainer.style.display = "none";
+      v5Presets.style.display = "flex";
+      if (v5SourcePicker) v5SourcePicker.style.display = "block";
+
+      aiTitle.textContent = "AI Workbench";
+      aiVersionBadge.textContent = "v5 Legacy";
+
+      if (state.lastAiResult) v5Actions.style.display = "flex";
+    }
+    const aiResult = document.querySelector("#ai-result");
+    aiResult.style.display = "none";
+    aiResult.innerHTML = "";
+  };
+
+  modeV6Btn?.addEventListener("click", () => { currentAiMode = "v6"; updateAiModeUI(); });
+  modeV5Btn?.addEventListener("click", () => { currentAiMode = "v5"; updateAiModeUI(); });
+
+  document.querySelectorAll(".preset-badge").forEach(badge => {
+    badge.addEventListener("click", () => {
+      badge.classList.toggle("is-active");
+      const presetText = badge.dataset.preset;
+      const promptEl = document.querySelector("#ai-prompt");
+      let currentVal = promptEl.value;
+
+      if (badge.classList.contains("is-active")) {
+        promptEl.value = currentVal ? `${currentVal}\n\n${presetText}` : presetText;
+      } else {
+        promptEl.value = currentVal.replace(`\n\n${presetText}`, "").replace(presetText, "").trim();
+      }
+    });
+  });
+
   document.querySelector("#run-ai")?.addEventListener("click", async () => {
-    const prompt = document.querySelector("#ai-prompt").value;
+    const rawText = document.querySelector("#ai-prompt").value;
+    const patientId = document.querySelector("#intake-patient-id")?.value || "patient_001";
     const btn = document.querySelector("#run-ai");
-    setBusy(btn, "분석 중", true);
+    setBusy(btn, "파이프라인 실행 중", true);
     try {
-      const data = await postJson("/api/ai/analyze", { prompt, blob_names: selectedValues("[data-ai-file]"), memo_file_names: selectedValues("[data-ai-memo]") });
-      document.querySelector("#ai-result").innerHTML = `<span>AI result</span><h3>분석 결과</h3><div>${markdownToHtml(data.result)}</div>`;
-      state.lastAiResult = data.result;
-      saveAiMemoButton.disabled = false; downloadAiMdButton.disabled = false; downloadAiPdfButton.disabled = false;
-      await loadUsageSummary();
-    } catch(err) { showToast(err.message); } finally { setBusy(btn, "분석 중", false); }
+      const data = await postJson("/api/v6/parse", { patient_id: patientId, raw_text: rawText });
+      state.lastParsedData = data;
+      state.editingDocIdx = null;
+
+      renderParsedDocuments();
+
+      const syncContainer = document.querySelector("#sync-container");
+      if (syncContainer) syncContainer.style.display = "flex";
+
+      showToast("정규화 완료");
+    } catch (err) { showToast(err.message); } finally { setBusy(btn, "Run Normalization Pipeline", false); }
+  });
+
+  document.querySelector("#run-ai-v5")?.addEventListener("click", async () => {
+    const rawText = document.querySelector("#ai-prompt").value;
+    const selectedBlobNames = selectedValues("[data-ai-file]");
+    const selectedMemoFileNames = selectedValues("[data-ai-memo]");
+    if (!rawText.trim() && !selectedBlobNames.length && !selectedMemoFileNames.length) {
+      return showToast("질문을 입력하거나 파일/메모를 하나 이상 선택해주세요.");
+    }
+
+    const btn = document.querySelector("#run-ai-v5");
+    setBusy(btn, "Gemini 분석 중", true);
+    try {
+      const data = await postJson("/api/ai/analyze", {
+        prompt: rawText,
+        blob_names: selectedBlobNames,
+        memo_file_names: selectedMemoFileNames,
+      });
+      state.lastAiResult = data.result || "결과가 없습니다.";
+      const aiResult = document.querySelector("#ai-result");
+      aiResult.innerHTML = renderMarkdown(state.lastAiResult);
+      aiResult.style.display = "block";
+      document.querySelector("#v5-actions").style.display = "flex";
+      showToast("분석 완료");
+    } catch (err) {
+      showToast(err.message);
+    } finally {
+      setBusy(btn, "Run Gemini Analysis", false);
+    }
+  });
+
+  document.querySelector("#sync-local")?.addEventListener("click", async () => {
+    if (!state.lastParsedData || !state.lastParsedData.documents) return;
+    const btn = document.querySelector("#sync-local");
+    setBusy(btn, "Syncing", true);
+    try {
+      const newManifests = await rebuildManifests();
+      const payload = {
+        documents: state.lastParsedData.documents,
+        manifest: newManifests,
+      };
+      const data = await postJson("/api/v6/publish", payload);
+      showToast(`${data.synced_count}개의 파일이 동기화 큐(GCS)에 발행되었습니다.`);
+    } catch (err) {
+      showToast(err.message);
+    } finally {
+      setBusy(btn, "Sync to Local Workspace (Phase 3)", false);
+    }
   });
 
   saveAiMemoButton?.addEventListener("click", async () => {
     if (!state.lastAiResult) return;
     try { await postJson("/api/memos", { title: "AI 분석 결과", content: state.lastAiResult }); await loadMemos(); showToast("메모로 저장되었습니다."); }
-    catch(err) { showToast(err.message); }
+    catch (err) { showToast(err.message); }
   });
   downloadAiMdButton?.addEventListener("click", () => {
     const blob = new Blob([state.lastAiResult], { type: "text/markdown" });
@@ -1405,16 +1669,16 @@ async function bootstrap() {
   });
   downloadAiPdfButton?.addEventListener("click", async () => {
     try { await downloadPostBlob("/api/tools/markdown-pdf", { markdown: state.lastAiResult }, "ai-result.pdf"); showToast("PDF 다운로드 시작"); }
-    catch(err) { showToast(err.message); }
+    catch (err) { showToast(err.message); }
   });
   downloadCurrentMemoButton?.addEventListener("click", async () => {
     const fileName = document.querySelector("#memo-file-name").value;
     if (!fileName) return;
     try { await downloadFromApi(`/api/memos/${fileName}/download`, "memo.txt"); }
-    catch(err) { showToast(err.message); }
+    catch (err) { showToast(err.message); }
   });
 
-  setActivePage(pageFromLocation(), { skipHistory: true });
+  setActivePage(session?.authorized ? pageFromLocation() : "login", { skipHistory: true });
 
   // Drag & Drop
   const filesSection = document.querySelector("#files");
@@ -1447,18 +1711,16 @@ async function bootstrap() {
 
   if (geminiSettingsSaveBtn) {
     if (geminiExchangeRateInput) geminiExchangeRateInput.value = localStorage.getItem("geminiExchangeRate") || "1400";
-    if (geminiCostMultiplierInput) geminiCostMultiplierInput.value = localStorage.getItem("geminiCostMultiplier") || "1.0";
+    if (geminiCostMultiplierInput) geminiCostMultiplierInput.value = localStorage.getItem("geminiCostMultiplier") || DEFAULT_GEMINI_COST_MULTIPLIER;
 
-    geminiSettingsSaveBtn.addEventListener("click", () => {
+    geminiSettingsSaveBtn.addEventListener("click", async () => {
       if (geminiExchangeRateInput && geminiExchangeRateInput.value) {
         localStorage.setItem("geminiExchangeRate", geminiExchangeRateInput.value);
       }
-      if (geminiCostMultiplierInput && geminiCostMultiplierInput.value) {
-        localStorage.setItem("geminiCostMultiplier", geminiCostMultiplierInput.value);
-      }
+      const multiplierValue = geminiCostMultiplierInput?.value || DEFAULT_GEMINI_COST_MULTIPLIER;
+      localStorage.setItem("geminiCostMultiplier", multiplierValue);
       showToast("Gemini 요금 설정이 저장되었습니다.");
-      loadUsageSummary();
-      loadSettingsUsage();
+      await Promise.all([loadUsageSummary(), loadSettings()]);
     });
   }
 }

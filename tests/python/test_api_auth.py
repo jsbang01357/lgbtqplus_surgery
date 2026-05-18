@@ -2,7 +2,9 @@ import os
 import unittest
 from unittest.mock import patch
 
-from api_server import ACCOUNT_SESSIONS, _auth_state, _create_account_session
+import api_server
+
+from api_server import _auth_state, _create_account_session
 
 
 class DummyRequest:
@@ -12,8 +14,24 @@ class DummyRequest:
 
 
 class ApiAuthTests(unittest.TestCase):
+    def setUp(self):
+        self.account_sessions = {}
+        self._patchers = [
+            patch.object(api_server, "_load_account_sessions", side_effect=self._load_account_sessions),
+            patch.object(api_server, "_save_account_sessions", side_effect=self._save_account_sessions),
+        ]
+        for patcher in self._patchers:
+            patcher.start()
+
     def tearDown(self):
-        ACCOUNT_SESSIONS.clear()
+        for patcher in reversed(self._patchers):
+            patcher.stop()
+
+    def _load_account_sessions(self):
+        return dict(self.account_sessions)
+
+    def _save_account_sessions(self, sessions):
+        self.account_sessions = dict(sessions)
 
     def test_owner_google_access_is_authorized_without_passkey_when_fallback_enabled(self):
         request = DummyRequest(

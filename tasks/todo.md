@@ -1,4 +1,86 @@
-## Streamlit 경고 및 모바일 UI 보정
+## 현재 우선순위
+
+### 문서/운영 기준 정리
+
+- [x] README를 현재 Starlette API + 정적 프론트엔드 구조에 맞게 재정리
+- [x] 빠진 런타임 의존성 `cryptography`를 requirements에 반영
+- [x] Cloudflare Access 강제 여부와 `cloudbuild.yaml` 기본값을 운영 정책과 다시 맞추기
+- [x] 로컬 검증 표준을 `.venv` / `unittest` / Node 20 기준으로 문서화하기
+
+### 다음 기능축 후보
+
+- [x] v6 parser-core 정밀도 개선 우선순위 확정 (Date normalization, UNIT_RE 확장, Section splitting 보강)
+- [x] review UI 범위를 `v6` 중심으로 좁혀 구체화 (Metadata 편집 필드 추가, Bulk actions 반영)
+- [x] GCS JSON 로그 파일의 동시성 구조 개선 및 API 서버 연동 완료
+
+## 이번 정리 요약
+
+- v6 브랜치 로그인 불가 원인을 점검했고, `frontend/app.js` 초기 전역 참조로 인한 부팅 크래시를 복구했다.
+- 실제 운영 진입점이 `api_server.py`인 현재 구조에 맞춰 README를 다시 작성했다.
+- 예전 Streamlit 중심 설명, `jisong_cloud.py`, `components/` 같은 오래된 구조 설명을 정리했다.
+- 테스트 수집 실패 원인이던 누락 의존성 `cryptography`를 `requirements.txt`에 추가했다.
+
+### 로그인 복구 (v6 branch)
+
+- [x] 현재 브랜치와 auth/login 연결 경로 확인
+- [x] 프런트엔드 부팅 크래시로 로그인 핸들러 미바인딩 원인 수정
+- [x] 브라우저/테스트 기준 기본 회귀 검증
+- [x] 라우터 초기화 전에는 로그인 섹션만 노출되도록 page gating 보강
+
+### 2026-05-18 UI / AI 복구
+
+- [x] 메모 열기 시 실제 메모 본문 API 재로딩 연결
+- [x] 도구모음 텍스트 클리너 옵션 레이아웃 정리
+- [x] v5 AI 파일/메모 선택과 MD/PDF 다운로드 복구
+- [x] 모바일 상단 검색 제거 및 하위 네비 문구 재노출
+- [x] AI 요금 계산 기본 10배 반영, 설정 배율은 1.0 유지
+- [x] 상단 IP 표시용 forwarded header 우선순위 보강
+- [x] 푸터/로그인 하단 버전 문구 고정
+
+---
+
+## 이전 작업 기록
+
+### 보안 및 인증 레이어 강화 (마일스톤 1)
+
+- [x] GCS 대체 로그인 비밀번호 PBKDF2-HMAC-SHA256 단방향 안전 암호화 해싱 적용
+- [x] GCS 평문 비밀번호 자동 감지 및 실시간 암호화 마이그레이션(Self-Healing) 구축
+- [x] 패스키 세션 검증 시 GCS JSON 매 요청 Read/Write 제거 및 로컬 인메모리 캐싱 도입 (동시성 Race Condition 차단)
+- [x] 파일 업로드 확장자 화이트리스트(PDF, 이미지, TXT, CSV, Office 파일 등) 강력 도입 (악성 업로드 원천 차단)
+- [x] Cloudflare Access JWT의 JWKS 퍼블릭 키 암호학적 서명(Signature) 검증 및 만료 검사 추가
+- [x] 하위 호환 모킹 변경으로 단위 테스트(37개 전체) 100% 통과 검증 완료
+
+## 요약
+- GCS 평문 저장 비밀번호 취약성을 완전 제거하고, 무중단으로 기존 평문을 안전하게 해싱 변환하는 자가 치유(Self-Healing) 코드를 탑재했습니다.
+- 세션 조회 시 불필요한 GCS Write를 전면 제거하고 10초 TTL 캐싱을 씌워 API 연동 속도를 기하급수적으로 단축하고 동시성 데이터를 보호했습니다.
+- 파일 업로드의 보안 화이트리스트 필터를 씌우고 Cloudflare Access JWT를 암호학적으로 상호 교차 검증하도록 보강했습니다.
+- 신규 보안 정책에 맞춰 유닛 테스트 모킹 대상을 갱신하고 전체 37개 테스트를 완전하게 합격시켰습니다.
+
+---
+
+### 프로젝트 전반 기능 파악 및 개선점 20개 도출
+
+## 요약
+- 전체 프로젝트 디렉토리를 샅샅이 스캔하여 Starlette API 서버([api_server.py](file:///Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/api_server.py)), 파일 관리자([storage.py](file:///Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/app/storage.py)), 메모장([memo.py](file:///Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/app/memo.py)), AI 분석([ai.py](file:///Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/app/ai.py)), 정산 계산기([settlement.py](file:///Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/app/settlement.py)), 텍스트 클리너([text_cleaner.py](file:///Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/app/text_cleaner.py)) 등 핵심 유틸리티 및 컴포넌트들의 코드 분석을 끝마쳤습니다.
+- 그 결과, 성능/비용 최적화, 보안 및 인증 강화, 메모리 및 자원 제어, 아키텍처 및 결합도 분리, 알고리즘 견고성 등의 관점에서 실질적으로 해결해야 할 **치명적인 취약점과 개선 포인트 20개**를 정밀 분석하여 상세 리포트로 도출했습니다.
+
+---
+
+### auth.py render_inline_html 임포트 에러 수정
+
+- [x] `app/auth.py`의 `render_inline_html` 누락 에러 확인
+- [x] `app/auth.py`에 `from app.streamlit_compat import render_inline_html` 추가
+- [x] 문법 검증 및 동작 확인
+- [x] 변경 요약 작성
+
+## 요약
+- `app/auth.py`에서 `render_inline_html` 함수를 참조하지만 임포트되지 않아 발생하던 에러를 수정했습니다.
+- `app/streamlit_compat.py`에서 `render_inline_html`을 임포트하는 구문을 `app/auth.py` 상단에 추가했습니다.
+- `.venv/bin/python3` 환경에서 `unittest`를 수행하여 37개 전체 테스트가 성공적으로 통과함을 확인했습니다.
+
+---
+
+### Streamlit 경고 및 모바일 UI 보정
 
 - [x] `components.html` 사용 제거 여부 판단
 - [x] 로그인/메모 자동 포커스 스크립트 유지 및 fallback 적용
@@ -21,7 +103,7 @@
 
 ---
 
-## 운영 안정성 개선
+### 운영 안정성 개선
 
 - [x] PPTX/DOCX/XLSX AI 분석을 텍스트 추출 방식으로 변경
 - [x] Gemini 비용 로그 동시 쓰기 충돌 완화
@@ -39,7 +121,33 @@
 
 ---
 
-## Mac mini 병행 서버 Phase 2 구성
+### 인증 경로 테스트 및 문서 정리
+
+- [x] 계정 로그인 API 성공/실패 테스트 추가
+- [x] 비밀번호 변경 API 성공/실패 테스트 추가
+- [x] `JISONG_ACCOUNT_PASSWORD` 관련 문서와 배포 설정 정리
+
+## 요약
+- 계정 로그인과 비밀번호 변경의 성공/실패 경로를 직접 검증하는 테스트를 추가했다.
+- 인증 관련 기존 테스트는 현재 GCS 기반 세션 저장 방식에 맞게 정리했다.
+- 문서와 Cloud Build 설정에서 `JISONG_ACCOUNT_PASSWORD` 하드코딩을 제거하고, 계정 비밀번호는 GCS의 `auth/account_password.txt`로 설명을 맞췄다.
+
+---
+
+### UI 점검 및 미구현 기능 제거
+
+- [x] Gemini 설정 저장 버튼의 런타임 에러 수정
+- [x] `오늘 뭐 먹지?` 기능 제거
+- [x] 관련 문서와 도구 목록 정리
+
+## 요약
+- Gemini 요금 설정 저장 후 존재하지 않는 갱신 함수를 호출하던 부분을 실제 갱신 경로로 바꿨다.
+- `오늘 뭐 먹지?`는 HTML/Streamlit 양쪽에서 노출되던 흔적을 제거했다.
+- README의 기능 목록과 프로젝트 구조도 현재 코드 기준으로 맞췄다.
+
+---
+
+### Mac mini 병행 서버 Phase 2 구성
 
 - [x] 기존 Cloud Run 배포와 로컬 실행 경로 확인
 - [x] Mac mini용 Docker Compose와 환경 변수 샘플 추가
@@ -57,7 +165,7 @@
 
 ---
 
-## Mac mini 로컬 저장소 mirror
+### Mac mini 로컬 저장소 mirror
 
 - [x] GCS 직접 호출 구조 확인
 - [x] 로컬 파일 기반 bucket adapter 추가
@@ -78,7 +186,7 @@
 
 ---
 
-## Mac mini 로컬 컨테이너 기동
+### Mac mini 로컬 컨테이너 기동
 
 - [x] `.streamlit/secrets.toml` 기준으로 `.env.local` 생성
 - [x] Docker용 GCS service account JSON 생성
@@ -95,7 +203,7 @@
 
 ---
 
-## Mac mini tunnel 및 로그 pull 보정
+### Mac mini tunnel 및 로그 pull 보정
 
 - [x] `mac.jisong.dev` static asset 실패 원인 확인
 - [x] Cloudflare dashboard의 `localhost:8501` origin이 컨테이너 내부 localhost를 보던 문제 수정
@@ -110,7 +218,7 @@
 
 ---
 
-## Mac mini 보안 및 자동 기동 점검
+### Mac mini 보안 및 자동 기동 점검
 
 - [x] 외부 도메인 응답과 Cloudflare Access 적용 여부 확인
 - [x] `.env.local` 및 Docker용 service account JSON 권한 축소
@@ -128,7 +236,7 @@
 
 ---
 
-## 프로젝트 전반 개선점 점검
+### 프로젝트 전반 개선점 점검
 
 - [x] 현재 작업트리와 주요 파일 구조 확인
 - [x] AI, 저장소, 메모, 도구, 배포 설정 점검
@@ -191,6 +299,41 @@ Mark items as complete as you go.
 ---
 
 ## Jisong Cloud UI 개선
+
+---
+
+## JisongCloud v6 아키텍처 재설계
+
+- [x] 기존 v5 구조와 최근 설계/운영 맥락 확인
+- [x] v6 핵심 철학과 클라우드/로컬 역할 재정의
+- [x] EMR 정규화 파이프라인과 modality별 출력 구조 설계
+- [x] 메타데이터, chunk parsing, local sync 전략 설계
+- [x] 프론트엔드 surface와 abstraction/migration 계획 정리
+- [x] 위험요소와 단계별 전환 전략 정리
+
+## 요약
+- v6는 AI 중심 웹앱이 아니라 EMR ingestion과 normalization을 담당하는 lightweight cloud bridge로 재정의했다.
+- canonical brain은 로컬 Mac workspace로 두고, cloud는 업로드, 정규화, 메타데이터 부착, sync trigger까지만 맡는 구조로 정리했다.
+- 출력 형식은 modality별 `csv`와 `md`를 기본으로 하고, patient workspace 디렉터리와 metadata/manifest 레이어를 함께 설계했다.
+
+### 다음 구현 계획
+
+- [x] clean_text 레포의 TSX 파싱 로직을 inventory하고 순수 파서 코어와 UI 의존부를 분리한다.
+- [x] modality 공통 schema와 document manifest schema를 TS 타입으로 먼저 고정한다.
+- [x] `labs`, `medications`, `imaging`, `pathology`, `notes`용 parser interface를 정의한다.
+- [x] chunk splitter와 classifier를 heuristic-first 방식으로 구현한다.
+- [x] CSV/Markdown artifact writer와 frontmatter metadata writer를 구현한다.
+- [x] local workspace sync manifest 포맷과 상대 경로 규칙을 TS로 고정한다.
+- [x] GCS staging publish/pull contract를 구현한다.
+- [x] v5 Starlette API에 `/api/v6/health`, `/api/v6/parse` 경로를 병행 추가한다.
+- [x] mixed EMR blob의 note/lab/imaging 분리 heuristic과 회귀 테스트를 추가한다.
+- [x] lightweight intake/review frontend는 parser 결과 검수용 surface만 남기고 범용 AI UI는 축소한다.
+
+## 진행 메모
+- `Clean_Text`의 `labParser.ts`, `textCleaner.ts`를 기준으로 `v6/parser-core` 독립 TS 패키지를 추가했다.
+- `app/v6_bridge.py`와 `api_server.py`에 Node CLI 기반 bridge를 추가했고, Dockerfile도 parser-core build를 수행하도록 맞췄다.
+- chunk splitter는 `[Chemistry]`, `CT Abdomen`, `Findings/Impression` 같은 내부 섹션을 과분리하지 않도록 조정했고, mixed blob regression test를 추가했다.
+- 아직 남은 큰 작업은 parser precision 보강, GCS/local sync publish contract, review UI다.
 
 - [x] 현재 전역 레이아웃과 도구모음 UI 구조 점검
 - [x] 전역 스타일과 사이드바 톤 정리
@@ -857,11 +1000,11 @@ Mark items as complete as you go.
 - [x] 웹하드 파일 선택 즉시 업로드
 - [x] 업로드 파일명에서 날짜/시간 suffix 제거 및 업로드 시각은 metadata로 저장
 - [x] 문법과 단위 테스트 검증
-- [ ] 제한 없는 로컬 HTTP 검증
+- [x] 제한 없는 로컬 HTTP 검증
 
 ## 요약
 - 실사용 흐름 기준으로 인증, AI 결과물, 메모/파일 동작을 정리한다.
-- `node --check`, `py_compile`, unittest 26개를 확인했다. 로컬 HTTP 서버 실행은 현재 sandbox/승인 제한으로 보류했다.
+- `node --check`, `py_compile`, unittest 26개를 확인했고, 로컬 API 서버를 띄워 `/`, `/files`, `/memos`, `/ai`, `/tools`, `/settings`, `/api/session`, `/api/health` 응답을 확인했다.
 
 ---
 
@@ -872,11 +1015,11 @@ Mark items as complete as you go.
 - [x] Dockerfile에 Python 런타임 기본 env 추가
 - [x] 배포 문서의 env/secret 목록 갱신
 - [x] 빌드 설정 문법 및 정적 검증
-- [ ] Docker daemon 연결 후 실제 이미지 빌드 검증
+- [x] Docker daemon 연결 후 실제 이미지 빌드 검증
 
 ## 요약
 - Cloud Build가 더 이상 Cloudflare OTP 필수/Google Access fallback 기준으로 배포하지 않게 정리한다.
-- `cloudbuild.yaml` YAML 파싱, `py_compile`, `node --check`, unittest 26개를 확인했다. 로컬 Docker build는 Docker daemon socket 부재로 보류했다.
+- `cloudbuild.yaml` YAML 파싱, `py_compile`, `node --check`, unittest 26개를 확인했고, 실제 `docker build -t jisong-cloud:test .`까지 성공했다.
 
 ---
 
@@ -907,6 +1050,23 @@ Mark items as complete as you go.
 - `User project invalid` 오류 해결을 위해 `gcs_helper.py`에서 서비스 계정 정보를 `secrets.toml`에서 직접 로드하도록 수정했습니다.
 - `uvicorn` 환경에서도 설정을 정확히 읽어올 수 있도록 `config.py`에 TOML 직접 파싱 로직을 추가했습니다.
 - 패스키 로그인 시 발생하던 400 오류의 원인을 파악하기 위해 상세 디버그 로그를 추가했습니다.
+- 로컬 API에서 `/api/auth/passkey/login/options`는 현재 `404 {"error":"등록된 passkey가 없습니다."}`를 반환해, 실제 패스키 등록자 없이는 최종 end-to-end 확인이 불가능한 상태입니다.
+
+---
+
+## Mac folder sync + CSV 분리 설계
+
+- [x] Mac `Developer` 폴더를 source of truth로 두는 파일 sync 구조 설계
+- [x] MongoDB 대신 CSV로 환자 검사정보를 분리하는 방향 정리
+- [x] sync worker, conflict 규칙, schema 초안 문서화
+- [x] local folder watcher와 sync queue 구현
+- [x] CSV schema와 file reference 모델 구현
+- [x] UI에서 sync 상태와 conflict copy 노출
+
+## 요약
+- 파일은 Mac 폴더와 GCS mirror로 두고, 환자 검사정보는 CSV로 우선 분리하는 구조로 정리했다.
+- MongoDB는 문서 저장에는 쓸 수 있지만, 이 프로젝트의 핵심 문제인 파일 동기화와 충돌 처리에는 맞지 않는다.
+- 구현은 watcher, queue, CSV schema 순으로 쪼개는 게 안전하다.
 
 - [x] Gemini 모델을 `gemini-3-flash-preview`로 변경
 - [x] 프론트엔드 영문 폰트(Inter/Outfit)를 제거하고 Apple SD Gothic Neo 등의 시스템 폰트로 일괄 적용
@@ -928,3 +1088,51 @@ Mark items as complete as you go.
 - 텍스트 클리너 도구의 UI가 텍스트 길이에 따라 깨지지 않도록 줄바꿈 처리를 보강했습니다.
 - Gemini API 비용을 추산할 때 사용자가 직접 설정 화면에서 배율과 환율을 조정할 수 있도록 프론트엔드/백엔드 로직을 확장했습니다.
 
+---
+
+## 프로젝트 전반 개선 마무리
+
+- [x] 세션 실패 시 UI 인증 상태 초기화
+- [x] 프록시 헤더 기준 클라이언트 IP 추출
+- [x] 계정 비밀번호의 코드 기본값 제거
+- [x] 접속/GCS/설정 오류 로깅 구조화
+- [x] GCS 로그 경로 중복 제거
+- [x] 네트워크 의존 테스트를 단위 테스트로 교체
+- [x] 스트림릿 포커스 스크립트 호환성 보정
+- [x] Gemini 설정 저장 후 갱신 경로 정리
+- [x] 도구 패널을 별도 모듈로 분리
+
+## 요약
+- 실제 사용자 영향이 있는 런타임/운영 문제를 먼저 정리했다.
+- 코드 기본값과 중복 경로를 제거해 인증과 로그의 단일 출처를 맞췄다.
+- 도구 패널 분리로 `frontend/app.js`의 책임을 줄였다.
+
+---
+
+## Gemini 설정 오류 수정
+
+- [x] `/Users/jsbang/.gemini/settings.json`의 `general.defaultApprovalMode` 값을 `"default"`로 수정
+- [x] `gemini` CLI 실행을 통해 설정 오류 해결 여부 검증
+
+## 요약
+- `~/.gemini/settings.json`의 `general.defaultApprovalMode` 값이 지원되지 않는 `"auto"`로 설정되어 있어 CLI 실행 시 발생하던 검증 에러를 수정했습니다.
+- 유효한 값인 `"default"`로 설정을 변경하여 configuration 파싱 에러를 완벽히 해결했습니다.
+
+
+---
+
+## v6 Core Philosophy 및 아키텍처 재설계 기반 로드맵
+*(EMR 정제 파이프라인 및 Local-first 브릿지 지향)*
+
+### Phase 1: Data Pipeline & Workspace Structure
+- [x] **Patient-centric Workspace 구조 적용:** `workspace/patient_ID/{labs, medications, imaging, pathology, notes}` 디렉토리 구조 확립 및 경로 빌더 연동
+- [x] **모든 문서(MD/CSV) Metadata 필수 첨부 강제화:** (type, date, tags, source 등)
+
+### Phase 2: Frontend Redesign & Sync Integration
+- [x] **Drag-and-Drop Intake UI 개편:** 범용 AI 챗봇 UI를 대폭 축소하고, EMR 텍스트/파일을 던져넣는(Ingestion) 유틸리티 인터페이스로 전환
+- [x] **Document Preview & Metadata Editing UI 구현:** 파싱된 결과를 로컬로 넘기기 전 검수하고 메타데이터를 수정하는 뷰어 추가
+- [x] **Local Sync Daemon 연동 기반 마련:** GCS와 로컬 Mac(`~/Developer/jisong_workspace/`) 간의 동기화 모니터링 UI
+
+### Phase 3 & 4: Local Mac Ecosystem Handoff
+- [x] **메타데이터 인덱싱 및 시각화용 Export 정비**
+- [x] **Local AI (Ollama) 및 Semantic Search 연동 Hook 구성:** 로컬 Obsidian 및 Python 환경에서 후처리가 용이하도록 데이터 포맷 완결성 보장
