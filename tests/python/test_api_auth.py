@@ -1,10 +1,10 @@
+import app.routers.auth
 import os
 import unittest
 from unittest.mock import patch
 
-import api_server
 
-from api_server import _auth_state, _create_account_session
+from app.api_deps import _auth_state, _create_account_session
 
 
 class DummyRequest:
@@ -17,8 +17,8 @@ class ApiAuthTests(unittest.TestCase):
     def setUp(self):
         self.account_sessions = {}
         self._patchers = [
-            patch.object(api_server, "_load_account_sessions", side_effect=self._load_account_sessions),
-            patch.object(api_server, "_save_account_sessions", side_effect=self._save_account_sessions),
+            patch("app.api_deps._load_account_sessions", side_effect=self._load_account_sessions),
+            patch("app.api_deps._save_account_sessions", side_effect=self._save_account_sessions),
         ]
         for patcher in self._patchers:
             patcher.start()
@@ -84,7 +84,7 @@ class ApiAuthTests(unittest.TestCase):
     def test_session_includes_passkey_registered_flag(self):
         request = DummyRequest()
 
-        with patch.object(api_server, "_auth_state", return_value={
+        with patch("app.api_deps._auth_state", return_value={
             "email": "jsbang01357@gmail.com",
             "access_context": type("Ctx", (), {"email": "", "has_jwt": False, "allowed": False})(),
             "authorized": False,
@@ -93,10 +93,10 @@ class ApiAuthTests(unittest.TestCase):
             "account_id_ok": False,
             "google_fallback_ok": False,
         }), \
-            patch.object(api_server.passkeys, "has_registered_credential", return_value=True), \
-            patch.object(api_server, "account_login_id", return_value="jsbang01357@gmail.com"), \
-            patch.object(api_server, "get_client_ip", return_value="127.0.0.1"):
-            response = __import__("asyncio").run(api_server.session(request))
+            patch("app.passkeys.has_registered_credential", return_value=True), \
+            patch("app.security.account_login_id", return_value="jsbang01357@gmail.com"), \
+            patch("app.request_utils.get_client_ip", return_value="127.0.0.1"):
+            response = __import__("asyncio").run(app.routers.auth.session(request))
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'"passkey_registered":true', response.body)
