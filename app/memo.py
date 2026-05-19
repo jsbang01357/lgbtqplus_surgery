@@ -1,8 +1,8 @@
 import streamlit as st
 import html
+import logging
 import json
 import zipfile
-import io
 import time
 import random
 import tempfile
@@ -12,6 +12,8 @@ from pathlib import PurePosixPath
 from app.core_utils import get_now, safe_filename, slugify, ttl_cache
 from app.streamlit_compat import render_inline_html
 from app.gcs_helper import get_bucket
+
+logger = logging.getLogger(__name__)
 
 MEMO_PREFIX = "memos"
 OLD_JSON_FILE = "memos.json"
@@ -214,7 +216,6 @@ def create_zip_of_memos(memo_list):
     if not memo_list:
         return None
 
-    bucket = get_bucket()
     fd, temp_path = tempfile.mkstemp(suffix=".zip")
     os.close(fd)
 

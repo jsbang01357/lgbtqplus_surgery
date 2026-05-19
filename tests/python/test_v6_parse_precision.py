@@ -34,9 +34,9 @@ Impression: no acute abnormality.
         self.assertEqual(
             relative_paths,
             [
-                "notes/2026-05-16_progress_note.md",
-                "labs/2026-05-16_chemistry.csv",
-                "imaging/2026-05-16_ct_abdomen.md",
+                "workspace/patient_001/notes/2026-05-16_progress_note.md",
+                "workspace/patient_001/labs/2026-05-16_chemistry.csv",
+                "workspace/patient_001/imaging/2026-05-16_ct_abdomen.md",
             ],
         )
 

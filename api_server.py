@@ -3,16 +3,17 @@ import io
 import re
 import secrets
 import logging
+import threading
+import time
 from dataclasses import asdict
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from starlette.applications import Starlette
-from starlette.requests import Request
+from fastapi import FastAPI, Depends, Request, HTTPException, status, BackgroundTasks
+
 import os
-from starlette.responses import FileResponse, JSONResponse, Response, StreamingResponse
-from starlette.background import BackgroundTask
-from starlette.routing import Route
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
+
 
 from app import passkeys
 from app.security import (
@@ -56,8 +57,7 @@ from app.ai import (
     _run_gemini_analysis,
     _sum_usage_costs,
 )
-from app.folder_sync import get_folder_sync_service, start_folder_sync_service, stop_folder_sync_service
-from app.drive_sync import start_gdrive_sync_service
+from app.folder_sync import get_folder_sync_service
 from app.gcs_helper import get_bucket
 from app.core_utils import get_now
 from app.request_utils import get_client_ip
@@ -73,14 +73,34 @@ from app.settlement import calculate_settlement
 from app.v6_bridge import ParserBridgeError, parser_bridge_available, run_v6_parse
 import json
 from google_auth_oauthlib.flow import Flow
-from google.oauth2.credentials import Credentials
+from app.models import AccountLoginRequest, PasswordUpdateRequest
+
+
 
 logger = logging.getLogger(__name__)
 
+
+
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    from app.folder_sync import start_folder_sync_service, stop_folder_sync_service
+    from app.drive_sync import start_gdrive_sync_service
+    start_folder_sync_service()
+    start_gdrive_sync_service()
+    _cleanup_expired_sessions()
+    try:
+        yield
+    finally:
+        stop_folder_sync_service()
+
+app = FastAPI(title='Jisong Cloud API', lifespan=lifespan)
+
+
+
 # Suppress common warnings
 logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.ERROR)
-import mimetypes
-import os
 
 mimetypes.init()
 
@@ -97,9 +117,6 @@ INCLUDE_RE = re.compile(r"<!--\s*include:(?P<path>[^ ]+)\s*-->")
 ACCOUNT_SESSION_COOKIE = "jisong_account_session"
 ACCOUNT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 30
 ACCOUNT_SESSIONS_BLOB = "auth/account_sessions.json"
-
-import threading
-import time
 
 _SESSIONS_CACHE = None
 _SESSIONS_CACHE_EXPIRY = 0
@@ -135,6 +152,39 @@ def _save_account_sessions(sessions: dict[str, str]):
     except Exception:
         pass
 
+
+def _cleanup_expired_sessions():
+    try:
+        global _SESSIONS_CACHE
+        sessions = _load_account_sessions()
+        now = time.time()
+        
+        expired_tokens = []
+        for token, data in sessions.items():
+            if isinstance(data, dict) and data.get("expires_at", 0) < now:
+                expired_tokens.append(token)
+                
+        if expired_tokens:
+            for token in expired_tokens:
+                del sessions[token]
+            _save_account_sessions(sessions)
+            _SESSIONS_CACHE = sessions
+            # logger.info(f"Cleaned up {len(expired_tokens)} expired sessions.")
+    except Exception:
+        pass
+
+
+
+
+def get_current_user(request: Request):
+    ok, message = _is_authorized(request)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=message)
+    return True
+
+def get_current_user_no_exc(request: Request):
+    ok, _ = _is_authorized(request)
+    return ok
 
 def _json(data, status_code=200):
     return JSONResponse(data, status_code=status_code)
@@ -276,10 +326,12 @@ def _is_authorized(request: Request) -> tuple[bool, str]:
     return True, ""
 
 
+@app.get('/api/health')
 async def health(_request: Request):
     return _json({"ok": True, "service": "jisong-cloud-api"})
 
 
+@app.get('/api/session')
 async def session(request: Request):
     state = _auth_state(request)
     access_context = state["access_context"]
@@ -309,7 +361,8 @@ async def session(request: Request):
 login_attempts = {}  # {ip: [timestamp1, timestamp2, ...]}
 
 
-async def account_login(request: Request):
+@app.post('/api/auth/account/login')
+async def account_login(request: Request, payload: AccountLoginRequest):
     if not allow_account_id_fallback():
         return _json({"error": "계정 ID fallback이 꺼져 있습니다."}, status_code=403)
 
@@ -340,7 +393,7 @@ async def account_login(request: Request):
             return _json(
                 {"error": "계정 ID 또는 비밀번호가 올바르지 않습니다."}, status_code=401
             )
-    except Exception as exc:
+    except Exception:
         logger.exception("Login verification error")
         return _json({"error": "인증 처리 중 오류가 발생했습니다."}, status_code=500)
 
@@ -350,7 +403,7 @@ async def account_login(request: Request):
     email = owner_email()
     try:
         token = _create_account_session(email)
-    except Exception as exc:
+    except Exception:
         logger.exception("Failed to create session")
         return _json({"error": "세션 생성에 실패했습니다."}, status_code=500)
 
@@ -368,10 +421,8 @@ async def account_login(request: Request):
     return response
 
 
+@app.get('/api/usage/summary')
 async def usage_summary(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
 
     try:
         multiplier = float(request.query_params.get("multiplier", 1.0))
@@ -406,12 +457,9 @@ async def usage_summary(request: Request):
         return _json({"error": str(exc)}, status_code=500)
 
 
-async def settings_password_update(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
-    payload = await request.json()
-    new_password = payload.get("new_password", "").strip()
+@app.post('/api/settings/password')
+async def settings_password_update(request: Request, payload: PasswordUpdateRequest, _: bool = Depends(get_current_user)):
+    new_password = payload.new_password.strip()
     if len(new_password) < 4:
         return _json({"error": "비밀번호는 4자리 이상이어야 합니다."}, status_code=400)
 
@@ -424,10 +472,8 @@ async def settings_password_update(request: Request):
         return _json({"error": f"비밀번호 변경 실패: {exc}"}, status_code=500)
 
 
+@app.get('/api/settings/access-logs')
 async def settings_access_logs(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
     try:
         logs = get_access_logs()[:50]
     except Exception as exc:
@@ -453,10 +499,8 @@ async def settings_access_logs(request: Request):
     )
 
 
+@app.post('/api/settings/access-logs/clear')
 async def settings_access_logs_clear(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
     try:
         clear_access_logs()
         return _json({"ok": True})
@@ -464,6 +508,7 @@ async def settings_access_logs_clear(request: Request):
         return _json({"error": str(exc)}, status_code=500)
 
 
+@app.post('/api/tools/text-cleaner')
 async def tool_text_cleaner(request: Request):
     # 도구는 비인증으로 열려있으되 민감기능만 제한할 수 있음.
     # 여기서는 전체 허용하되 필요시 _is_authorized 체크 추가 가능
@@ -543,6 +588,7 @@ async def tool_text_cleaner(request: Request):
     )
 
 
+@app.post('/api/tools/settlement')
 async def tool_settlement(request: Request):
     payload = await request.json()
     people = payload.get("people") or []
@@ -560,23 +606,20 @@ async def tool_settlement(request: Request):
     )
 
 
+@app.get('/api/sync/status')
 async def folder_sync_status(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
     service = get_folder_sync_service()
     return _json(service.status())
 
 
+@app.post('/api/sync/rescan')
 async def folder_sync_rescan(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
     service = get_folder_sync_service()
     result = service.sync_now()
     return _json({"ok": True, **asdict(result)})
 
 
+@app.get('/api/v6/health')
 async def v6_health(_request: Request):
     available, reason = parser_bridge_available()
     return _json(
@@ -588,10 +631,8 @@ async def v6_health(_request: Request):
     )
 
 
+@app.post('/api/v6/parse')
 async def v6_parse(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
 
     payload = await request.json()
     raw_text = str(payload.get("raw_text") or payload.get("text") or "").strip()
@@ -618,10 +659,8 @@ async def v6_parse(request: Request):
     return _json(result)
 
 
+@app.post('/api/v6/publish')
 async def v6_publish_sync(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
 
     payload = await request.json()
     documents = payload.get("documents", [])
@@ -666,10 +705,8 @@ async def v6_publish_sync(request: Request):
     return _json({"ok": True, "synced_count": len(synced_files)})
 
 
+@app.get('/api/settings/gemini-usage')
 async def settings_gemini_usage(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
     try:
         multiplier = float(request.query_params.get("multiplier", 1.0))
         exchange_rate = float(
@@ -724,10 +761,8 @@ async def settings_gemini_usage(request: Request):
     )
 
 
+@app.post('/api/auth/passkey/register/options')
 async def passkey_register_options(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
     email = _request_email(request)
     try:
         return _json(passkeys.registration_options(email))
@@ -735,10 +770,8 @@ async def passkey_register_options(request: Request):
         return _json({"error": str(exc)}, status_code=400)
 
 
+@app.post('/api/auth/passkey/register/verify')
 async def passkey_register_verify(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
     email = _request_email(request)
     payload = await request.json()
     try:
@@ -749,6 +782,7 @@ async def passkey_register_verify(request: Request):
         return _json({"error": str(exc)}, status_code=400)
 
 
+@app.post('/api/auth/passkey/login/options')
 async def passkey_login_options(request: Request):
     ok, message = _access_context_allowed(request)
     if not ok:
@@ -766,6 +800,7 @@ async def passkey_login_options(request: Request):
         return _json({"error": str(exc)}, status_code=400)
 
 
+@app.post('/api/auth/passkey/login/verify')
 async def passkey_login_verify(request: Request):
     ok, message = _access_context_allowed(request)
     if not ok:
@@ -788,6 +823,7 @@ async def passkey_login_verify(request: Request):
     return response
 
 
+@app.post('/api/auth/logout')
 async def auth_logout(request: Request):
     response = JSONResponse({"ok": True})
     # Remove passkey cookie
@@ -804,6 +840,7 @@ async def auth_logout(request: Request):
     return response
 
 
+@app.get('/api/auth/gdrive/url')
 async def gdrive_auth_url(request: Request):
     try:
         ok, message = _is_authorized(request)
@@ -838,6 +875,7 @@ async def gdrive_auth_url(request: Request):
         return _error(f"인증 URL 생성 중 오류가 발생했습니다: {str(e)}", 500)
 
 
+@app.get('/api/auth/gdrive/callback')
 async def gdrive_auth_callback(request: Request):
     try:
         code = request.query_params.get("code")
@@ -890,10 +928,8 @@ async def gdrive_auth_callback(request: Request):
         return Response(f"<html><body><h3>오류 발생</h3><p>{str(e)}</p></body></html>", media_type="text/html")
 
 
+@app.get('/api/files')
 async def files_list(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
     files = [
         {
             "name": item.name,
@@ -908,10 +944,8 @@ async def files_list(request: Request):
     return _json({"files": files})
 
 
+@app.get('/api/files/download')
 async def files_download(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
     blob_name = request.query_params.get("blob_name")
     if not blob_name:
         return _json({"error": "blob_name is required"}, status_code=400)
@@ -922,10 +956,8 @@ async def files_download(request: Request):
     return _file_response_bytes(content, original_name or blob_name, content_type)
 
 
+@app.post('/api/files')
 async def files_upload(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
     form = await request.form()
     uploaded = []
     bucket = get_bucket()
@@ -981,19 +1013,15 @@ async def files_upload(request: Request):
     return _json({"uploaded": uploaded})
 
 
+@app.post('/api/files/delete')
 async def files_delete(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
     payload = await request.json()
     delete_uploaded_file(payload.get("blob_name", ""))
     return _json({"ok": True})
 
 
+@app.get('/api/files/zip')
 async def files_zip(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
     
     zip_path = create_zip_of_files()
     if not zip_path or not os.path.exists(zip_path):
@@ -1003,14 +1031,12 @@ async def files_zip(request: Request):
         zip_path,
         media_type="application/zip",
         filename="jisong-cloud-files.zip",
-        background=BackgroundTask(os.remove, zip_path)
+        background=BackgroundTasks().add_task(os.remove, zip_path)
     )
 
 
+@app.get('/api/files/content')
 async def files_get_content(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
     
     blob_name = request.query_params.get("blob_name")
     if not blob_name:
@@ -1028,10 +1054,8 @@ async def files_get_content(request: Request):
         return _json({"error": str(e)}, status_code=500)
 
 
+@app.post('/api/files/content')
 async def files_save_content(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
     
     try:
         payload = await request.json()
@@ -1060,24 +1084,18 @@ async def files_save_content(request: Request):
         return _json({"error": str(e)}, status_code=500)
 
 
+@app.get('/api/memos')
 async def memos_list(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
     return _json({"memos": load_memo_list_cached()})
 
 
+@app.get('/api/memos/{file_name:str}')
 async def memo_detail(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
     return _json({"memo": load_single_memo_content(request.path_params["file_name"])})
 
 
+@app.get('/api/memos/{file_name:str}/download')
 async def memo_download(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
     memo = load_single_memo_content(request.path_params["file_name"])
     filename = f"{memo.get('title') or 'memo'}.txt"
     return _file_response_bytes(
@@ -1087,10 +1105,8 @@ async def memo_download(request: Request):
     )
 
 
+@app.post('/api/memos')
 async def memo_save(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
     payload = await request.json()
     save_memo_txt(
         payload.get("title", "메모"),
@@ -1100,19 +1116,15 @@ async def memo_save(request: Request):
     return _json({"ok": True})
 
 
+@app.post('/api/memos/delete')
 async def memo_delete(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
     payload = await request.json()
     delete_memo_txt(payload.get("file_name", ""))
     return _json({"ok": True})
 
 
+@app.get('/api/memos/zip')
 async def memos_zip(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
     memos = load_memo_list_cached()
     zip_buffer = create_zip_of_memos(memos)
     if not zip_buffer:
@@ -1126,10 +1138,8 @@ async def memos_zip(request: Request):
     )
 
 
+@app.post('/api/ai/analyze')
 async def ai_analyze(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
     payload = await request.json()
     prompt = (payload.get("prompt") or "").strip()
     if not prompt:
@@ -1173,10 +1183,8 @@ async def ai_analyze(request: Request):
         return _json({"error": str(exc)}, status_code=500)
 
 
+@app.post('/api/tools/markdown-pdf')
 async def tool_markdown_pdf(request: Request):
-    ok, message = _is_authorized(request)
-    if not ok:
-        return _json({"error": message}, status_code=401)
     payload = await request.json()
     markdown = (payload.get("markdown") or "").strip()
     if not markdown:
@@ -1206,94 +1214,25 @@ async def frontend(request: Request):
         if not request.cookies.get("jisong_access_logged"):
             client_ip = get_client_ip(request.headers, _request_client_host(request))
             headers_dict = dict(request.headers)
-            response.background = BackgroundTask(
-                log_access_request, headers_dict, client_ip
-            )
+            tasks = BackgroundTasks()
+            tasks.add_task(log_access_request, headers_dict, client_ip)
+            response.background = tasks
+            #
+                
             response.set_cookie("jisong_access_logged", "1", max_age=3600 * 24)
         return response
     media_type = mimetypes.guess_type(target.name)[0]
     return FileResponse(target, media_type=media_type)
 
 
-routes = [
-    Route("/api/health", health, methods=["GET"]),
-    Route("/api/v6/health", v6_health, methods=["GET"]),
-    Route("/api/session", session, methods=["GET"]),
-    Route("/api/usage/summary", usage_summary, methods=["GET"]),
-    Route("/api/sync/status", folder_sync_status, methods=["GET"]),
-    Route("/api/sync/rescan", folder_sync_rescan, methods=["POST"]),
-    Route("/api/settings/access-logs", settings_access_logs, methods=["GET"]),
-    Route(
-        "/api/settings/access-logs/clear", settings_access_logs_clear, methods=["POST"]
-    ),
-    Route("/api/settings/password", settings_password_update, methods=["POST"]),
-    Route("/api/settings/gemini-usage", settings_gemini_usage, methods=["GET"]),
-    Route(
-        "/api/auth/passkey/register/options", passkey_register_options, methods=["POST"]
-    ),
-    Route(
-        "/api/auth/passkey/register/verify", passkey_register_verify, methods=["POST"]
-    ),
-    Route("/api/auth/passkey/login/options", passkey_login_options, methods=["POST"]),
-    Route("/api/auth/passkey/login/verify", passkey_login_verify, methods=["POST"]),
-    Route("/api/auth/logout", auth_logout, methods=["POST"]),
-    Route("/api/auth/account/login", account_login, methods=["POST"]),
-    Route("/api/auth/gdrive/url", gdrive_auth_url, methods=["GET"]),
-    Route("/api/auth/gdrive/callback", gdrive_auth_callback, methods=["GET"]),
-    Route("/api/files", files_list, methods=["GET"]),
-    Route("/api/files", files_upload, methods=["POST"]),
-    Route("/api/files/download", files_download, methods=["GET"]),
-    Route("/api/files/delete", files_delete, methods=["POST"]),
-    Route("/api/files/zip", files_zip, methods=["GET"]),
-    Route("/api/files/content", files_get_content, methods=["GET"]),
-    Route("/api/files/content", files_save_content, methods=["POST"]),
-    Route("/api/memos", memos_list, methods=["GET"]),
-    Route("/api/memos", memo_save, methods=["POST"]),
-    Route("/api/memos/delete", memo_delete, methods=["POST"]),
-    Route("/api/memos/zip", memos_zip, methods=["GET"]),
-    Route("/api/memos/{file_name:str}/download", memo_download, methods=["GET"]),
-    Route("/api/memos/{file_name:str}", memo_detail, methods=["GET"]),
-    Route("/api/ai/analyze", ai_analyze, methods=["POST"]),
-    Route("/api/tools/markdown-pdf", tool_markdown_pdf, methods=["POST"]),
-    Route("/api/tools/text-cleaner", tool_text_cleaner, methods=["POST"]),
-    Route("/api/tools/settlement", tool_settlement, methods=["POST"]),
-    Route("/api/v6/parse", v6_parse, methods=["POST"]),
-    Route("/api/v6/publish", v6_publish_sync, methods=["POST"]),
-    Route("/", frontend, methods=["GET"]),
-    Route("/{path:path}", frontend, methods=["GET"]),
-]
 
 
-def _cleanup_expired_sessions():
-    try:
-        global _SESSIONS_CACHE
-        sessions = _load_account_sessions()
-        now = time.time()
-        
-        expired_tokens = []
-        for token, data in sessions.items():
-            if isinstance(data, dict) and data.get("expires_at", 0) < now:
-                expired_tokens.append(token)
-                
-        if expired_tokens:
-            for token in expired_tokens:
-                del sessions[token]
-            _save_account_sessions(sessions)
-            _SESSIONS_CACHE = sessions
-            # logger.info(f"Cleaned up {len(expired_tokens)} expired sessions.")
-    except Exception:
-        pass
 
 
-@asynccontextmanager
-async def lifespan(_app):
-    start_folder_sync_service()
-    start_gdrive_sync_service()
-    _cleanup_expired_sessions()
-    try:
-        yield
-    finally:
-        stop_folder_sync_service()
+@app.get("/")
+async def frontend_root(request: Request):
+    return await frontend(request)
 
-
-app = Starlette(debug=False, routes=routes, lifespan=lifespan)
+@app.get("/{path:path}")
+async def frontend_path(request: Request, path: str):
+    return await frontend(request)

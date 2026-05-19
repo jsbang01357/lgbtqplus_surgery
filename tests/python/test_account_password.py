@@ -29,7 +29,7 @@ class AccountPasswordTests(unittest.TestCase):
             patch.object(api_server, "owner_email", return_value="owner@example.com"), \
             patch.object(api_server, "_create_account_session", return_value="issued-token"), \
             patch.object(api_server, "_should_secure_cookie", return_value=False):
-            response = asyncio.run(api_server.account_login(request))
+            response = asyncio.run(api_server.account_login(request, api_server.AccountLoginRequest(**request._payload)))
 
         body = json.loads(response.body)
         self.assertEqual(response.status_code, 200)
@@ -45,7 +45,7 @@ class AccountPasswordTests(unittest.TestCase):
         with patch.dict(os.environ, {"ALLOW_ACCOUNT_ID_FALLBACK": "true"}, clear=True), \
             patch.object(api_server, "account_login_id", return_value="owner@example.com"), \
             patch.object(api_server, "verify_account_password", return_value=False):
-            response = asyncio.run(api_server.account_login(request))
+            response = asyncio.run(api_server.account_login(request, api_server.AccountLoginRequest(**request._payload)))
 
         body = json.loads(response.body)
         self.assertEqual(response.status_code, 401)
@@ -54,9 +54,8 @@ class AccountPasswordTests(unittest.TestCase):
     def test_password_update_saves_new_password(self):
         request = DummyRequest(payload={"new_password": "new-secret"})
 
-        with patch.object(api_server, "_is_authorized", return_value=(True, "")), \
-            patch("app.security.update_account_password") as mock_update:
-            response = asyncio.run(api_server.settings_password_update(request))
+        with patch("app.security.update_account_password") as mock_update:
+            response = asyncio.run(api_server.settings_password_update(request, api_server.PasswordUpdateRequest(**request._payload)))
 
         self.assertEqual(response.status_code, 200)
         mock_update.assert_called_once_with("new-secret")
@@ -64,9 +63,8 @@ class AccountPasswordTests(unittest.TestCase):
     def test_password_update_rejects_short_password(self):
         request = DummyRequest(payload={"new_password": "123"})
 
-        with patch.object(api_server, "_is_authorized", return_value=(True, "")), \
-            patch("app.security.update_account_password") as mock_update:
-            response = asyncio.run(api_server.settings_password_update(request))
+        with patch("app.security.update_account_password") as mock_update:
+            response = asyncio.run(api_server.settings_password_update(request, api_server.PasswordUpdateRequest(**request._payload)))
 
         body = json.loads(response.body)
         self.assertEqual(response.status_code, 400)

@@ -1,7 +1,6 @@
 import streamlit as st
 import datetime
 import zipfile
-import io
 import mimetypes
 import html
 import re

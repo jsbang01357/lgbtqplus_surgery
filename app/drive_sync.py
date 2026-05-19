@@ -2,13 +2,11 @@ import io
 import json
 import logging
 import threading
-import time
-from datetime import datetime
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 from google.oauth2.credentials import Credentials
 
-from app.config import get_bucket_name, get_gdrive_folder_id, get_secrets_dict
+from app.config import get_bucket_name, get_gdrive_folder_id
 from app.gcs_helper import get_bucket
 
 logger = logging.getLogger(__name__)
