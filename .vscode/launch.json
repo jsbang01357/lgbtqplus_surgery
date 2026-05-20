@@ -5,14 +5,14 @@
             "name": "Python: API Server (Jisong Cloud v6)",
             "type": "debugpy",
             "request": "launch",
+            "python": "${workspaceFolder}/.venv/bin/python",
             "module": "uvicorn",
             "args": [
                 "api_server:app",
                 "--host",
                 "127.0.0.1",
                 "--port",
-                "8080",
-                "--reload"
+                "8080"
             ],
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
