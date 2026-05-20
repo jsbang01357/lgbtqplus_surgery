@@ -51,7 +51,7 @@ if os.getenv("GDRIVE_REDIRECT_URI", "").startswith("http://localhost"):
 GDRIVE_TOKEN_BLOB = "auth/gdrive_token.json"
 GDRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
 
-FRONTEND_DIR = (Path(__file__).resolve().parent / "frontend").resolve()
+FRONTEND_DIR = (Path(__file__).resolve().parent.parent / "frontend").resolve()
 MENU_JSON_PATH = Path(__file__).resolve().parent / "data" / "menu_list.json"
 INCLUDE_RE = re.compile(r"<!--\s*include:(?P<path>[^ ]+)\s*-->")
 ACCOUNT_SESSION_COOKIE = "jisong_account_session"
