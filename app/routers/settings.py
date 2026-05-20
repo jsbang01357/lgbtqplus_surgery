@@ -57,7 +57,7 @@ async def settings_password_update(request: Request, payload: PasswordUpdateRequ
         return _json({"error": f"비밀번호 변경 실패: {exc}"}, status_code=500)
 
 @router.get('/api/settings/access-logs')
-async def settings_access_logs(request: Request):
+async def settings_access_logs(request: Request, _: bool = Depends(get_current_user)):
     try:
         logs = get_access_logs()[:50]
     except Exception as exc:
@@ -83,7 +83,7 @@ async def settings_access_logs(request: Request):
     )
 
 @router.post('/api/settings/access-logs/clear')
-async def settings_access_logs_clear(request: Request):
+async def settings_access_logs_clear(request: Request, _: bool = Depends(get_current_user)):
     try:
         clear_access_logs()
         return _json({"ok": True})
@@ -91,7 +91,7 @@ async def settings_access_logs_clear(request: Request):
         return _json({"error": str(exc)}, status_code=500)
 
 @router.get('/api/settings/gemini-usage')
-async def settings_gemini_usage(request: Request):
+async def settings_gemini_usage(request: Request, _: bool = Depends(get_current_user)):
     try:
         multiplier = float(request.query_params.get("multiplier", 1.0))
         exchange_rate = float(

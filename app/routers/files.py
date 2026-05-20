@@ -1,12 +1,12 @@
-from fastapi import APIRouter, Request, BackgroundTasks
+from fastapi import APIRouter, Request, BackgroundTasks, Depends
 from fastapi.responses import FileResponse
 import os
 import secrets
 from pathlib import Path
 from dataclasses import asdict
 
-from app.api_deps import _json, _file_response_bytes
-from app.storage import create_zip_of_files, create_file_download_url, delete_uploaded_file, guess_content_type, list_uploaded_files_cached, list_uploaded_files, normalize_blob_name, MAX_UPLOAD_SIZE_BYTES, UPLOAD_PREFIX, download_file_bytes
+from app.api_deps import _json, _file_response_bytes, get_current_user
+from app.storage import create_zip_of_files, create_file_download_url_safe, delete_uploaded_file, guess_content_type, list_uploaded_files_cached, list_uploaded_files, normalize_blob_name, MAX_UPLOAD_SIZE_BYTES, UPLOAD_PREFIX, download_file_bytes
 from app.memo import load_memo_list_cached
 from app.folder_sync import get_folder_sync_service
 from app.gcs_helper import get_bucket
@@ -15,18 +15,18 @@ from app.core_utils import get_now
 router = APIRouter()
 
 @router.get('/api/sync/status')
-async def folder_sync_status(request: Request):
+async def folder_sync_status(request: Request, _: bool = Depends(get_current_user)):
     service = get_folder_sync_service()
     return _json(service.status())
 
 @router.post('/api/sync/rescan')
-async def folder_sync_rescan(request: Request):
+async def folder_sync_rescan(request: Request, _: bool = Depends(get_current_user)):
     service = get_folder_sync_service()
     result = service.sync_now()
     return _json({"ok": True, **asdict(result)})
 
 @router.get('/api/files')
-async def files_list(request: Request):
+async def files_list(request: Request, _: bool = Depends(get_current_user)):
     files = [
         {
             "name": item.name,
@@ -34,14 +34,14 @@ async def files_list(request: Request):
             "size": item.size,
             "updated": item.updated.isoformat() if item.updated else "",
             "content_type": item.content_type or "",
-            "download_url": create_file_download_url(item),
+            "download_url": create_file_download_url_safe(item),
         }
         for item in list_uploaded_files()
     ]
     return _json({"files": files})
 
 @router.get('/api/files/download')
-async def files_download(request: Request):
+async def files_download(request: Request, _: bool = Depends(get_current_user)):
     blob_name = request.query_params.get("blob_name")
     if not blob_name:
         return _json({"error": "blob_name is required"}, status_code=400)
@@ -51,7 +51,7 @@ async def files_download(request: Request):
     return _file_response_bytes(content, original_name or blob_name, content_type)
 
 @router.post('/api/files')
-async def files_upload(request: Request):
+async def files_upload(request: Request, _: bool = Depends(get_current_user)):
     form = await request.form()
     uploaded = []
     bucket = get_bucket()
@@ -107,28 +107,28 @@ async def files_upload(request: Request):
     return _json({"uploaded": uploaded})
 
 @router.post('/api/files/delete')
-async def files_delete(request: Request):
+async def files_delete(request: Request, _: bool = Depends(get_current_user)):
     payload = await request.json()
     delete_uploaded_file(payload.get("blob_name", ""))
     return _json({"ok": True})
 
 @router.get('/api/files/zip')
-async def files_zip(request: Request):
-    
+async def files_zip(request: Request, _: bool = Depends(get_current_user)):
     zip_path = create_zip_of_files()
     if not zip_path or not os.path.exists(zip_path):
         return _json({"error": "다운로드할 파일이 없습니다."}, status_code=404)
-        
+
+    background = BackgroundTasks()
+    background.add_task(os.remove, zip_path)
     return FileResponse(
         zip_path,
         media_type="application/zip",
         filename="jisong-cloud-files.zip",
-        background=BackgroundTasks().add_task(os.remove, zip_path)
+        background=background,
     )
 
 @router.get('/api/files/content')
-async def files_get_content(request: Request):
-    
+async def files_get_content(request: Request, _: bool = Depends(get_current_user)):
     blob_name = request.query_params.get("blob_name")
     if not blob_name:
         return _json({"error": "blob_name is required"}, status_code=400)
@@ -145,8 +145,7 @@ async def files_get_content(request: Request):
         return _json({"error": str(e)}, status_code=500)
 
 @router.post('/api/files/content')
-async def files_save_content(request: Request):
-    
+async def files_save_content(request: Request, _: bool = Depends(get_current_user)):
     try:
         payload = await request.json()
         blob_name = payload.get("blob_name")

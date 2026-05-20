@@ -1,9 +1,9 @@
 import mimetypes
-from fastapi import APIRouter, Request, BackgroundTasks
+from fastapi import APIRouter, Request, BackgroundTasks, Depends
 from fastapi.responses import FileResponse, StreamingResponse, Response
 import io
 
-from app.api_deps import _json, FRONTEND_DIR, _render_frontend_html, _request_client_host
+from app.api_deps import _json, FRONTEND_DIR, _render_frontend_html, _request_client_host, get_current_user
 from app.storage import list_uploaded_files
 from app.memo import load_single_memo_content
 from app.ai import _get_gemini_api_key, _get_model_name, _get_usage_limit_status, _postprocess_ai_result, _record_gemini_usage, _run_gemini_analysis
@@ -112,7 +112,7 @@ async def tool_settlement(request: Request):
     )
 
 @router.post('/api/ai/analyze')
-async def ai_analyze(request: Request):
+async def ai_analyze(request: Request, _: bool = Depends(get_current_user)):
     payload = await request.json()
     prompt = (payload.get("prompt") or "").strip()
     if not prompt:

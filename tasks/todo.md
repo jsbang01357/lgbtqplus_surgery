@@ -259,6 +259,14 @@ Mark items as complete as you go.
 
 ---
 
+## 2026-05-20 웹하드/인증/정리 이슈 복구
+
+- [x] 웹하드 목록 실패 원인 확인
+- [x] 파일 목록/다운로드 API 복구
+- [x] 보호가 필요한 API 인증 의존성 정리
+- [x] background task 및 임시 ZIP 정리 버그 수정
+- [x] 테스트 및 기본 동작 검증
+
 - [x] Read the repository structure and main entrypoints
 - [x] Inspect core modules for storage, memos, tools, auth, and logging
 - [x] Review deployment/configuration files and supporting assets

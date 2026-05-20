@@ -14,6 +14,7 @@ Reuse these lessons in future tasks to avoid repeating the same mistakes.
 ## Missed Requirements
 * 작업 체크리스트를 갱신할 때는 새 파일로 덮어쓰기 전에 기존 `tasks/todo.md` 내용을 먼저 확인하고, 이전 기록 아래에 새 작업 섹션을 추가한다.
 * 앱의 진입점이 바뀌면 README의 실행 방법, 구조도, 인증 설명부터 먼저 다시 확인한다. 이 저장소는 Streamlit 보조 모듈이 남아 있어도 운영 기준 진입점은 `api_server.py`다.
+* 파일 목록 API에서 signed URL은 부가 정보일 뿐 필수 응답이 아니다. 다운로드 fallback endpoint가 따로 있으면 URL 서명 실패를 전체 목록 실패로 번지게 하지 말고 빈 값으로 내려야 한다.
 * 제거 예정 API 경고를 처리할 때는 기능 삭제 전에 실제 사용자 가치와 fallback 가능성을 먼저 확인한다.
 * Streamlit 세션 상태로 다운로드 bytes를 준비할 때는 source 플래그를 먼저 갱신해 생성 조건을 건너뛰지 않도록 한다.
 * 한국어 인명 마스킹 정규식은 `환자는`처럼 명사 뒤 조사가 붙는 케이스까지 테스트한다.

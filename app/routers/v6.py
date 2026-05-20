@@ -1,10 +1,11 @@
 import logging
 logger = logging.getLogger(__name__)
 from fastapi import APIRouter, Request
+from fastapi import Depends
 import json
 import secrets
 
-from app.api_deps import _json
+from app.api_deps import _json, get_current_user
 from app.gcs_helper import get_bucket
 from app.v6_bridge import ParserBridgeError, parser_bridge_available, run_v6_parse
 
@@ -22,7 +23,7 @@ async def v6_health(_request: Request):
     )
 
 @router.post('/api/v6/parse')
-async def v6_parse(request: Request):
+async def v6_parse(request: Request, _: bool = Depends(get_current_user)):
 
     payload = await request.json()
     raw_text = str(payload.get("raw_text") or payload.get("text") or "").strip()
@@ -49,7 +50,7 @@ async def v6_parse(request: Request):
     return _json(result)
 
 @router.post('/api/v6/publish')
-async def v6_publish_sync(request: Request):
+async def v6_publish_sync(request: Request, _: bool = Depends(get_current_user)):
 
     payload = await request.json()
     documents = payload.get("documents", [])

@@ -1,10 +1,11 @@
 import logging
 from contextlib import asynccontextmanager
+import mimetypes
+
 from fastapi import FastAPI, Request
 from fastapi.responses import Response, FileResponse
 from starlette.background import BackgroundTasks
-import mimetypes
-import app.access_logger
+from app.access_logger import log_access_request
 
 from app.api_deps import _render_frontend_html, _request_client_host, FRONTEND_DIR, _cleanup_expired_sessions, _json
 from app.folder_sync import start_folder_sync_service, stop_folder_sync_service
@@ -53,7 +54,7 @@ async def frontend(request: Request):
             client_ip = get_client_ip(request.headers, _request_client_host(request))
             headers_dict = dict(request.headers)
             tasks = BackgroundTasks()
-            tasks.add_task(headers_dict, client_ip)
+            tasks.add_task(log_access_request, headers_dict, client_ip)
             response.background = tasks
             response.set_cookie("jisong_access_logged", "1", max_age=3600 * 24)
         return response

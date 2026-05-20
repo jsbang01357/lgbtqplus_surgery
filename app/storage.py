@@ -165,10 +165,14 @@ def clear_all_uploaded_files():
     list_uploaded_files_cached.clear()
 
 
-def download_file_bytes(blob_name: str) -> bytes:
+def download_file_bytes(blob_name: str) -> tuple[bytes, str, str]:
     bucket = get_bucket()
     blob = bucket.blob(blob_name)
-    return blob.download_as_bytes()
+    content = blob.download_as_bytes()
+    metadata = blob.metadata or {}
+    original_name = _display_file_name(blob_name, metadata)
+    content_type = blob.content_type or guess_content_type(original_name)
+    return content, content_type, original_name
 
 
 def create_file_download_url(file_info: GCSFileInfo) -> str:
@@ -185,6 +189,13 @@ def create_file_download_url(file_info: GCSFileInfo) -> str:
         ),
         response_type=file_info.content_type or "application/octet-stream",
     )
+
+
+def create_file_download_url_safe(file_info: GCSFileInfo) -> str:
+    try:
+        return create_file_download_url(file_info)
+    except Exception:
+        return ""
 
 
 def create_zip_of_files():
