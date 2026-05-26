@@ -28,3 +28,6 @@ Reuse these lessons in future tasks to avoid repeating the same mistakes.
 * 로그인 화면과 다중 섹션 SPA를 섞을 때는 JS 라우터가 준비되기 전 기본 HTML 상태에서 다른 `data-page` 섹션이 보이지 않도록 `router-ready` 같은 하드 가드를 먼저 둔다. 숨김 토글이 늦으면 데이터가 비어 있어도 아래 페이지들이 먼저 렌더링된다.
 * 런타임 호환 컴포넌트(`streamlit_compat.py` 등)를 새로 사용하도록 코드를 리팩토링할 때는 호출부 파일(`auth.py` 등)에서 해당 함수(`render_inline_html`)가 올바르게 임포트되었는지 꼼꼼하게 교차 검증해야 한다.
 * Starlette 버전에 따라 `Starlette(..., on_startup=..., on_shutdown=...)`가 지원되지 않을 수 있으니, background service 연결은 `lifespan`으로 묶는 쪽을 우선 확인한다.
+* 캐시 데코레이터를 제거한 함수에는 남아 있는 `.clear()` 호출까지 같이 제거해야 한다. 업로드/저장 성공 후 stale cache clear 호출이 500 응답으로 바뀌면 사용자는 저장이 안 된 것으로 보게 된다.
+* 다운로드 응답의 `Content-Disposition`에는 한글/유니코드 파일명을 raw `filename="..."`로 넣지 말고 ASCII fallback과 `filename*=UTF-8''...`를 같이 내려야 한다.
+* FastAPI 라우트는 등록 순서가 중요하므로 `/api/memos/zip` 같은 고정 경로는 `/api/memos/{file_name}` 같은 동적 경로보다 먼저 둔다.

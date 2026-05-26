@@ -103,7 +103,6 @@ async def files_upload(request: Request, _: bool = Depends(get_current_user)):
         blob.upload_from_string(content, content_type=content_type)
         uploaded.append({"name": safe_original, "blob_name": blob_name})
     list_uploaded_files_cached.clear()
-    create_zip_of_files.clear()
     return _json({"uploaded": uploaded})
 
 @router.post('/api/files/delete')

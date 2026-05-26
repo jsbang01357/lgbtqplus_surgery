@@ -6,6 +6,7 @@ import logging
 import threading
 import time
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import Request, HTTPException, status
 
@@ -212,11 +213,19 @@ def _should_secure_cookie(request: Request) -> bool:
 
 
 def _file_response_bytes(content: bytes, filename: str, media_type: str):
-    safe_name = filename.replace("\\", "_").replace('"', "'")
+    safe_name = filename.replace("\\", "_").replace("/", "_").replace('"', "'")
+    ascii_name = safe_name.encode("ascii", "ignore").decode("ascii").strip()
+    if not ascii_name:
+        ascii_name = "download"
+    encoded_name = quote(safe_name)
     return StreamingResponse(
         io.BytesIO(content),
         media_type=media_type,
-        headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{encoded_name}'
+            )
+        },
     )
 
 
@@ -264,5 +273,4 @@ def _is_authorized(request: Request) -> tuple[bool, str]:
     if not state["authorized"]:
         return False, "패스키 또는 계정 ID 인증이 필요합니다."
     return True, ""
-
 

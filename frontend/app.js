@@ -301,11 +301,17 @@ async function uploadSelectedFiles(input) {
   const btn = document.querySelector("#upload-form button") || { textContent: "" };
   setBusy(btn, "업로드 중", true);
   try {
-    await fetch("/api/files", {
+    const response = await fetch("/api/files", {
       method: "POST",
       body: formData,
     });
-    showToast("업로드 완료");
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || "업로드에 실패했습니다.");
+    }
+    state.currentStorage = "uploads";
+    const uploadedCount = Array.isArray(data.uploaded) ? data.uploaded.length : files.length;
+    showToast(`${uploadedCount}개 파일 업로드 완료`);
     await loadFiles();
   } catch (error) {
     showToast("업로드 실패: " + error.message);
@@ -364,6 +370,53 @@ async function deleteMemo(index) {
     await loadMemos();
   } catch (error) {
     showToast("삭제 실패: " + error.message);
+  }
+}
+
+async function getMemoContent(memo) {
+  const fullMemo = await loadMemoDetail(memo.fileName);
+  const nextMemo = fullMemo
+    ? {
+      ...memo,
+      title: fullMemo.title || memo.title,
+      body: fullMemo.content || memo.body,
+    }
+    : memo;
+  state.memos = state.memos.map((item) =>
+    item.fileName === memo.fileName ? nextMemo : item,
+  );
+  return nextMemo;
+}
+
+function memoDownloadName(memo) {
+  const title = (memo.title || "memo")
+    .replace(/[\\/:*?"<>|]+/g, "_")
+    .trim();
+  return `${title || "memo"}.txt`;
+}
+
+async function downloadMemo(index) {
+  const memo = getFilteredMemos()[index];
+  if (!memo?.fileName) return;
+  try {
+    await downloadFromApi(
+      `/api/memos/${encodeURIComponent(memo.fileName)}/download`,
+      memoDownloadName(memo),
+    );
+  } catch (error) {
+    showToast("메모 다운로드 실패: " + error.message);
+  }
+}
+
+async function copyMemo(index) {
+  const memo = getFilteredMemos()[index];
+  if (!memo?.fileName) return;
+  try {
+    const fullMemo = await getMemoContent(memo);
+    await navigator.clipboard.writeText(fullMemo.body || "");
+    showToast("메모 본문 복사 완료");
+  } catch (error) {
+    showToast("메모 복사 실패: " + error.message);
   }
 }
 
@@ -1037,6 +1090,8 @@ function renderMemos() {
             ${memo.updated ? `<small>${escapeHtml(memo.updated)}</small>` : "<small>미리보기</small>"}
             ${memo.fileName
           ? `<button class="text-button" type="button" data-memo-open="${index}">열기</button>
+                   <button class="text-button" type="button" data-memo-download="${index}">다운</button>
+                   <button class="text-button" type="button" data-memo-copy="${index}">복사</button>
                    <button class="text-button" type="button" data-memo-delete="${index}">삭제</button>`
           : ""
         }
@@ -1472,17 +1527,7 @@ async function bootstrap() {
       const memo = getFilteredMemos()[parseInt(memoOpen.dataset.memoOpen)];
       if (memo) {
         try {
-          const fullMemo = await loadMemoDetail(memo.fileName);
-          const nextMemo = fullMemo
-            ? {
-              ...memo,
-              title: fullMemo.title || memo.title,
-              body: fullMemo.content || memo.body,
-            }
-            : memo;
-          state.memos = state.memos.map((item) =>
-            item.fileName === memo.fileName ? nextMemo : item,
-          );
+          const nextMemo = await getMemoContent(memo);
           document.querySelector("#memo-title").value = nextMemo.title;
           document.querySelector("#memo-body").value = nextMemo.body;
           document.querySelector("#memo-file-name").value = memo.fileName;
@@ -1494,6 +1539,18 @@ async function bootstrap() {
           showToast(err.message);
         }
       }
+      return;
+    }
+
+    const memoDownload = e.target.closest("[data-memo-download]");
+    if (memoDownload) {
+      downloadMemo(parseInt(memoDownload.dataset.memoDownload));
+      return;
+    }
+
+    const memoCopy = e.target.closest("[data-memo-copy]");
+    if (memoCopy) {
+      copyMemo(parseInt(memoCopy.dataset.memoCopy));
       return;
     }
 
@@ -1814,7 +1871,8 @@ async function bootstrap() {
   downloadCurrentMemoButton?.addEventListener("click", async () => {
     const fileName = document.querySelector("#memo-file-name").value;
     if (!fileName) return;
-    try { await downloadFromApi(`/api/memos/${fileName}/download`, "memo.txt"); }
+    const title = document.querySelector("#memo-title").value || "memo";
+    try { await downloadFromApi(`/api/memos/${encodeURIComponent(fileName)}/download`, memoDownloadName({ title })); }
     catch (err) { showToast(err.message); }
   });
 

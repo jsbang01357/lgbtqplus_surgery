@@ -113,7 +113,6 @@ def save_uploaded_file(uploaded_file):
 
         # 저장 후 목록 캐시 비우기
         list_uploaded_files_cached.clear()
-        create_zip_of_files.clear()
         return True
     except Exception as e:
         st.error(f"업로드 오류: {e}")
@@ -139,7 +138,6 @@ def save_generated_file(
     blob.upload_from_string(content, content_type=content_type)
 
     list_uploaded_files_cached.clear()
-    create_zip_of_files.clear()
     return new_filename
 
 
