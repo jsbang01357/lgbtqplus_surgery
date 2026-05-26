@@ -408,12 +408,39 @@ async function downloadMemo(index) {
   }
 }
 
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Fall through to the selection-based fallback for browsers that block
+      // async Clipboard API calls outside secure contexts or strict gestures.
+    }
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.top = "-9999px";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  const copied = document.execCommand("copy");
+  textarea.remove();
+  if (!copied) {
+    throw new Error("브라우저가 클립보드 접근을 허용하지 않았습니다.");
+  }
+}
+
 async function copyMemo(index) {
   const memo = getFilteredMemos()[index];
   if (!memo?.fileName) return;
   try {
     const fullMemo = await getMemoContent(memo);
-    await navigator.clipboard.writeText(fullMemo.body || "");
+    await copyTextToClipboard(fullMemo.body || "");
     showToast("메모 본문 복사 완료");
   } catch (error) {
     showToast("메모 복사 실패: " + error.message);

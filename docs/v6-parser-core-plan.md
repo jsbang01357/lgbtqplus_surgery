@@ -55,6 +55,6 @@ JisongCloud v6의 핵심은 웹 AI surface가 아니라 EMR normalization engine
 
 - `app/v6_bridge.py`: Python -> Node CLI bridge
 - `api_server.py`: `/api/v6/health`, `/api/v6/parse`
-- `Dockerfile`: Node runtime 설치 + `v6/parser-core` build 수행
+- `Dockerfile`: Node runtime 설치 + `parser-core` build 수행
 
 현재는 API bridge까지 연결됐고, parser 품질 고도화와 review UI가 다음 우선순위다.

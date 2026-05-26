@@ -8,7 +8,7 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-PARSER_CORE_DIR = REPO_ROOT / "v6" / "parser-core"
+PARSER_CORE_DIR = REPO_ROOT / "parser-core"
 PARSER_CLI_PATH = PARSER_CORE_DIR / "dist" / "cli.js"
 
 

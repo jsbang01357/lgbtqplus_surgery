@@ -14,7 +14,7 @@ const payload = {
 };
 
 try {
-  const result = execSync("node v6/parser-core/dist/cli.js", {
+  const result = execSync("node parser-core/dist/cli.js", {
     input: JSON.stringify(payload),
     encoding: "utf-8"
   });

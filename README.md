@@ -116,8 +116,8 @@ bucket/
 │   └── v6_bridge.py
 ├── docs/
 ├── frontend/
+├── parser-core/
 ├── tests/
-├── v6/
 ├── Dockerfile
 ├── cloudbuild.yaml
 └── requirements.txt
@@ -243,13 +243,13 @@ python3 -m unittest discover -s tests/python
 v6 parser-core 타입 체크:
 
 ```bash
-cd v6/parser-core
+cd parser-core
 npm run check
 ```
 
 주의:
 
-- 현재 로컬 머신의 Node가 `v16`이면 `v6/parser-core` 작업 전에 Node 20 계열로 맞추는 편이 안전합니다.
+- 현재 로컬 머신의 Node가 `v16`이면 `parser-core` 작업 전에 Node 20 계열로 맞추는 편이 안전합니다.
 - `tests/python`은 `google-cloud-storage`, `cryptography` 같은 런타임 의존성이 설치되어 있어야 수집 단계부터 정상 동작합니다.
 
 ## 배포
