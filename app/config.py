@@ -23,20 +23,7 @@ def get_config(key: str, default: str = "") -> str:
     if value:
         return value
 
-    # 2. Local fallback or Streamlit secrets
-    try:
-        import streamlit as st
-        # If we are in streamlit context, use st.secrets
-        if hasattr(st, "secrets") and st.secrets:
-            if key.lower() in st.secrets:
-                return str(st.secrets[key.lower()])
-            for section in st.secrets.values():
-                if isinstance(section, dict) and key.lower() in section:
-                    return str(section[key.lower()])
-    except ImportError:
-        pass
-    except Exception:
-        logger.warning("Streamlit secrets 로드에 실패했습니다.", exc_info=True)
+
 
     # 3. Direct TOML reading for uvicorn/bare context
     if _SECRETS_CACHE is None:
@@ -74,18 +61,7 @@ def get_secrets_dict() -> dict:
         _SECRETS_CACHE = _load_secrets_toml()
     
     combined = dict(_SECRETS_CACHE)
-    try:
-        import streamlit as st
-        if hasattr(st, "secrets") and st.secrets:
-            for k, v in st.secrets.items():
-                if isinstance(v, dict):
-                    combined[k] = {**combined.get(k, {}), **v}
-                else:
-                    combined[k] = v
-    except ImportError:
-        pass
-    except Exception:
-        logger.warning("Streamlit secrets dictionary 병합에 실패했습니다.", exc_info=True)
+
     return combined
 
 def get_admin_password() -> str:

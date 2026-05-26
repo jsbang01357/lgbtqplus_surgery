@@ -43,12 +43,13 @@ async def files_list(request: Request, _: bool = Depends(get_current_user)):
 @router.get('/api/files/download')
 async def files_download(request: Request, _: bool = Depends(get_current_user)):
     blob_name = request.query_params.get("blob_name")
+    filename = request.query_params.get("filename")
     if not blob_name:
         return _json({"error": "blob_name is required"}, status_code=400)
 
-
     content, content_type, original_name = download_file_bytes(blob_name)
-    return _file_response_bytes(content, original_name or blob_name, content_type)
+    final_name = filename or original_name or blob_name
+    return _file_response_bytes(content, final_name, content_type)
 
 @router.post('/api/files')
 async def files_upload(request: Request, _: bool = Depends(get_current_user)):

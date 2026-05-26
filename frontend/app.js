@@ -24,6 +24,7 @@ const state = {
   selectedDocIndices: [],
   currentStorage: "uploads", // Add current storage type
   currentPath: "", // Add current selected path
+  lastAiSources: null, // Track sources used for the last AI analysis
 };
 
 const DEFAULT_GEMINI_COST_MULTIPLIER = "1.0";
@@ -337,7 +338,7 @@ async function downloadFile(index) {
   const file = getFilteredFiles()[index];
   if (!file) return;
   try {
-    await downloadFromApi(`/api/files/download?blob_name=${encodeURIComponent(file.blobName)}`, file.name);
+    await downloadFromApi(`/api/files/download?blob_name=${encodeURIComponent(file.blobName)}&filename=${encodeURIComponent(file.name)}`, file.name);
   } catch (error) {
     showToast("다운로드 실패: " + error.message);
   }
@@ -399,9 +400,10 @@ async function downloadMemo(index) {
   const memo = getFilteredMemos()[index];
   if (!memo?.fileName) return;
   try {
+    const filename = memoDownloadName(memo);
     await downloadFromApi(
-      `/api/memos/${encodeURIComponent(memo.fileName)}/download`,
-      memoDownloadName(memo),
+      `/api/memos/${encodeURIComponent(memo.fileName)}/download?filename=${encodeURIComponent(filename)}`,
+      filename,
     );
   } catch (error) {
     showToast("메모 다운로드 실패: " + error.message);
@@ -564,6 +566,33 @@ async function downloadPostBlob(url, payload, filename) {
   link.remove();
   URL.revokeObjectURL(objectUrl);
 }
+
+function getAiResultDownloadName(ext) {
+  const sources = [];
+  if (state.lastAiSources) {
+    if (state.lastAiSources.files) {
+      sources.push(...state.lastAiSources.files);
+    }
+    if (state.lastAiSources.memos) {
+      sources.push(...state.lastAiSources.memos);
+    }
+  }
+
+  if (sources.length === 0) {
+    return `ai-result.${ext}`;
+  }
+
+  const firstSource = sources[0];
+  let baseName = firstSource;
+  const lastDot = firstSource.lastIndexOf('.');
+  if (lastDot > 0) {
+    baseName = firstSource.substring(0, lastDot);
+  }
+
+  const sanitized = baseName.replace(/[\\/:*?"<>|]+/g, "_").trim();
+  return `${sanitized || "ai-result"}_analysis.${ext}`;
+}
+
 
 function downloadTextFile(filename, content, type = "text/plain;charset=utf-8") {
   const blob = new Blob([content], { type });
@@ -1436,11 +1465,23 @@ async function bootstrap() {
   }
 
   // Event listeners that require session
-  document.querySelector("#upload-form")?.addEventListener("submit", e => {
+  const fileInput = document.querySelector("#file-input");
+  const uploadBtn = document.querySelector("#upload-submit-btn");
+
+  document.querySelector("#upload-form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
-    uploadSelectedFiles(document.querySelector("#file-input"));
+    if (fileInput && fileInput.files.length > 0) {
+      await uploadSelectedFiles(fileInput);
+      if (uploadBtn) uploadBtn.disabled = true;
+    }
   });
-  document.querySelector("#file-input")?.addEventListener("change", e => uploadSelectedFiles(e.target));
+
+  fileInput?.addEventListener("change", (e) => {
+    if (uploadBtn) {
+      uploadBtn.disabled = !e.target.files.length;
+    }
+  });
+
   document.querySelector("#download-all")?.addEventListener("click", async () => {
     try { await downloadFromApi("/api/files/zip", "jisong-cloud-files.zip"); showToast("ZIP 다운로드 시작"); }
     catch (err) { showToast(err.message); }
@@ -1879,6 +1920,10 @@ async function bootstrap() {
         memo_file_names: selectedMemoFileNames,
       });
       state.lastAiResult = data.result || "결과가 없습니다.";
+      state.lastAiSources = {
+        files: selectedBlobNames.map(bn => state.files.find(f => f.blobName === bn)?.name).filter(Boolean),
+        memos: selectedMemoFileNames.map(fn => state.memos.find(m => m.fileName === fn)?.title).filter(Boolean)
+      };
       const aiResult = document.querySelector("#ai-result");
       aiResult.innerHTML = markdownToHtml(state.lastAiResult);
       aiResult.style.display = "block";
@@ -1918,17 +1963,19 @@ async function bootstrap() {
   downloadAiMdButton?.addEventListener("click", () => {
     const blob = new Blob([state.lastAiResult], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "ai-result.md"; a.click();
+    const a = document.createElement("a"); a.href = url; a.download = getAiResultDownloadName("md"); a.click();
   });
   downloadAiPdfButton?.addEventListener("click", async () => {
-    try { await downloadPostBlob("/api/tools/markdown-pdf", { markdown: state.lastAiResult }, "ai-result.pdf"); showToast("PDF 다운로드 시작"); }
+    const filename = getAiResultDownloadName("pdf");
+    try { await downloadPostBlob("/api/tools/markdown-pdf", { markdown: state.lastAiResult, filename }, filename); showToast("PDF 다운로드 시작"); }
     catch (err) { showToast(err.message); }
   });
   downloadCurrentMemoButton?.addEventListener("click", async () => {
     const fileName = document.querySelector("#memo-file-name").value;
     if (!fileName) return;
     const title = document.querySelector("#memo-title").value || "memo";
-    try { await downloadFromApi(`/api/memos/${encodeURIComponent(fileName)}/download`, memoDownloadName({ title })); }
+    const filename = memoDownloadName({ title });
+    try { await downloadFromApi(`/api/memos/${encodeURIComponent(fileName)}/download?filename=${encodeURIComponent(filename)}`, filename); }
     catch (err) { showToast(err.message); }
   });
 
@@ -1978,29 +2025,4 @@ async function bootstrap() {
     });
   }
 }
-bootstrap();
-tener("input", () => {
-  if (!state.editingMemoFileName) return;
-  clearTimeout(autoSaveTimeout);
-  autoSaveTimeout = setTimeout(() => {
-    saveMemo(true); // silent save
-  }, 2000);
-});
-
-if (geminiSettingsSaveBtn) {
-  if (geminiExchangeRateInput) geminiExchangeRateInput.value = localStorage.getItem("geminiExchangeRate") || "1400";
-  if (geminiCostMultiplierInput) geminiCostMultiplierInput.value = localStorage.getItem("geminiCostMultiplier") || "1.0";
-
-  geminiSettingsSaveBtn.addEventListener("click", async () => {
-    if (geminiExchangeRateInput && geminiExchangeRateInput.value) {
-      localStorage.setItem("geminiExchangeRate", geminiExchangeRateInput.value);
-    }
-    if (geminiCostMultiplierInput && geminiCostMultiplierInput.value) {
-      localStorage.setItem("geminiCostMultiplier", geminiCostMultiplierInput.value);
-    }
-    showToast("Gemini 요금 설정이 저장되었습니다.");
-    await Promise.all([loadUsageSummary(), loadSettings()]);
-  });
-}
-
 bootstrap();

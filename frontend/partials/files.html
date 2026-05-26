@@ -29,7 +29,10 @@
       </div>
       <form class="utility-card upload-card" id="upload-form">
         <label for="file-input">파일 올리기</label>
-        <input id="file-input" name="file-input" type="file" multiple />
+        <div class="tool-file-picker-row" style="margin-top: 8px;">
+          <input id="file-input" name="file-input" type="file" multiple />
+          <button class="button button-primary" id="upload-submit-btn" type="submit" disabled>업로드</button>
+        </div>
         <p class="settings-note">GCS uploads/ 폴더에 저장됩니다.</p>
       </form>
 

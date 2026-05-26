@@ -3,7 +3,7 @@ from fastapi import APIRouter, Request, BackgroundTasks, Depends
 from fastapi.responses import FileResponse, StreamingResponse, Response
 import io
 
-from app.api_deps import _json, FRONTEND_DIR, _render_frontend_html, _request_client_host, get_current_user
+from app.api_deps import _json, FRONTEND_DIR, _render_frontend_html, _request_client_host, get_current_user, _file_response_bytes
 from app.storage import list_uploaded_files
 from app.memo import load_single_memo_content
 from app.ai import _get_gemini_api_key, _get_model_name, _get_usage_limit_status, _postprocess_ai_result, _record_gemini_usage, _run_gemini_analysis
@@ -159,17 +159,16 @@ async def ai_analyze(request: Request, _: bool = Depends(get_current_user)):
 async def tool_markdown_pdf(request: Request):
     payload = await request.json()
     markdown = (payload.get("markdown") or "").strip()
+    filename = (payload.get("filename") or "jisong-markdown.pdf").strip()
+    if not filename.lower().endswith(".pdf"):
+        filename = f"{filename}.pdf"
     if not markdown:
         return _json({"error": "변환할 마크다운을 입력하세요."}, status_code=400)
     try:
         pdf_bytes = markdown_to_pdf_bytes(markdown)
     except Exception as exc:
         return _json({"error": str(exc)}, status_code=500)
-    return StreamingResponse(
-        io.BytesIO(pdf_bytes),
-        media_type="application/pdf",
-        headers={"Content-Disposition": 'attachment; filename="jisong-markdown.pdf"'},
-    )
+    return _file_response_bytes(pdf_bytes, filename, "application/pdf")
 
 
 async def frontend(request: Request):

@@ -1,4 +1,3 @@
-from app.core_utils import get_now
 
 
 WEASYPRINT_INSTALL_HINT = """
@@ -107,71 +106,3 @@ def markdown_to_pdf_bytes(markdown_text: str) -> bytes:
 
 def decode_markdown_upload(uploaded_file) -> str:
     return uploaded_file.getvalue().decode("utf-8-sig", errors="replace")
-
-
-def _uploaded_file_signature(uploaded_file) -> tuple[str, int] | None:
-    if uploaded_file is None:
-        return None
-    return (uploaded_file.name, uploaded_file.size)
-
-
-def render_md_pdf_tool():
-    import streamlit as st
-
-    st.info("Markdown 텍스트나 .md 파일을 한글 서식이 포함된 PDF로 변환합니다.")
-
-    uploaded = st.file_uploader(
-        "Markdown 파일 업로드",
-        type=["md", "markdown", "txt"],
-        key="md_pdf_upload",
-    )
-
-    upload_signature = _uploaded_file_signature(uploaded)
-    if upload_signature and st.session_state.get("md_pdf_upload_signature") != upload_signature:
-        st.session_state.md_pdf_input = decode_markdown_upload(uploaded)
-        st.session_state.md_pdf_upload_signature = upload_signature
-        st.session_state.md_pdf_bytes = None
-        st.session_state.md_pdf_filename = None
-    elif "md_pdf_input" not in st.session_state:
-        st.session_state.md_pdf_input = ""
-
-    if uploaded is not None:
-        st.caption(f"업로드됨: {uploaded.name}")
-
-    markdown_text = st.text_area(
-        "Markdown 내용",
-        height=360,
-        placeholder="# 제목\n\n- 항목\n- 항목",
-        key="md_pdf_input",
-    )
-
-    has_markdown = bool(markdown_text.strip())
-    if has_markdown and st.session_state.get("md_pdf_source") != markdown_text:
-        st.session_state.md_pdf_source = markdown_text
-        st.session_state.md_pdf_bytes = None
-        st.session_state.md_pdf_error = ""
-        st.session_state.md_pdf_filename = (
-            f"converted_{get_now().strftime('%Y%m%d_%H%M')}.pdf"
-        )
-
-    if has_markdown and not st.session_state.get("md_pdf_bytes") and not st.session_state.get(
-        "md_pdf_error"
-    ):
-        with st.spinner("PDF를 만드는 중입니다..."):
-            try:
-                st.session_state.md_pdf_bytes = markdown_to_pdf_bytes(markdown_text)
-            except Exception as exc:
-                st.session_state.md_pdf_error = str(exc)
-
-    st.download_button(
-        "PDF 다운로드",
-        data=st.session_state.get("md_pdf_bytes") or b"",
-        file_name=st.session_state.get("md_pdf_filename", "converted.pdf"),
-        mime="application/pdf",
-        use_container_width=True,
-        disabled=not st.session_state.get("md_pdf_bytes"),
-    )
-    if not has_markdown:
-        st.caption("Markdown 내용을 입력하면 PDF 다운로드 버튼이 활성화됩니다.")
-    elif st.session_state.get("md_pdf_error"):
-        st.warning(f"PDF 생성 중 오류가 발생했습니다: {st.session_state.md_pdf_error}")

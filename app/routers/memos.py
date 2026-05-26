@@ -35,7 +35,7 @@ async def memo_detail(request: Request, _: bool = Depends(get_current_user)):
 @router.get('/api/memos/{file_name:str}/download')
 async def memo_download(request: Request, _: bool = Depends(get_current_user)):
     memo = load_single_memo_content(request.path_params["file_name"])
-    filename = f"{memo.get('title') or 'memo'}.txt"
+    filename = request.query_params.get("filename") or f"{memo.get('title') or 'memo'}.txt"
     return _file_response_bytes(
         (memo.get("content") or "").encode("utf-8"),
         filename,

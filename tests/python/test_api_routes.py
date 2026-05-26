@@ -159,6 +159,58 @@ class ApiRouteProtectionTests(unittest.TestCase):
         self.assertIn("filename*=UTF-8''", content_disposition)
         self.assertIn("%EC%A7%84%EB%A3%8C%20%EB%A9%94%EB%AA%A8.txt", content_disposition)
 
+    def test_file_download_uses_custom_filename_query_param(self):
+        with patch("api_server.start_folder_sync_service"), \
+            patch("api_server.start_gdrive_sync_service"), \
+            patch("api_server.stop_folder_sync_service"), \
+            patch("app.api_deps._is_authorized", return_value=(True, "")), \
+            patch(
+                "app.routers.files.download_file_bytes",
+                return_value=(b"hello", "text/plain; charset=utf-8", "original.txt"),
+            ):
+            with TestClient(api_server.app) as client:
+                response = client.get(
+                    "/api/files/download", params={"blob_name": "uploads/file.txt", "filename": "custom_name.txt"}
+                )
+
+        self.assertEqual(response.status_code, 200)
+        content_disposition = response.headers["content-disposition"]
+        self.assertIn("filename*=UTF-8''custom_name.txt", content_disposition)
+
+    def test_memo_download_uses_custom_filename_query_param(self):
+        with patch("api_server.start_folder_sync_service"), \
+            patch("api_server.start_gdrive_sync_service"), \
+            patch("api_server.stop_folder_sync_service"), \
+            patch("app.api_deps._is_authorized", return_value=(True, "")), \
+            patch(
+                "app.routers.memos.load_single_memo_content",
+                return_value={"title": "original_title", "content": "body"},
+            ):
+            with TestClient(api_server.app) as client:
+                response = client.get(
+                    "/api/memos/memo.txt/download", params={"filename": "custom_memo.txt"}
+                )
+
+        self.assertEqual(response.status_code, 200)
+        content_disposition = response.headers["content-disposition"]
+        self.assertIn("filename*=UTF-8''custom_memo.txt", content_disposition)
+
+    def test_markdown_pdf_endpoint_uses_custom_filename_payload_prop(self):
+        with patch("api_server.start_folder_sync_service"), \
+            patch("api_server.start_gdrive_sync_service"), \
+            patch("api_server.stop_folder_sync_service"), \
+            patch("app.routers.tools.markdown_to_pdf_bytes", return_value=b"pdf_data"):
+            with TestClient(api_server.app) as client:
+                response = client.post(
+                    "/api/tools/markdown-pdf",
+                    json={"markdown": "test content", "filename": "my_doc.pdf"}
+                )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"pdf_data")
+        content_disposition = response.headers["content-disposition"]
+        self.assertIn("filename*=UTF-8''my_doc.pdf", content_disposition)
+
 
 if __name__ == "__main__":
     unittest.main()

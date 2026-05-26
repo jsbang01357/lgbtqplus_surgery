@@ -152,6 +152,8 @@ function bindToolPanel(tool, deps) {
     const loadBtn = document.querySelector("#tool-md-load");
     const mdInput = document.querySelector("#tool-md-input");
     const markdownFiles = getMarkdownFiles();
+    let loadedFileName = "";
+
     if (sourceSelect) {
       sourceSelect.innerHTML = `
         <option value="">직접 입력</option>
@@ -168,6 +170,12 @@ function bindToolPanel(tool, deps) {
         option.disabled = true;
         sourceSelect.appendChild(option);
       }
+
+      sourceSelect.addEventListener("change", () => {
+        if (!sourceSelect.value) {
+          loadedFileName = "";
+        }
+      });
     }
 
     loadBtn.addEventListener("click", async () => {
@@ -184,6 +192,11 @@ function bindToolPanel(tool, deps) {
       try {
         const data = await loadMarkdownFile(blobName);
         mdInput.value = data.content || "";
+        
+        // Save the display name of the file
+        const file = markdownFiles.find(f => f.blobName === blobName);
+        loadedFileName = file ? file.name : "";
+
         showToast("Markdown 파일을 불러왔습니다.");
       } catch (error) {
         showToast("Markdown 불러오기 실패: " + error.message);
@@ -193,11 +206,21 @@ function bindToolPanel(tool, deps) {
     });
 
     document.querySelector("#tool-md-run").addEventListener("click", async () => {
+      let exportName = "jisong-markdown.pdf";
+      if (loadedFileName) {
+        let baseName = loadedFileName;
+        const lastDot = loadedFileName.lastIndexOf('.');
+        if (lastDot > 0) {
+          baseName = loadedFileName.substring(0, lastDot);
+        }
+        const sanitized = baseName.replace(/[\\/:*?"<>|]+/g, "_").trim();
+        exportName = `${sanitized || "markdown"}.pdf`;
+      }
       try {
         await downloadPostBlob(
           "/api/tools/markdown-pdf",
-          { markdown: mdInput.value },
-          "jisong-markdown.pdf",
+          { markdown: mdInput.value, filename: exportName },
+          exportName,
         );
         showToast("PDF 다운로드를 시작합니다.");
       } catch (error) {

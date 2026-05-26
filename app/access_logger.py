@@ -56,18 +56,7 @@ def log_access_request(headers: dict, client_ip: str = None):
     logger.warning("접속 로그 저장에 실패했습니다 (동시성 충돌).")
     return False
 
-def log_access():
-    """Streamlit 호환용 접속 기록 저장 함수 (필요 시 유지)"""
-    try:
-        import streamlit as st
-        if "access_logged" in st.session_state:
-            return
-        
-        success = log_access_request(st.context.headers)
-        if success:
-            st.session_state.access_logged = True
-    except Exception:
-        pass
+
 
 def get_access_logs():
     bucket = get_bucket()
