@@ -466,6 +466,19 @@ function selectedValues(selector) {
   );
 }
 
+function getMarkdownFiles() {
+  return [...state.files, ...state.workspaceFiles]
+    .filter((file) => file.blobName && ["md", "markdown"].includes(file.ext))
+    .map((file) => ({
+      ...file,
+      label: file.relativePath ? `${file.relativePath} · ${file.size}` : `${file.name} · ${file.size}`,
+    }));
+}
+
+async function loadMarkdownFile(blobName) {
+  return apiJson(`/api/files/content?blob_name=${encodeURIComponent(blobName)}`);
+}
+
 function setBusy(button, busyText, isBusy) {
   if (!button) return;
   if (isBusy) {
@@ -1368,7 +1381,15 @@ async function bootstrap() {
   updateHeroPreview();
   renderPresets();
   renderAiSources();
-  renderToolPanel("cleaner", { showToast, setBusy, postJson, downloadPostBlob, selectedValues });
+  renderToolPanel("cleaner", {
+    showToast,
+    setBusy,
+    postJson,
+    downloadPostBlob,
+    selectedValues,
+    getMarkdownFiles,
+    loadMarkdownFile,
+  });
   renderSettingsAuth(session);
 
   document.querySelector("#storage-selector")?.addEventListener("change", (e) => {
@@ -1493,7 +1514,15 @@ async function bootstrap() {
       const tool = card.dataset.tool;
       document.querySelectorAll(".tool-card").forEach(c => c.classList.remove("is-selected"));
       card.classList.add("is-selected");
-      renderToolPanel(tool, { showToast, setBusy, postJson, downloadPostBlob, selectedValues });
+      renderToolPanel(tool, {
+        showToast,
+        setBusy,
+        postJson,
+        downloadPostBlob,
+        selectedValues,
+        getMarkdownFiles,
+        loadMarkdownFile,
+      });
     }
 
     const shortcut = e.target.closest("[data-tool-shortcut]");

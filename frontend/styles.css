@@ -79,10 +79,6 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  padding-bottom: 56px;
-}
-
-body:not(.is-authorized) {
   padding-bottom: 0;
 }
 
@@ -1157,11 +1153,6 @@ textarea {
 }
 
 .footer {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 45;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -1185,7 +1176,8 @@ textarea {
 
 .tool-options label,
 .tool-sub-options label {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   min-height: 44px;
@@ -1194,6 +1186,14 @@ textarea {
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.78);
   font-size: 14px;
+  line-height: 1.35;
+  overflow: hidden;
+}
+
+.tool-options label span,
+.tool-sub-options label span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .tool-sub-options {
@@ -1217,6 +1217,22 @@ textarea {
 .tool-input-group label {
   font-size: 14px;
   font-weight: 600;
+}
+
+.tool-file-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.tool-file-picker-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.tool-file-picker select {
+  min-width: 0;
 }
 .menu-result {
   padding: 32px;

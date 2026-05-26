@@ -1,3 +1,13 @@
+function escapeHtml(value = "") {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  }[char]));
+}
+
 function renderToolTemplate(tool) {
   const templates = {
     cleaner: `
@@ -5,13 +15,13 @@ function renderToolTemplate(tool) {
         <h3>텍스트 클리너</h3>
         <textarea id="tool-cleaner-input" rows="7" placeholder="정리할 텍스트를 붙여넣으세요."></textarea>
         <div class="tool-options">
-          <label><input type="radio" name="cleaner-mode" value="basic" checked> 기본 정리</label>
-          <label><input type="radio" name="cleaner-mode" value="plain"> Markdown → Plain</label>
-          <label><input type="radio" name="cleaner-mode" value="word"> Markdown → Word</label>
+          <label><input type="radio" name="cleaner-mode" value="basic" checked><span>기본 정리</span></label>
+          <label><input type="radio" name="cleaner-mode" value="plain"><span>Markdown → Plain</span></label>
+          <label><input type="radio" name="cleaner-mode" value="word"><span>Markdown → Word</span></label>
         </div>
         <div id="cleaner-basic-options" class="tool-sub-options">
-          <label><input type="checkbox" id="cleaner-ai-mode" checked> AI 모드 (불릿/구분선)</label>
-          <label><input type="checkbox" id="cleaner-ai-dash"> 번호를 '- '로 변환</label>
+          <label><input type="checkbox" id="cleaner-ai-mode" checked><span>AI 모드 (불릿/구분선)</span></label>
+          <label><input type="checkbox" id="cleaner-ai-dash"><span>번호를 '- '로 변환</span></label>
         </div>
         <div class="form-actions">
           <button class="button button-primary" id="tool-cleaner-run" type="button">정리하기</button>
@@ -28,6 +38,15 @@ function renderToolTemplate(tool) {
     "md-pdf": `
       <div class="tool-panel">
         <h3>MD to PDF</h3>
+        <div class="tool-file-picker">
+          <label for="tool-md-source">저장소 Markdown</label>
+          <div class="tool-file-picker-row">
+            <select id="tool-md-source">
+              <option value="">직접 입력</option>
+            </select>
+            <button class="button button-secondary" id="tool-md-load" type="button">불러오기</button>
+          </div>
+        </div>
         <textarea id="tool-md-input" rows="8" placeholder="# 제목&#10;&#10;마크다운 내용을 입력하세요."></textarea>
         <button class="button button-primary" id="tool-md-run" type="button">PDF 다운로드</button>
       </div>
@@ -69,7 +88,14 @@ function renderToolTemplate(tool) {
 }
 
 function bindToolPanel(tool, deps) {
-  const { showToast, setBusy, postJson, downloadPostBlob } = deps;
+  const {
+    showToast,
+    setBusy,
+    postJson,
+    downloadPostBlob,
+    getMarkdownFiles = () => [],
+    loadMarkdownFile,
+  } = deps;
 
   if (tool === "cleaner") {
     const runBtn = document.querySelector("#tool-cleaner-run");
@@ -122,11 +148,55 @@ function bindToolPanel(tool, deps) {
     });
   }
   if (tool === "md-pdf") {
+    const sourceSelect = document.querySelector("#tool-md-source");
+    const loadBtn = document.querySelector("#tool-md-load");
+    const mdInput = document.querySelector("#tool-md-input");
+    const markdownFiles = getMarkdownFiles();
+    if (sourceSelect) {
+      sourceSelect.innerHTML = `
+        <option value="">직접 입력</option>
+        ${markdownFiles
+          .map(
+            (file) => `<option value="${escapeHtml(file.blobName)}">${escapeHtml(file.label || file.name)}</option>`,
+          )
+          .join("")}
+      `;
+      if (!markdownFiles.length) {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = "불러올 Markdown 파일 없음";
+        option.disabled = true;
+        sourceSelect.appendChild(option);
+      }
+    }
+
+    loadBtn.addEventListener("click", async () => {
+      const blobName = sourceSelect.value;
+      if (!blobName) {
+        showToast("불러올 Markdown 파일을 선택하세요.");
+        return;
+      }
+      if (!loadMarkdownFile) {
+        showToast("파일 불러오기 경로가 준비되지 않았습니다.");
+        return;
+      }
+      setBusy(loadBtn, "불러오는 중", true);
+      try {
+        const data = await loadMarkdownFile(blobName);
+        mdInput.value = data.content || "";
+        showToast("Markdown 파일을 불러왔습니다.");
+      } catch (error) {
+        showToast("Markdown 불러오기 실패: " + error.message);
+      } finally {
+        setBusy(loadBtn, "불러오는 중", false);
+      }
+    });
+
     document.querySelector("#tool-md-run").addEventListener("click", async () => {
       try {
         await downloadPostBlob(
           "/api/tools/markdown-pdf",
-          { markdown: document.querySelector("#tool-md-input").value },
+          { markdown: mdInput.value },
           "jisong-markdown.pdf",
         );
         showToast("PDF 다운로드를 시작합니다.");
