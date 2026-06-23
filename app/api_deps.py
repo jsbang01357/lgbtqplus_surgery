@@ -99,6 +99,70 @@ def _save_account_sessions(sessions: dict[str, Any]):
         pass
 
 
+_USERS_CACHE = None
+_USERS_CACHE_EXPIRY = 0
+_USERS_LOCK = threading.Lock()
+USERS_BLOB = "auth/users.json"
+
+def _load_users() -> dict[str, Any]:
+    global _USERS_CACHE, _USERS_CACHE_EXPIRY
+    if _USERS_CACHE is not None and time.time() < _USERS_CACHE_EXPIRY:
+        return _USERS_CACHE
+        
+    with _USERS_LOCK:
+        if _USERS_CACHE is not None and time.time() < _USERS_CACHE_EXPIRY:
+            return _USERS_CACHE
+        try:
+            bucket = get_bucket()
+            blob = bucket.blob(USERS_BLOB)
+            if blob.exists():
+                _USERS_CACHE = json.loads(blob.download_as_text(encoding="utf-8"))
+            else:
+                _USERS_CACHE = {}
+                
+            # Self-healing migration from legacy format auth/users/{email}.json
+            legacy_blobs = list(bucket.list_blobs(prefix="auth/users/"))
+            migrated = False
+            for lb in legacy_blobs:
+                if lb.name.endswith(".json") and lb.name != USERS_BLOB:
+                    try:
+                        email = lb.name.split("/")[-1].replace(".json", "")
+                        data = json.loads(lb.download_as_text(encoding="utf-8"))
+                        if email and data.get("password_hash"):
+                            _USERS_CACHE[email] = {
+                                "password_hash": data["password_hash"],
+                                "created_at": data.get("created_at", time.strftime("%Y-%m-%dT%H:%M:%S"))
+                            }
+                            migrated = True
+                            lb.delete()
+                    except Exception as me:
+                        logger.error(f"Migration error for legacy blob {lb.name}: {me}")
+            if migrated:
+                blob.upload_from_string(
+                    json.dumps(_USERS_CACHE, ensure_ascii=False, indent=2),
+                    content_type="application/json; charset=utf-8"
+                )
+        except Exception:
+            _USERS_CACHE = {} if _USERS_CACHE is None else _USERS_CACHE
+            
+        _USERS_CACHE_EXPIRY = time.time() + 60
+        return _USERS_CACHE
+
+
+def _save_users(users: dict[str, Any]):
+    global _USERS_CACHE
+    try:
+        bucket = get_bucket()
+        blob = bucket.blob(USERS_BLOB)
+        blob.upload_from_string(
+            json.dumps(users, ensure_ascii=False, indent=2),
+            content_type="application/json; charset=utf-8"
+        )
+        _USERS_CACHE = users
+    except Exception:
+        pass
+
+
 def _cleanup_expired_sessions():
     try:
         global _SESSIONS_CACHE

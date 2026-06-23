@@ -102,5 +102,78 @@ class ApiAuthTests(unittest.TestCase):
         self.assertIn(b'"passkey_registered":true', response.body)
 
 
+from unittest.mock import MagicMock
+import json
+from app.api_deps import _load_users, _save_users, USERS_BLOB
+
+class UserDatabaseTests(unittest.TestCase):
+    def setUp(self):
+        # Reset caches before each test
+        import app.api_deps
+        app.api_deps._USERS_CACHE = None
+        app.api_deps._USERS_CACHE_EXPIRY = 0
+
+    @patch("app.api_deps.get_bucket")
+    def test_save_and_load_users(self, mock_get_bucket):
+        mock_bucket = MagicMock()
+        mock_blob = MagicMock()
+        mock_get_bucket.return_value = mock_bucket
+        mock_bucket.blob.return_value = mock_blob
+        
+        # Mock users.json exist
+        mock_blob.exists.return_value = True
+        mock_blob.download_as_text.return_value = '{"test@example.com": {"password_hash": "abc", "created_at": "123"}}'
+        
+        # Test load
+        users = _load_users()
+        self.assertIn("test@example.com", users)
+        self.assertEqual(users["test@example.com"]["password_hash"], "abc")
+        
+        # Test save
+        mock_blob.reset_mock()
+        users["new@example.com"] = {"password_hash": "def", "created_at": "456"}
+        _save_users(users)
+        
+        mock_bucket.blob.assert_called_with(USERS_BLOB)
+        mock_blob.upload_from_string.assert_called_once()
+        uploaded_data = json.loads(mock_blob.upload_from_string.call_args[0][0])
+        self.assertIn("new@example.com", uploaded_data)
+
+    @patch("app.api_deps.get_bucket")
+    def test_legacy_users_migration(self, mock_get_bucket):
+        mock_bucket = MagicMock()
+        mock_blob = MagicMock()
+        mock_get_bucket.return_value = mock_bucket
+        mock_bucket.blob.return_value = mock_blob
+        
+        # Users blob doesn't exist initially
+        mock_blob.exists.return_value = False
+        
+        # Legacy blobs under auth/users/
+        legacy_blob1 = MagicMock()
+        legacy_blob1.name = "auth/users/legacy1@example.com.json"
+        legacy_blob1.download_as_text.return_value = '{"login_id": "legacy1@example.com", "password_hash": "hash1", "created_at": "2026-06-01T12:00:00"}'
+        
+        legacy_blob2 = MagicMock()
+        legacy_blob2.name = "auth/users/legacy2@example.com.json"
+        legacy_blob2.download_as_text.return_value = '{"login_id": "legacy2@example.com", "password_hash": "hash2"}'
+        
+        mock_bucket.list_blobs.return_value = [legacy_blob1, legacy_blob2]
+        
+        users = _load_users()
+        
+        self.assertIn("legacy1@example.com", users)
+        self.assertEqual(users["legacy1@example.com"]["password_hash"], "hash1")
+        self.assertIn("legacy2@example.com", users)
+        self.assertEqual(users["legacy2@example.com"]["password_hash"], "hash2")
+        
+        # Confirms legacy blobs are deleted after migration
+        legacy_blob1.delete.assert_called_once()
+        legacy_blob2.delete.assert_called_once()
+        
+        # Confirms new users.json is uploaded
+        mock_blob.upload_from_string.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()

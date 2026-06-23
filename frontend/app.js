@@ -660,7 +660,8 @@ function openCaseModal(caseData = null) {
     document.querySelector("#form-calendar-status").value = caseData.calendar_status || "미연동";
     
     document.querySelector("#form-diagnosis").value = caseData.diagnosis || "";
-    document.querySelector("#form-coop-detail").value = caseData.coop_detail || "";
+    const coopDetailEl = document.querySelector("#form-coop-detail");
+    if (coopDetailEl) coopDetailEl.value = caseData.coop_detail || "";
     document.querySelector("#form-surgery-fee").value = caseData.surgery_fee || "";
     document.querySelector("#form-surgery-duration").value = caseData.surgery_duration || 0;
     document.querySelector("#form-room-type").value = caseData.room_type || "다인실";
@@ -1003,7 +1004,7 @@ async function bootstrap() {
       admission_type: document.querySelector("#form-admission-type").value,
       
       diagnosis: document.querySelector("#form-diagnosis").value.trim(),
-      coop_detail: document.querySelector("#form-coop-detail").value.trim(),
+      coop_detail: document.querySelector("#form-coop-detail")?.value.trim() || "",
       insurance_types: insTypes,
       surgery_fee: document.querySelector("#form-surgery-fee").value.trim(),
       surgery_duration: parseInt(document.querySelector("#form-surgery-duration").value) || 0,

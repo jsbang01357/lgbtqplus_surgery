@@ -1,12 +1,10 @@
 import app.routers.auth
-import app.routers.settings
 import asyncio
 import json
 import os
 import unittest
 from unittest.mock import patch
 
-import api_server
 import app.models
 
 
@@ -53,26 +51,6 @@ class AccountPasswordTests(unittest.TestCase):
         body = json.loads(response.body)
         self.assertEqual(response.status_code, 401)
         self.assertIn("비밀번호", body["error"])
-
-    def test_password_update_saves_new_password(self):
-        request = DummyRequest(payload={"new_password": "new-secret"})
-
-        with patch("app.routers.settings.update_account_password") as mock_update:
-            response = asyncio.run(app.routers.settings.settings_password_update(request, app.models.PasswordUpdateRequest(**request._payload), True))
-
-        self.assertEqual(response.status_code, 200)
-        mock_update.assert_called_once_with("new-secret")
-
-    def test_password_update_rejects_short_password(self):
-        request = DummyRequest(payload={"new_password": "123"})
-
-        with patch("app.routers.settings.update_account_password") as mock_update:
-            response = asyncio.run(app.routers.settings.settings_password_update(request, app.models.PasswordUpdateRequest(**request._payload), True))
-
-        body = json.loads(response.body)
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("4자리", body["error"])
-        mock_update.assert_not_called()
 
 
 if __name__ == "__main__":

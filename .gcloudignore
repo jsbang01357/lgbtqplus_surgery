@@ -1,0 +1,36 @@
+# gcloudignore to control what files are uploaded to Cloud Build
+
+# Ignore git folder
+.git/
+.gitignore
+
+# Ignore local python environments and caches
+.venv/
+env/
+venv/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Ignore IDE settings
+.vscode/
+.idea/
+
+# Ignore local config/secrets
+.streamlit/secrets.toml
+.env.local
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore local builds/modules
+parser-core/node_modules/
+parser-core/dist/
+tasks/
+AGENTS.md
+
+# Ignore local text outputs but explicitly ALLOW requirements.txt
+*.txt
+!requirements.txt

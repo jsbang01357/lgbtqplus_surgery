@@ -7,7 +7,7 @@ import time
 from pydantic import BaseModel
 
 from app.models import AccountLoginRequest
-from app.api_deps import _json, ACCOUNT_SESSION_TTL_SECONDS, ACCOUNT_SESSION_COOKIE, _load_account_sessions, _save_account_sessions, _is_authorized, GDRIVE_SCOPES, GDRIVE_TOKEN_BLOB, _error, _request_email, _request_client_host, _account_token, _create_account_session, _should_secure_cookie, _access_context_allowed, _auth_state
+from app.api_deps import _json, ACCOUNT_SESSION_TTL_SECONDS, ACCOUNT_SESSION_COOKIE, _load_account_sessions, _save_account_sessions, _is_authorized, GDRIVE_SCOPES, GDRIVE_TOKEN_BLOB, _error, _request_email, _request_client_host, _account_token, _create_account_session, _should_secure_cookie, _access_context_allowed, _auth_state, _load_users, _save_users
 from app.security import account_login_id, verify_account_password, allow_account_id_fallback, allow_google_auth_fallback, owner_email, require_cloudflare_access
 from app import passkeys
 from app.gcs_helper import get_bucket
@@ -23,11 +23,10 @@ class AccountRegisterRequest(BaseModel):
 def verify_registered_user(login_id: str, password: str) -> bool:
     from app.security import _verify_hash
     try:
-        bucket = get_bucket()
-        blob = bucket.blob(f"auth/users/{login_id}.json")
-        if blob.exists():
-            data = json.loads(blob.download_as_text(encoding="utf-8"))
-            hashed = data.get("password_hash")
+        users = _load_users()
+        user_data = users.get(login_id)
+        if user_data:
+            hashed = user_data.get("password_hash")
             if hashed:
                 return _verify_hash(password, hashed)
     except Exception as e:
@@ -135,22 +134,17 @@ async def account_register(payload: AccountRegisterRequest):
         return _json({"error": "비밀번호는 최소 6자리 이상이어야 합니다."}, status_code=400)
         
     try:
-        bucket = get_bucket()
-        blob = bucket.blob(f"auth/users/{login_id}.json")
-        if blob.exists() or login_id == account_login_id():
+        users = _load_users()
+        if login_id in users or login_id == account_login_id():
             return _json({"error": "이미 가입된 이메일입니다."}, status_code=400)
             
         from app.security import hash_password
         hashed = hash_password(password)
-        user_data = {
-            "login_id": login_id,
+        users[login_id] = {
             "password_hash": hashed,
             "created_at": time.strftime("%Y-%m-%dT%H:%M:%S")
         }
-        blob.upload_from_string(
-            json.dumps(user_data, ensure_ascii=False, indent=2),
-            content_type="application/json; charset=utf-8"
-        )
+        _save_users(users)
         return _json({"ok": True})
     except Exception as e:
         logger.exception("Registration failed")
