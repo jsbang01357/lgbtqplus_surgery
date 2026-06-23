@@ -1,11 +1,12 @@
 import csv
 import io
 import logging
+import re
 from typing import Dict, Any
 from fastapi import APIRouter, Depends, Request, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 
-from app.api_deps import get_current_user, _json, _error
+from app.api_deps import get_current_user, _json, _error, require_role
 from app.surgery_store import (
     get_cases, get_case, save_case, delete_case, cancel_case, restore_case
 )
@@ -34,7 +35,7 @@ async def get_all_cases(request: Request, _: bool = Depends(get_current_user)):
 @router.post("/cases")
 async def create_new_case(
     payload: SurgeryCaseCreate, 
-    _: bool = Depends(get_current_user)
+    _: bool = Depends(require_role(["admin", "staff"]))
 ):
     try:
         saved = save_case(payload.model_dump())
@@ -58,7 +59,7 @@ async def get_case_detail(
 async def update_existing_case(
     case_id: str, 
     payload: SurgeryCaseUpdate, 
-    _: bool = Depends(get_current_user)
+    _: bool = Depends(require_role(["admin", "staff"]))
 ):
     existing = get_case(case_id)
     if not existing:
@@ -78,7 +79,7 @@ async def update_existing_case(
 @router.delete("/cases/{case_id}")
 async def delete_existing_case(
     case_id: str, 
-    _: bool = Depends(get_current_user)
+    _: bool = Depends(require_role(["admin", "staff"]))
 ):
     success = delete_case(case_id)
     if not success:
@@ -163,7 +164,7 @@ async def get_surgeons_summary(request: Request, _: bool = Depends(get_current_u
 async def cancel_surgery_case(
     case_id: str, 
     payload: SurgeryCancelRequest, 
-    _: bool = Depends(get_current_user)
+    _: bool = Depends(require_role(["admin", "staff"]))
 ):
     updated = cancel_case(case_id, payload.cancellation_reason)
     if not updated:
@@ -174,7 +175,7 @@ async def cancel_surgery_case(
 @router.post("/cases/{case_id}/restore")
 async def restore_surgery_case(
     case_id: str, 
-    _: bool = Depends(get_current_user)
+    _: bool = Depends(require_role(["admin", "staff"]))
 ):
     updated = restore_case(case_id)
     if not updated:
@@ -183,7 +184,7 @@ async def restore_surgery_case(
 
 
 @router.get("/export.csv")
-async def export_surgery_cases_csv(request: Request, _: bool = Depends(get_current_user)):
+async def export_surgery_cases_csv(request: Request, _: bool = Depends(require_role(["admin", "staff"]))):
     cases = get_cases()
     
     # Sort: status == "확인필요" first, then surgery_date ascending
@@ -260,7 +261,7 @@ async def export_surgery_cases_csv(request: Request, _: bool = Depends(get_curre
 @router.post("/import.csv")
 async def import_surgery_cases_csv(
     file: UploadFile = File(...), 
-    _: bool = Depends(get_current_user)
+    _: bool = Depends(require_role(["admin", "staff"]))
 ):
     try:
         content = await file.read()
@@ -278,6 +279,7 @@ async def import_surgery_cases_csv(
             "case_id": "case_id", "수술ID": "case_id",
             "patient_code": "patient_code", "등록번호": "patient_code",
             "patient_name": "patient_name", "환자명": "patient_name",
+            "patient_preferred_name": "patient_preferred_name", "선호이름": "patient_preferred_name",
             "surgery_date": "surgery_date", "수술일자": "surgery_date",
             "surgery_start_time": "surgery_start_time", "시작시간": "surgery_start_time",
             "surgery_end_time": "surgery_end_time", "종료시간": "surgery_end_time",
@@ -308,8 +310,14 @@ async def import_surgery_cases_csv(
             v = val.strip().lower()
             return v in ("완료", "y", "yes", "true", "1", "o")
             
-        count = 0
+        # Two-pass validation
+        date_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+        time_pattern = re.compile(r"^\d{2}:\d{2}$")
+        
+        cases_to_save = []
+        row_num = 1
         for row in reader:
+            row_num += 1
             if not row or not any(row):
                 continue
                 
@@ -338,10 +346,34 @@ async def import_surgery_cases_csv(
                 else:
                     # Top-level fields
                     case_data[field] = val
-                    
+            
+            # Validation checks
+            for req in required:
+                if not case_data.get(req):
+                    raise HTTPException(status_code=400, detail=f"행 {row_num}: 필수 입력 필드 '{req}'가 누락되었거나 비어있습니다.")
+            
+            s_date = case_data.get("surgery_date")
+            if s_date and not date_pattern.match(s_date):
+                raise HTTPException(status_code=400, detail=f"행 {row_num}: 수술일자 '{s_date}' 형식이 유효하지 않습니다. (YYYY-MM-DD 형식 필요)")
+            
+            l_date = prep_data.get("lab_date")
+            if l_date and not date_pattern.match(l_date):
+                raise HTTPException(status_code=400, detail=f"행 {row_num}: 검사일자 '{l_date}' 형식이 유효하지 않습니다. (YYYY-MM-DD 형식 필요)")
+                
+            st_time = case_data.get("surgery_start_time")
+            if st_time and not time_pattern.match(st_time):
+                raise HTTPException(status_code=400, detail=f"행 {row_num}: 시작시간 '{st_time}' 형식이 유효하지 않습니다. (HH:MM 형식 필요)")
+                
+            et_time = case_data.get("surgery_end_time")
+            if et_time and not time_pattern.match(et_time):
+                raise HTTPException(status_code=400, detail=f"행 {row_num}: 종료시간 '{et_time}' 형식이 유효하지 않습니다. (HH:MM 형식 필요)")
+
             if prep_data:
                 case_data["prep"] = prep_data
-                
+            cases_to_save.append(case_data)
+            
+        count = 0
+        for case_data in cases_to_save:
             case_id = case_data.get("case_id")
             if case_id:
                 existing = get_case(case_id)
@@ -384,7 +416,7 @@ async def get_calendar_status(request: Request, _: bool = Depends(get_current_us
 
 
 @router.post("/calendar/disconnect")
-async def disconnect_calendar(request: Request, _: bool = Depends(get_current_user)):
+async def disconnect_calendar(request: Request, _: bool = Depends(require_role(["admin", "staff"]))):
     from app.gcs_helper import get_bucket
     from app.calendar_helper import GDRIVE_TOKEN_BLOB
     try:

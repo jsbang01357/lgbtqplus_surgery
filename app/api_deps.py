@@ -348,3 +348,38 @@ def _is_authorized(request: Request) -> tuple[bool, str]:
         return False, "패스키 또는 계정 ID 인증이 필요합니다."
     return True, ""
 
+
+def require_role(allowed_roles: list[str]):
+    def dependency(request: Request):
+        ok, message = _is_authorized(request)
+        if not ok:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=message
+            )
+        
+        state = _auth_state(request)
+        email = state.get("email", "").strip().lower()
+        
+        role = "viewer"
+        from app.security import account_login_id
+        if email == owner_email() or (account_login_id() and email == account_login_id()):
+            role = "admin"
+        else:
+            try:
+                users = _load_users()
+                user_data = users.get(email)
+                if user_data and "role" in user_data:
+                    role = user_data["role"]
+            except Exception as e:
+                logger.error(f"Failed to load user role for {email}: {e}")
+                
+        if role not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"해당 기능에 대한 권한이 없습니다. (필요 권한: {', '.join(allowed_roles)}, 현재 권한: {role})"
+            )
+        return True
+    return dependency
+
+

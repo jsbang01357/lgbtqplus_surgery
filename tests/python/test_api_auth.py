@@ -174,6 +174,34 @@ class UserDatabaseTests(unittest.TestCase):
         # Confirms new users.json is uploaded
         mock_blob.upload_from_string.assert_called_once()
 
+class RegistrationBlockTests(unittest.TestCase):
+    def test_account_register_blocked_when_public_registration_disabled(self):
+        from app.routers.auth import account_register, AccountRegisterRequest
+        import asyncio
+        
+        req = AccountRegisterRequest(account_id="test@example.com", password="password123")
+        
+        with patch("app.config.allow_public_registration", return_value=False):
+            response = asyncio.run(account_register(req))
+            
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("비활성화되어 있습니다".encode("utf-8"), response.body)
+
+    def test_account_register_allowed_when_public_registration_enabled(self):
+        from app.routers.auth import account_register, AccountRegisterRequest
+        import asyncio
+        
+        req = AccountRegisterRequest(account_id="new_test_user@example.com", password="password123")
+        
+        with patch("app.config.allow_public_registration", return_value=True), \
+             patch("app.api_deps._load_users", return_value={}), \
+             patch("app.api_deps._save_users"), \
+             patch("app.security.account_login_id", return_value="admin@example.com"):
+            response = asyncio.run(account_register(req))
+            
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'"ok":true', response.body)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -101,3 +101,8 @@ def get_int_config(key: str, default: int) -> int:
         return int(raw)
     except ValueError:
         return default
+
+
+def allow_public_registration() -> bool:
+    return get_bool_config("ALLOW_PUBLIC_REGISTRATION", False)
+

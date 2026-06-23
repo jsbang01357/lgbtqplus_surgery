@@ -121,6 +121,10 @@ async def account_login(request: Request, payload: AccountLoginRequest):
 
 @router.post('/api/auth/account/register')
 async def account_register(payload: AccountRegisterRequest):
+    from app.config import allow_public_registration
+    if not allow_public_registration():
+        return _json({"error": "공개 회원가입이 비활성화되어 있습니다. 관리자에게 계정 생성을 요청하세요."}, status_code=403)
+
     login_id = payload.account_id.strip().lower()
     password = payload.password
     
@@ -142,6 +146,7 @@ async def account_register(payload: AccountRegisterRequest):
         hashed = hash_password(password)
         users[login_id] = {
             "password_hash": hashed,
+            "role": "viewer",
             "created_at": time.strftime("%Y-%m-%dT%H:%M:%S")
         }
         _save_users(users)

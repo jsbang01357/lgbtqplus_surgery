@@ -63,52 +63,22 @@ def sync_case_to_calendar(case: dict) -> dict:
     elif surgery_status == "가예약":
         prefix = "[가예약] "
         
-    # Patient display name
-    pat_name = res.get("patient_name") or ""
-    pref_name = res.get("patient_preferred_name") or ""
     pat_code = res.get("patient_code") or ""
-    
-    patient_disp = pat_name
-    if pref_name:
-        patient_disp = f"{pat_name}({pref_name})"
-    elif not patient_disp:
-        patient_disp = pat_code
-        
-    summary = f"{prefix}{patient_disp} / {res.get('surgery_name')} / {res.get('surgeon')}"
+    summary = f"{prefix}{pat_code} / {res.get('surgery_name')} / {res.get('surgeon')}"
     
     # Preop computed status
     from app.surgery_status import compute_case_status
     computed = compute_case_status(res)
     missing_str = ", ".join(computed.get("missing_items", [])) or "없음"
     
-    prep = res.get("prep") or {}
-    
     # Build detailed description
-    description = f"""[수술 기본 정보]
-환자코드: {pat_code}
-환자명(선호이름): {patient_disp}
-진단명: {res.get('diagnosis') or '없음'}
+    description = f"""환자코드: {pat_code}
 수술명: {res.get('surgery_name')}
 집도의: {res.get('surgeon')}
-Co-op 여부/과: {res.get('coop_status') or '불필요'} ({res.get('coop_dept') or ''} {res.get('coop_doctor') or ''})
 수술방: {res.get('operating_room')}
-마취종류: {res.get('anesthesia')}
-입원여부/병실: {res.get('admission_type')} / {res.get('room_type') or '없음'}
-
-[수술 전 준비 현황]
+마취: {res.get('anesthesia')}
 준비상태: {computed.get('status_auto')}
-누락항목: {missing_str}
-프리메드 상태: {prep.get('premed_status') or '미완료'}
-협진 상태: {prep.get('cooperation_status') or '불필요'}
-입원안내 완료: {'Yes' if prep.get('admission_guidance_done') else 'No'}
-서류확인 완료: {'Yes' if prep.get('documents_checked') else 'No'}
-
-[병실 예약]
-1인실 필요 여부: {res.get('room_1person_status') or '미정'}
-성중립병실 확인: {res.get('room_gender_neutral_status') or '불필요'}
-
-[특이사항]
-{res.get('notes') or '없음'}"""
+누락항목: {missing_str}"""
 
     event_body = {
         'summary': summary,
