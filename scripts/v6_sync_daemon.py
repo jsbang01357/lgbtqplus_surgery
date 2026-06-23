@@ -4,10 +4,13 @@ import logging
 from pathlib import Path
 from google.cloud import storage
 
+# 보류된 parser-core/GCS sync 실험용 스크립트입니다.
+# 현재 Qplus Surgery 오프라인 운영 경로에서는 사용하지 않습니다.
+
 # --- Configuration ---
 # You can set these environment variables or edit them here.
-GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "jisong-cloud-storage")
-SYNC_ROOT = Path(os.path.expanduser(os.getenv("LOCAL_SYNC_ROOT", "~/Developer/jisong_workspace"))).expanduser()
+GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "lgbtqplus-surgery")
+SYNC_ROOT = Path(os.path.expanduser(os.getenv("LOCAL_SYNC_ROOT", "~/Developer/qplus_surgery_workspace"))).expanduser()
 STAGING_PREFIX = os.getenv("V6_STAGING_PREFIX", "v6_sync")
 POLL_INTERVAL = int(os.getenv("SYNC_POLL_INTERVAL", "10"))
 SERVICE_ACCOUNT_JSON = os.getenv("GCP_SERVICE_ACCOUNT_JSON", "") # Path to .json file

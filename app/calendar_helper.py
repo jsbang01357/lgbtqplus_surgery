@@ -3,6 +3,7 @@ import logging
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 from app.gcs_helper import get_bucket
+from app.config import google_calendar_sync_enabled
 import os
 
 logger = logging.getLogger(__name__)
@@ -10,6 +11,9 @@ logger = logging.getLogger(__name__)
 GDRIVE_TOKEN_BLOB = "auth/gdrive_token.json"
 
 def get_calendar_service():
+    if not google_calendar_sync_enabled():
+        return None
+
     try:
         bucket = get_bucket()
         blob = bucket.blob(GDRIVE_TOKEN_BLOB)

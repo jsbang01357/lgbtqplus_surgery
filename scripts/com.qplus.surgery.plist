@@ -7,7 +7,7 @@
   사용 방법:
   1. 본 파일을 ~/Library/LaunchAgents/com.qplus.surgery.plist 에 복사합니다.
   2. <string> 안의 경로들을 실제 맥미니 환경에 맞춰 수정합니다. (예: /Users/사용자명/Developer/lgbtqplus_surgery)
-  3. 필요시 <key>EnvironmentVariables</key> 아래에 추가 환경변수를 기입합니다.
+  3. 실제 앱 설정은 레포 루트의 .env 파일에서 읽습니다.
   4. 다음 명령어로 서비스를 등록하고 시작합니다:
      launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.qplus.surgery.plist
      launchctl enable gui/$(id -u)/com.qplus.surgery
@@ -47,22 +47,6 @@
     <dict>
         <key>PATH</key>
         <string>/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin</string>
-        <key>GCS_BUCKET_NAME</key>
-        <string>lgbtqplus-surgery</string>
-        <key>REQUIRE_CLOUDFLARE_ACCESS</key>
-        <string>false</string>
-        <key>ALLOW_ACCOUNT_ID_FALLBACK</key>
-        <string>true</string>
-        <key>ALLOW_PUBLIC_REGISTRATION</key>
-        <string>false</string>
-        <key>JISONG_ACCOUNT_LOGIN_ID</key>
-        <string>admin@example.com</string>
-        <key>PASSKEY_RP_ID</key>
-        <string>192.168.0.35</string>
-        <key>PASSKEY_ORIGIN</key>
-        <string>http://192.168.0.35:8080</string>
-        <key>PASSKEY_RP_NAME</key>
-        <string>Qplus Surgery</string>
     </dict>
 </dict>
 </plist>

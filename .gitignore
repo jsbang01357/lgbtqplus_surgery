@@ -20,7 +20,9 @@ ENV/
 
 # Streamlit / secrets
 .streamlit/
+.env
 .env.local
+.local_data/
 
 # OS
 .DS_Store

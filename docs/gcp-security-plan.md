@@ -1,6 +1,16 @@
-# GCP 보안 전환 계획
+# GCP 선택 운영 보안 계획
 
-Jisong Cloud의 운영 기준은 GCP 프로젝트입니다. Mac mini 로컬 Docker 호스팅과 로컬 LLM 경로는 제거하고, Cloud Run + GCS + Gemini + Cloudflare Access + 패스키 인증을 기본 경계로 둡니다.
+Qplus Surgery의 기본 운영 기준은 오프라인 로컬 저장소입니다. 이 문서는 GCS/Cloud Run/Cloudflare Access로 전환할 때만 사용하는 보안 체크리스트입니다.
+
+## 전환 조건
+
+GCP 운영은 아래 조건이 충족될 때만 고려합니다.
+
+- 내부망 단독 운영보다 원격 접근 필요성이 명확하다.
+- 환자/수술 운영 데이터의 외부 저장 정책이 승인되어 있다.
+- Cloudflare Access 또는 동등한 접근 제어를 적용한다.
+- Secret Manager 또는 안전한 환경변수 관리가 준비되어 있다.
+- 백업/감사/삭제 정책이 문서화되어 있다.
 
 ## 목표 구조
 
@@ -8,53 +18,87 @@ Jisong Cloud의 운영 기준은 GCP 프로젝트입니다. Mac mini 로컬 Dock
 User
 └── Cloudflare Access
     └── Cloud Run
-        ├── Jisong Cloud API / UI
+        ├── Qplus Surgery API/UI
         ├── GCS
-        ├── Gemini API
-        └── Secret Manager
+        └── optional Google Calendar
 ```
 
-## 인증 경계
+## 필수 환경변수
 
-- Cloudflare Access: `cloud.jisong.dev` 앞단의 외부 접근 제어
-- 패스키 인증: 앱 내부 민감 작업 보호
-- 관리자 비밀번호: 패스키 전환 전까지만 유지할 임시 fallback
+```env
+STORAGE_BACKEND="gcs"
+OFFLINE_MODE="false"
+GCS_BUCKET_NAME="lgbtqplus-surgery"
+REQUIRE_CLOUDFLARE_ACCESS="true"
+CLOUDFLARE_ACCESS_ALLOWED_EMAILS="허용이메일"
+ALLOW_ACCOUNT_ID_FALLBACK="true"
+ALLOW_PUBLIC_REGISTRATION="false"
+```
 
-## 패스키 구현 메모
+서비스 계정:
 
-- 서버는 challenge를 발급하고 세션에 저장한다.
-- 브라우저는 WebAuthn `navigator.credentials.create()` / `navigator.credentials.get()`을 호출한다.
-- 서버는 credential public key, sign count, user handle을 저장한다.
-- 민감 작업은 Cloudflare Access 통과 여부와 패스키 세션을 모두 확인한다.
+```env
+GCP_SERVICE_ACCOUNT_JSON="..."
+```
 
-## 제거된 경로
+또는 Cloud Run의 기본 서비스 계정/ADC를 사용합니다.
 
-- Mac mini Docker Compose 운영
-- launchd 로컬 자동 기동
-- local mirror 저장소 adapter
-- Ollama/local LLM provider와 fallback
+## 접근 제어
 
-## 다음 구현 순서
+- Cloudflare Access에서 허용 이메일을 제한합니다.
+- 앱 내부에서도 passkey 또는 계정 세션을 요구합니다.
+- 공개 회원가입은 유지하지 않습니다.
+- `viewer`, `staff`, `admin` 역할을 분리합니다.
 
-1. 새 프론트엔드용 Python API 경계 생성
-2. Cloudflare Access 헤더 검증 middleware 추가
-3. 패스키 등록/로그인 API 추가
-4. 관리자 비밀번호 fallback을 제한적으로 유지
-5. Cloud Run 배포 후 Access 정책과 앱 내부 인증을 함께 검증
+## 저장소 권한
 
-## 환경 변수
+서비스 계정은 필요한 bucket에만 접근합니다.
 
-- `REQUIRE_CLOUDFLARE_ACCESS=false`: Cloudflare Access 이메일 OTP를 피하기 위해 기본 필수 조건에서는 제외한다.
-- `CLOUDFLARE_ACCESS_ALLOWED_EMAILS=jsbang01357@gmail.com`: 소유자 Google 계정만 허용한다. 값을 비워도 앱 기본값은 `jsbang01357@gmail.com`이다.
-- `ALLOW_ACCOUNT_ID_FALLBACK=true`: 패스키를 쓸 수 없는 브라우저에서는 소유자 계정 ID 세션으로 통과시킨다.
-- `JISONG_ACCOUNT_LOGIN_ID=jsbang01357@gmail.com`
-- 계정 ID fallback 비밀번호는 GCS의 `auth/account_password.txt`에 저장한다.
-- `PASSKEY_RP_ID=cloud.jisong.dev`
-- `PASSKEY_ORIGIN=https://cloud.jisong.dev`
-- `PASSKEY_RP_NAME=Jisong Cloud`
+권장 최소 권한:
 
-## Cloudflare CLI 메모
+- GCS object read/write/delete
+- 필요한 bucket 단위로 제한
+- Secret 접근은 필요한 secret만 제한
 
-- 현재 로컬에는 `cloudflared`가 설치되어 있으며 Tunnel/Access 관련 확인에 사용할 수 있다.
-- `wrangler`는 현재 PATH에 없으므로 Workers/Pages 작업이 필요할 때 별도로 설치한다.
-- Cloud Run 앞단 Access 정책은 `jsbang01357@gmail.com`만 허용하도록 Cloudflare dashboard 또는 API에서 맞춘다.
+## Calendar 사용 시 주의
+
+Google Calendar는 선택 기능입니다.
+
+켜는 경우:
+
+```env
+GOOGLE_CALENDAR_SYNC_ENABLED="true"
+GOOGLE_CALENDAR_ID="..."
+GDRIVE_CLIENT_ID="..."
+GDRIVE_CLIENT_SECRET="..."
+GDRIVE_REDIRECT_URI="https://서비스도메인/api/auth/gdrive/callback"
+```
+
+외부 캘린더에는 넣지 않을 정보:
+
+- 환자명
+- 선호이름
+- 진단명
+- 상세 비고
+- 프리메드 상세
+- 과거력/복용약/검사 이상 세부 내용
+
+## 배포 전 체크리스트
+
+- [ ] 저장소 백엔드가 `gcs`인지 확인
+- [ ] `OFFLINE_MODE=false` 확인
+- [ ] Cloudflare Access 강제 여부 확인
+- [ ] 공개 회원가입 비활성화 확인
+- [ ] Secret 값이 git에 없는지 확인
+- [ ] 테스트 계정으로 로그인 확인
+- [ ] CSV export/import 확인
+- [ ] Calendar 동기화가 필요한 정보만 보내는지 확인
+- [ ] 롤백 기준 문서화
+
+## 롤백
+
+클라우드 전환 중 문제가 생기면:
+
+1. Cloud Run 트래픽을 이전 revision으로 되돌립니다.
+2. GCS의 `surgery_ops/cases/`를 백업합니다.
+3. 필요하면 데이터를 `.local_data/storage/` 구조로 내려받아 오프라인 모드로 복구합니다.

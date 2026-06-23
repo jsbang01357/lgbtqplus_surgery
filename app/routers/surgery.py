@@ -405,18 +405,26 @@ async def import_surgery_cases_csv(
 
 @router.get("/calendar/status")
 async def get_calendar_status(request: Request, _: bool = Depends(get_current_user)):
+    from app.config import google_calendar_sync_enabled
+    if not google_calendar_sync_enabled():
+        return _json({"connected": False, "enabled": False, "mode": "offline"})
+
     from app.calendar_helper import get_calendar_service
     try:
         service = get_calendar_service()
         connected = service is not None
-        return _json({"connected": connected})
+        return _json({"connected": connected, "enabled": True})
     except Exception as e:
         logger.error(f"Failed to get calendar status: {e}")
-        return _json({"connected": False, "error": str(e)})
+        return _json({"connected": False, "enabled": True, "error": str(e)})
 
 
 @router.post("/calendar/disconnect")
 async def disconnect_calendar(request: Request, _: bool = Depends(require_role(["admin", "staff"]))):
+    from app.config import google_calendar_sync_enabled
+    if not google_calendar_sync_enabled():
+        return _json({"ok": True, "message": "오프라인 모드에서는 Google Calendar 연동이 비활성화되어 있습니다."})
+
     from app.gcs_helper import get_bucket
     from app.calendar_helper import GDRIVE_TOKEN_BLOB
     try:

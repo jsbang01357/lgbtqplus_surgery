@@ -1,6 +1,7 @@
 import unittest
 import tempfile
 import json
+import os
 from unittest.mock import patch
 
 import app.gcs_helper as gcs_helper
@@ -46,6 +47,31 @@ class GcsHelperTests(unittest.TestCase):
 
         self.assertEqual(info["project_id"], "demo-file")
         self.assertEqual(info["private_key"], "line1\nline2")
+
+    def test_local_storage_bucket_round_trip(self):
+        with tempfile.TemporaryDirectory() as root:
+            gcs_helper._LOCAL_BUCKET_CACHE = {}
+            with patch.dict(
+                os.environ,
+                {
+                    "STORAGE_BACKEND": "local",
+                    "LOCAL_STORAGE_ROOT": root,
+                    "GCS_BUCKET_NAME": "local-test",
+                },
+            ):
+                bucket = gcs_helper.get_bucket()
+                blob = bucket.blob("surgery_ops/cases/case_1.json")
+                blob.upload_from_string('{"ok": true}', content_type="application/json")
+
+                self.assertTrue(blob.exists())
+                self.assertEqual(blob.download_as_text(), '{"ok": true}')
+                self.assertEqual(
+                    [item.name for item in bucket.list_blobs(prefix="surgery_ops/cases/")],
+                    ["surgery_ops/cases/case_1.json"],
+                )
+
+                blob.delete()
+                self.assertFalse(blob.exists())
 
 
 if __name__ == "__main__":

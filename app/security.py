@@ -134,7 +134,7 @@ def _verify_hash(password: str, hashed: str) -> bool:
 
 @ttl_cache(seconds=60)
 def account_login_password() -> str:
-    """GCS에서 해싱된 계정 비밀번호 정보를 다운로드하여 캐싱합니다."""
+    """현재 저장소 백엔드에서 해싱된 계정 비밀번호 정보를 읽어 캐싱합니다."""
     from app.gcs_helper import get_bucket
     try:
         bucket = get_bucket()
@@ -142,7 +142,7 @@ def account_login_password() -> str:
         if blob.exists():
             return blob.download_as_text(encoding="utf-8").strip()
     except Exception:
-        logger.exception("계정 비밀번호를 GCS에서 읽지 못했습니다.")
+        logger.exception("계정 비밀번호를 저장소에서 읽지 못했습니다.")
     return ""
 
 
@@ -173,7 +173,7 @@ def verify_account_password(password: str) -> bool:
 
 
 def update_account_password(new_password: str):
-    """비밀번호를 PBKDF2로 안전하게 해싱하여 GCS에 저장하고, 캐시를 갱신합니다."""
+    """비밀번호를 PBKDF2로 안전하게 해싱하여 현재 저장소 백엔드에 저장하고, 캐시를 갱신합니다."""
     from app.gcs_helper import get_bucket
     hashed = hash_password(new_password)
     bucket = get_bucket()

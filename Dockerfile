@@ -28,8 +28,12 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
-RUN npm --prefix /app/parser-core ci \
-    && npm --prefix /app/parser-core run build
+
+ARG BUILD_PARSER_CORE=false
+RUN if [ "$BUILD_PARSER_CORE" = "true" ]; then \
+        npm --prefix /app/parser-core ci \
+        && npm --prefix /app/parser-core run build; \
+    fi
 
 EXPOSE 8080
 

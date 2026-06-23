@@ -23,7 +23,7 @@ steps:
       - '--platform=managed'
       - '--image=asia-northeast1-docker.pkg.dev/lgbtqplus-surgery/cloud-run-source-deploy/lgbtqplus-surgery:$COMMIT_SHA'
       - '--service-account=895903149529-compute@developer.gserviceaccount.com'
-      - '--update-env-vars=GCS_BUCKET_NAME=lgbtqplus-surgery,REQUIRE_CLOUDFLARE_ACCESS=false,CLOUDFLARE_ACCESS_ALLOWED_EMAILS=jsbang01357@gmail.com,ALLOW_ACCOUNT_ID_FALLBACK=true,JISONG_ACCOUNT_LOGIN_ID=jsbang01357@gmail.com,PASSKEY_RP_ID=lgbtqplus-surgery-895903149529.asia-northeast1.run.app,PASSKEY_ORIGIN=https://lgbtqplus-surgery-895903149529.asia-northeast1.run.app,PASSKEY_RP_NAME=Qplus surgery'
+      - '--update-env-vars=STORAGE_BACKEND=gcs,OFFLINE_MODE=false,GCS_BUCKET_NAME=lgbtqplus-surgery,GOOGLE_CALENDAR_SYNC_ENABLED=false,REQUIRE_CLOUDFLARE_ACCESS=false,CLOUDFLARE_ACCESS_ALLOWED_EMAILS=jsbang01357@gmail.com,ALLOW_ACCOUNT_ID_FALLBACK=true,ALLOW_PUBLIC_REGISTRATION=false,JISONG_ACCOUNT_LOGIN_ID=jsbang01357@gmail.com,PASSKEY_RP_ID=lgbtqplus-surgery-895903149529.asia-northeast1.run.app,PASSKEY_ORIGIN=https://lgbtqplus-surgery-895903149529.asia-northeast1.run.app,PASSKEY_RP_NAME=Qplus Surgery'
       - '--update-secrets=GEMINI_API_KEY=gemini-api-key:latest'
       - '--allow-unauthenticated'
       - '--quiet'

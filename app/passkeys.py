@@ -225,7 +225,7 @@ def _rp_id() -> str:
 
 
 def _rp_name() -> str:
-    return get_config("PASSKEY_RP_NAME", "Jisong Cloud")
+    return get_config("PASSKEY_RP_NAME", "Qplus Surgery")
 
 
 def _origin() -> str:

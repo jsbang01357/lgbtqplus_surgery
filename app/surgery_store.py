@@ -183,7 +183,7 @@ def save_case(case_data: Dict[str, Any]) -> Dict[str, Any]:
         if k not in case_data["prep"]["premed_detail"]:
             case_data["prep"]["premed_detail"][k] = v
 
-    # Sync to Google Calendar before uploading to GCS
+    # Sync to Google Calendar before saving to the active storage backend.
     try:
         from app.calendar_helper import sync_case_to_calendar
         case_data = sync_case_to_calendar(case_data)
@@ -289,4 +289,4 @@ def write_audit_log(action: str, case_id: str, detail: str):
             content_type="application/x-jsonlines; charset=utf-8"
         )
     except Exception as e:
-        logger.error(f"Failed to write audit log to GCS: {e}")
+        logger.error(f"Failed to write audit log to storage backend: {e}")

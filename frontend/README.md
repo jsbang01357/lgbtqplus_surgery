@@ -1,35 +1,56 @@
-# Jisong Cloud Frontend
+# Qplus Surgery Frontend
 
-`DESIGN.md`의 Apple식 UI 언어를 반영한 새 정적 프론트엔드입니다.
+정적 HTML/CSS/JavaScript 기반 수술 일정 대시보드입니다. `api_server.py`가 `frontend/index.html`과 `frontend/partials/*.html`을 조립해 제공합니다.
 
-현재 프론트엔드는 `api_server.py`가 정적 파일로 제공하며, 파일, 메모, AI, 도구 화면은 `/api/*` endpoint를 통해 GCS/Gemini 로직과 연결됩니다. 운영 기준은 GCP 프로젝트이며 패스키와 계정 ID fallback을 앱 인증 경계로 둡니다.
+## 현재 화면
+
+- `partials/login.html`: 계정 로그인 화면
+- `partials/surgery.html`: 수술 일정 대시보드, 통계 카드, 필터, 등록/수정 모달, CSV import/export
+
+## 주요 파일
+
+- `index.html`: 공통 레이아웃, 상단바, partial include 자리
+- `app.js`: 인증 상태, 라우팅, 수술 API 호출, 테이블 렌더링, 모달 이벤트
+- `styles.css`: 공통 디자인 토큰과 레이아웃
+- `partials/surgery.html`: 대시보드 화면과 모달 마크업
+- `partials/login.html`: 로그인 폼
 
 ## 실행
 
 ```bash
-uvicorn api_server:app --host 127.0.0.1 --port 8080
+.venv/bin/uvicorn api_server:app --host 127.0.0.1 --port 8080 --reload
 ```
 
-브라우저에서 `http://127.0.0.1:8080`을 엽니다.
+내부망에서 확인할 때:
 
-## 구조
+```bash
+.venv/bin/uvicorn api_server:app --host 0.0.0.0 --port 8080 --reload
+```
 
-- `index.html`: 앱 마크업
-- `partials/home.html`: 홈 hero와 workspace 지표
-- `partials/files.html`: 웹하드 화면
-- `partials/memos.html`: 메모장 화면
-- `partials/ai.html`: AI 분석 화면
-- `partials/tools.html`: 도구모음 화면
-- `partials/settings.html`: 계정 ID 로그인, 접속 기록, Gemini 사용량 설정 화면
-- `styles.css`: Apple 스타일 디자인 토큰과 반응형 레이아웃
-- `app.js`: 인증 상태, 파일/메모 CRUD, AI 분석, 도구모음 상호작용
+## 연결 API
 
-`index.html`에는 `<!-- include:partials/*.html -->` 주석이 있고, `api_server.py`가 요청 시 partial을 조립해 완성된 HTML을 내려줍니다.
+- `GET /api/session`
+- `POST /api/auth/account/login`
+- `POST /api/auth/logout`
+- `GET /api/surgery/cases`
+- `POST /api/surgery/cases`
+- `PUT /api/surgery/cases/{case_id}`
+- `DELETE /api/surgery/cases/{case_id}`
+- `POST /api/surgery/cases/{case_id}/cancel`
+- `POST /api/surgery/cases/{case_id}/restore`
+- `GET /api/surgery/summary`
+- `GET /api/surgery/alerts`
+- `GET /api/surgery/surgeons/summary`
+- `GET /api/surgery/export.csv`
+- `POST /api/surgery/import.csv`
+- `GET /api/surgery/calendar/status`
 
-## 연결 메모
+## 오프라인 Calendar 표시
 
-- 파일 업로드/삭제/다운로드는 `app/storage.py` 로직을 Starlette API로 감싸 연결합니다.
-- 메모 CRUD는 `app/memo.py` 로직을 Starlette API로 감싸 연결합니다.
-- AI 분석은 `app/ai.py`의 Gemini 비용 제한 흐름을 유지한 채 `/api/ai/analyze` endpoint로 연결합니다.
-- 인증은 WebAuthn 패스키를 우선 사용하고, 패스키가 어려운 환경에서는 설정 화면의 소유자 ID+비밀번호 fallback으로 앱 세션을 발급합니다.
-- 화면 전환은 `/home`, `/files`, `/memos`, `/ai`, `/tools`, `/settings` 경로 기준으로 한 화면씩 표시합니다.
+`GOOGLE_CALENDAR_SYNC_ENABLED=false` 또는 `OFFLINE_MODE=true`이면 Calendar 상태 API가 오프라인 모드로 응답합니다. 이때 프론트엔드는 Google 연동 버튼을 숨기고 `오프라인` 상태를 표시합니다.
+
+## 검증
+
+```bash
+node --check frontend/app.js
+```

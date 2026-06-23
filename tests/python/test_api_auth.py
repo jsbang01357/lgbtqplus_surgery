@@ -194,9 +194,9 @@ class RegistrationBlockTests(unittest.TestCase):
         req = AccountRegisterRequest(account_id="new_test_user@example.com", password="password123")
         
         with patch("app.config.allow_public_registration", return_value=True), \
-             patch("app.api_deps._load_users", return_value={}), \
-             patch("app.api_deps._save_users"), \
-             patch("app.security.account_login_id", return_value="admin@example.com"):
+             patch("app.routers.auth._load_users", return_value={}), \
+             patch("app.routers.auth._save_users"), \
+             patch("app.routers.auth.account_login_id", return_value="admin@example.com"):
             response = asyncio.run(account_register(req))
             
         self.assertEqual(response.status_code, 200)

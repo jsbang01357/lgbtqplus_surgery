@@ -211,7 +211,13 @@ async function loadCalendarStatus() {
 
   try {
     const data = await apiJson("/api/surgery/calendar/status");
-    if (data.connected) {
+    if (data.enabled === false || data.mode === "offline") {
+      indicator.textContent = "오프라인";
+      indicator.className = "status-badge status-취소";
+      if (text) text.textContent = "오프라인 운영 모드라 Google Calendar 동기화가 비활성화되어 있습니다.";
+      if (btnConnect) btnConnect.style.display = "none";
+      if (btnDisconnect) btnDisconnect.style.display = "none";
+    } else if (data.connected) {
       indicator.textContent = "연동완료";
       indicator.className = "status-badge status-준비완료";
       if (text) text.textContent = "수술 일정 등록/수정 시 구글 캘린더에 실시간으로 동기화됩니다.";

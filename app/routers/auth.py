@@ -235,6 +235,10 @@ async def gdrive_auth_url(request: Request):
         ok, message = _is_authorized(request)
         if not ok:
             return _error(message, 401)
+
+        from app.config import google_calendar_sync_enabled
+        if not google_calendar_sync_enabled():
+            return _error("오프라인 모드에서는 Google Calendar 연동이 비활성화되어 있습니다.", 400)
             
         from app.config import get_gdrive_oauth_config
         config = get_gdrive_oauth_config()
@@ -266,6 +270,13 @@ async def gdrive_auth_url(request: Request):
 @router.get('/api/auth/gdrive/callback')
 async def gdrive_auth_callback(request: Request):
     try:
+        from app.config import google_calendar_sync_enabled
+        if not google_calendar_sync_enabled():
+            return Response(
+                "<html><head><meta charset='UTF-8'></head><body><h3>Google Calendar 연동 비활성화</h3><p>오프라인 모드에서는 캘린더 토큰을 저장하지 않습니다.</p></body></html>",
+                media_type="text/html",
+            )
+
         code = request.query_params.get("code")
         if not code:
             error_param = request.query_params.get("error")
@@ -294,7 +305,7 @@ async def gdrive_auth_callback(request: Request):
         flow.fetch_token(code=code)
         creds = flow.credentials
         
-        # Save token to GCS
+        # Save token to the active storage backend.
         token_data = {
             'token': creds.token,
             'refresh_token': creds.refresh_token,

@@ -1,5 +1,27 @@
 ## 현재 우선순위
 
+### 2026-06-24 오프라인 운영 전환
+
+- [x] GCS 없이 동작하는 로컬 파일 저장소 백엔드 추가
+- [x] `.env` 기반 로컬 설정 로딩 보강
+- [x] 오프라인 모드에서 Google Calendar 동기화가 네트워크를 타지 않도록 차단
+- [x] README를 Qplus surgery 현재 구조와 오프라인 운영 기준으로 재작성
+- [x] 로컬 실행/오프라인 운영 문서 최신화
+- [x] 빠른 핵심 검증 실행
+
+## 이번 정리 요약
+
+- `STORAGE_BACKEND=local`, `OFFLINE_MODE=true`, `LOCAL_STORAGE_ROOT` 기반 로컬 파일 저장소를 추가했다.
+- `.env` 자동 로딩을 추가해 launchd/uvicorn 실행 시 터미널 export 없이도 설정을 읽게 했다.
+- 오프라인 모드에서는 Google Calendar service 생성과 OAuth 연결을 차단하고, 프론트엔드에는 `오프라인` 상태를 표시한다.
+- README, 오프라인 운영 문서, 로컬 개발 문서, workspace context, GCP 선택 운영 문서, 보류 계획 문서를 현재 Qplus Surgery 기준으로 재작성했다.
+- parser-core는 운영 필수 경로가 아님을 문서화하고 Docker 기본 빌드에서 제외했다.
+- 전체 Python 테스트, JS 문법 검사, Python 문법 검사, parser-core TypeScript check, 오프라인 저장 smoke test를 통과했다.
+
+## 이전 작업 기록
+
+## 현재 우선순위
+
 ### 2026-05-26 도구모음/푸터 UX 보정
 
 - [x] 공통 푸터를 fixed footer에서 문서 하단 footer로 변경

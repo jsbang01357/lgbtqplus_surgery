@@ -31,3 +31,4 @@ Reuse these lessons in future tasks to avoid repeating the same mistakes.
 * 캐시 데코레이터를 제거한 함수에는 남아 있는 `.clear()` 호출까지 같이 제거해야 한다. 업로드/저장 성공 후 stale cache clear 호출이 500 응답으로 바뀌면 사용자는 저장이 안 된 것으로 보게 된다.
 * 다운로드 응답의 `Content-Disposition`에는 한글/유니코드 파일명을 raw `filename="..."`로 넣지 말고 ASCII fallback과 `filename*=UTF-8''...`를 같이 내려야 한다.
 * FastAPI 라우트는 등록 순서가 중요하므로 `/api/memos/zip` 같은 고정 경로는 `/api/memos/{file_name}` 같은 동적 경로보다 먼저 둔다.
+* 테스트에서 `from module import fn`으로 가져온 함수를 mock할 때는 원본 모듈이 아니라 실제 호출 모듈의 이름공간을 patch한다. 그렇지 않으면 테스트가 실제 저장소/GCS를 타서 느리거나 불안정해질 수 있다.

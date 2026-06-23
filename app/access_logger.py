@@ -8,7 +8,7 @@ MAX_LOGS = 500
 logger = logging.getLogger(__name__)
 
 def log_access_request(headers: dict, client_ip: str = None):
-    """접속 기록을 누적하여 GCS에 저장합니다. (동시성 보호 적용)"""
+    """접속 기록을 누적하여 현재 저장소 백엔드에 저장합니다. (동시성 보호 적용)"""
     ip = client_ip or get_client_ip(headers)
     ua = headers.get("user-agent") or headers.get("User-Agent", "Unknown Browser")
     
@@ -50,7 +50,7 @@ def log_access_request(headers: dict, client_ip: str = None):
             )
             return True
         except Exception:
-            # generation mismatch or other GCS error, retry
+            # generation mismatch or storage error, retry
             continue
     
     logger.warning("접속 로그 저장에 실패했습니다 (동시성 충돌).")

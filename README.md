@@ -1,93 +1,134 @@
-# Jisong Cloud
+# Qplus Surgery
 
-개인용 미니 클라우드 앱입니다.
+Qplus Surgery는 병원 내부망에서 수술 일정을 등록, 확인, 수정, 취소하고 준비 상태를 추적하는 오프라인 우선 대시보드입니다.
 
-현재 운영 기준은 `Starlette API + 정적 프론트엔드 + GCS + Gemini + Cloud Run` 조합입니다.  
-앱 진입점은 [api_server.py](/Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/api_server.py)이며, [frontend/](/Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/frontend/)의 Apple 스타일 화면을 정적으로 제공하고 `/api/*` endpoint로 파일, 메모, AI, 도구 기능을 연결합니다.
+현재 기본 운영 기준은 `FastAPI + 정적 프론트엔드 + 로컬 파일 저장소`입니다. GCS와 Google Calendar 연동은 선택 기능이며, 오프라인 모드에서는 네트워크 호출 없이 로컬 디스크에 데이터를 저장합니다.
 
-## 현재 구조 한눈에 보기
+## 빠른 실행
 
-- UI: `frontend/index.html`, `frontend/partials/*.html`, `frontend/styles.css`, `frontend/app.js`
-- API: `api_server.py`
-- 저장소: Google Cloud Storage
-- AI: Gemini
-- 배포: Docker, Cloud Build, Cloud Run
-- 인증 경계: Cloudflare Access 선택 적용 + 앱 내부 패스키/계정 ID fallback
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install -r requirements.txt
+cp .env.example .env
+.venv/bin/uvicorn api_server:app --host 0.0.0.0 --port 8080
+```
+
+접속 주소:
+
+- 맥미니 본인: `http://127.0.0.1:8080`
+- 내부망 PC: `http://맥미니IP:8080`
+
+## 오프라인 기본 설정
+
+`.env.example`의 기본값은 오프라인 운영에 맞춰져 있습니다.
+
+```env
+STORAGE_BACKEND="local"
+OFFLINE_MODE="true"
+LOCAL_STORAGE_ROOT=".local_data/storage"
+GOOGLE_CALENDAR_SYNC_ENABLED="false"
+REQUIRE_CLOUDFLARE_ACCESS="false"
+ALLOW_ACCOUNT_ID_FALLBACK="true"
+ALLOW_PUBLIC_REGISTRATION="false"
+```
+
+운영 전 반드시 바꿀 값:
+
+- `JISONG_ACCOUNT_LOGIN_ID`
+- `ADMIN_PASSWORD`
+- `PASSKEY_RP_ID`
+- `PASSKEY_ORIGIN`
+
+내부망에서 접속할 경우 `PASSKEY_RP_ID`와 `PASSKEY_ORIGIN`은 맥미니 IP 기준으로 맞춥니다.
+
+```env
+PASSKEY_RP_ID="192.168.0.35"
+PASSKEY_ORIGIN="http://192.168.0.35:8080"
+```
+
+## 데이터 저장 위치
+
+오프라인 모드에서는 GCS 객체 경로를 그대로 로컬 파일 경로로 저장합니다.
+
+```text
+.local_data/storage/
+├── surgery_ops/
+│   ├── cases/
+│   │   └── case_*.json
+│   └── audit/
+│       └── surgery_ops_audit.jsonl
+├── auth/
+│   ├── account_password.txt
+│   ├── account_sessions.json
+│   ├── passkeys.json
+│   └── users.json
+└── logs/
+    └── access_log.json
+```
+
+백업은 `.local_data/storage/` 폴더를 통째로 복사하면 됩니다.
 
 ## 주요 기능
 
-### 웹하드
+- 수술 일정 등록, 조회, 수정, 삭제
+- 수술 취소 및 복구
+- CSV 가져오기와 내보내기
+- 상태 자동 계산
+- 집도의별 요약
+- 확인 필요 항목 알림
+- 계정 로그인, 역할 기반 권한, passkey 세션
+- 선택적 Google Calendar 동기화
 
-- 파일 업로드
-- 파일 목록 조회
-- 개별 다운로드
-- 개별 삭제
-- ZIP 묶음 다운로드
+## 상태 계산 기준
 
-업로드 파일은 GCS `uploads/` 아래에 저장되며, 같은 이름의 파일이 올라와도 타임스탬프를 붙여 덮어쓰지 않습니다.
+수술 케이스는 저장/조회 시 자동으로 상태가 계산됩니다.
 
-### 메모장
+- `취소`: 취소 처리된 케이스
+- `진행중`: 수술일이 오늘인 케이스
+- `확인필요`: 검사일 누락, 검사일 8주 초과, 캘린더 오류, 14일 이내 필수 준비 미완료
+- `준비완료`: 위 위험 조건이 없는 케이스
 
-- 메모 작성/수정
-- 메모 목록 조회
-- 개별 복사/다운로드/삭제
-- ZIP 묶음 다운로드
+필수 준비 항목:
 
-메모는 GCS `memos/` 아래 `.txt` 파일로 저장되며, 제목과 생성/수정 시각을 본문 헤더와 blob metadata에 함께 반영합니다.
+- 검사일
+- 프리메드 상태
+- 협진 상태
+- 입원 안내
+- 서류 확인
 
-### AI
+## API 구조
 
-- Gemini 기반 파일 분석
-- 메모 분석
-- 직접 입력 텍스트 분석
-- 프리셋 프롬프트
-- 결과 복사, Markdown 다운로드, PDF 다운로드
-- 결과를 새 메모로 저장
-- 일/월 예상 비용 표시 및 사용 제한
+진입점:
 
-PDF, 이미지, TXT, MD, CSV는 그대로 처리하고, DOCX/XLSX/PPTX는 앱에서 텍스트를 추출한 뒤 분석 프롬프트에 포함합니다. 예상 비용은 `logs/gemini_usage.json`을 기반으로 계산합니다.
+- `api_server.py`
 
-### 도구모음
+주요 라우터:
 
-- 텍스트 클리너
-- MD to PDF
-- 글자 수 카운터
-- 정산 계산기
-- 저장소 상태
-- 접속 기록 관리
-- v6 파서 상태/연동 기반 기능
+- `app/routers/auth.py`
+- `app/routers/surgery.py`
 
-## 인증/권한 모델
+주요 엔드포인트:
 
-현재 코드 기준 권한 경계는 아래와 같습니다.
-
-- `웹하드`, `메모장`, `AI`: 인증 필요
-- `도구모음`: 일부 열람 가능, 민감 기능은 인증 필요
-- 접속 로그 조회/삭제, 비밀번호 변경, 폴더 동기화, v6 parse 같은 민감 API: 인증 필요
-
-인증 방식:
-
-1. Cloudflare Access
-2. 패스키 세션
-3. 소유자 계정 ID + 비밀번호 fallback
-4. 일부 환경에서 Google Access fallback
-
-실제 상태 확인 endpoint는 `/api/session`입니다.
-
-## 저장 구조
-
-```text
-bucket/
-├── uploads/
-├── memos/
-├── logs/
-│   ├── access_log.json
-│   └── gemini_usage.json
-└── auth/
-    ├── account_password.txt
-    ├── account_sessions.json
-    └── passkeys.json
-```
+- `GET /api/health`
+- `GET /api/session`
+- `POST /api/auth/account/login`
+- `POST /api/auth/account/register`
+- `POST /api/auth/logout`
+- `GET /api/surgery/cases`
+- `POST /api/surgery/cases`
+- `GET /api/surgery/cases/{case_id}`
+- `PUT /api/surgery/cases/{case_id}`
+- `DELETE /api/surgery/cases/{case_id}`
+- `POST /api/surgery/cases/{case_id}/cancel`
+- `POST /api/surgery/cases/{case_id}/restore`
+- `GET /api/surgery/summary`
+- `GET /api/surgery/alerts`
+- `GET /api/surgery/surgeons/summary`
+- `GET /api/surgery/export.csv`
+- `POST /api/surgery/import.csv`
+- `GET /api/surgery/calendar/status`
+- `POST /api/surgery/calendar/disconnect`
 
 ## 프로젝트 구조
 
@@ -95,185 +136,80 @@ bucket/
 .
 ├── api_server.py
 ├── app/
-│   ├── access_logger.py
-│   ├── ai.py
-│   ├── auth.py
+│   ├── api_deps.py
+│   ├── calendar_helper.py
 │   ├── config.py
-│   ├── core_utils.py
-│   ├── folder_sync.py
 │   ├── gcs_helper.py
-│   ├── idle_timeout.py
-│   ├── md_pdf.py
-│   ├── memo.py
 │   ├── passkeys.py
-│   ├── request_utils.py
 │   ├── security.py
-│   ├── settlement.py
-│   ├── storage.py
-│   ├── streamlit_compat.py
-│   ├── text_cleaner.py
-│   ├── tools.py
-│   └── v6_bridge.py
-├── docs/
+│   ├── surgery_schema.py
+│   ├── surgery_status.py
+│   ├── surgery_store.py
+│   └── routers/
+│       ├── auth.py
+│       └── surgery.py
 ├── frontend/
-├── parser-core/
+│   ├── index.html
+│   ├── app.js
+│   ├── styles.css
+│   └── partials/
+├── docs/
 ├── tests/
+├── scripts/
 ├── Dockerfile
-├── cloudbuild.yaml
 └── requirements.txt
 ```
 
-### 주요 파일 역할
+## 검증
 
-- [api_server.py](/Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/api_server.py): API 라우팅, 인증 확인, 정적 프론트엔드 제공
-- [app/storage.py](/Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/app/storage.py): 파일 저장/목록/다운로드/ZIP
-- [app/memo.py](/Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/app/memo.py): 메모 CRUD
-- [app/ai.py](/Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/app/ai.py): Gemini 분석, 비용 계산, 결과 후처리
-- [app/security.py](/Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/app/security.py): 계정 비밀번호 해시/검증, Access 정책 보조
-- [app/passkeys.py](/Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/app/passkeys.py): WebAuthn 패스키 등록/로그인
-- [app/folder_sync.py](/Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/app/folder_sync.py): 폴더 스캔/동기화
-- [app/v6_bridge.py](/Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/app/v6_bridge.py): Python API와 Node parser-core 연결
-- [frontend/README.md](/Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/frontend/README.md): 프론트엔드 구조 메모
-
-## 주요 API
-
-- `GET /api/health`
-- `GET /api/session`
-- `POST /api/auth/account/login`
-- `POST /api/auth/passkey/register/options`
-- `POST /api/auth/passkey/register/verify`
-- `POST /api/auth/passkey/login/options`
-- `POST /api/auth/passkey/login/verify`
-- `POST /api/auth/logout`
-- `GET /api/files`
-- `POST /api/files`
-- `GET /api/files/download`
-- `POST /api/files/delete`
-- `GET /api/files/zip`
-- `GET /api/memos`
-- `POST /api/memos`
-- `GET /api/memos/{file_name}`
-- `GET /api/memos/{file_name}/download`
-- `POST /api/memos/delete`
-- `GET /api/memos/zip`
-- `POST /api/ai/analyze`
-- `POST /api/tools/markdown-pdf`
-- `POST /api/tools/text-cleaner`
-- `POST /api/tools/settlement`
-- `GET /api/usage/summary`
-- `GET /api/sync/status`
-- `POST /api/sync/rescan`
-- `GET /api/v6/health`
-- `POST /api/v6/parse`
-- `POST /api/v6/publish`
-
-## 실행 방법
-
-### 1. 의존성 설치
+빠른 핵심 검증:
 
 ```bash
-python3 -m pip install -r requirements.txt
+.venv/bin/python -m unittest tests/python/test_config.py tests/python/test_gcs.py tests/python/test_surgery_status.py
+node --check frontend/app.js
+.venv/bin/python -m py_compile api_server.py app/*.py app/routers/*.py
 ```
 
-macOS에서 MD to PDF를 로컬로 쓰려면 WeasyPrint 시스템 라이브러리도 필요합니다.
+전체 Python 테스트:
 
 ```bash
-brew install glib pango gdk-pixbuf libffi
+.venv/bin/python -m unittest discover -s tests/python
 ```
 
-### 2. 로컬 설정
-
-설정은 환경변수 또는 `.streamlit/secrets.toml`에서 읽습니다.
-
-예시:
-
-```toml
-[gcs]
-bucket_name = "YOUR_BUCKET_NAME"
-
-[gcp_service_account]
-type = "service_account"
-project_id = "YOUR_PROJECT_ID"
-private_key_id = "YOUR_PRIVATE_KEY_ID"
-private_key = "-----BEGIN PRIVATE KEY-----\nYOUR_PRIVATE_KEY\n-----END PRIVATE KEY-----\n"
-client_email = "YOUR_SERVICE_ACCOUNT_EMAIL"
-client_id = "YOUR_CLIENT_ID"
-token_uri = "https://oauth2.googleapis.com/token"
-
-[gemini]
-api_key = "YOUR_GEMINI_API_KEY"
-model = "gemini-3-flash-preview"
-input_price_per_1m = 0.50
-output_price_per_1m = 3.00
-usd_to_krw_rate = 1478
-
-[admin]
-admin_password = "YOUR_ADMIN_PASSWORD"
-```
-
-중요 환경변수:
-
-- `GCS_BUCKET_NAME`
-- `GCP_SERVICE_ACCOUNT_JSON`
-- `GEMINI_API_KEY`
-- `ADMIN_PASSWORD`
-- `REQUIRE_CLOUDFLARE_ACCESS`
-- `ALLOW_ACCOUNT_ID_FALLBACK`
-- `JISONG_ACCOUNT_LOGIN_ID`
-- `PASSKEY_RP_ID`
-- `PASSKEY_ORIGIN`
-- `PASSKEY_RP_NAME`
-
-### 3. 로컬 실행
+parser-core TypeScript 검증은 의존성 설치 후 실행합니다.
 
 ```bash
-uvicorn api_server:app --host 127.0.0.1 --port 8080
+npm --prefix parser-core ci
+npm --prefix parser-core run check
 ```
 
-브라우저에서 `http://127.0.0.1:8080`을 엽니다.
+## 선택: GCS/Cloud Run 운영
 
-## 검증 방법
+클라우드 저장소를 쓰려면 `.env` 또는 Cloud Run 환경변수에서 아래처럼 설정합니다.
 
-기본 파이썬 검증:
-
-```bash
-python3 -m unittest discover -s tests/python
+```env
+STORAGE_BACKEND="gcs"
+OFFLINE_MODE="false"
+GCS_BUCKET_NAME="lgbtqplus-surgery"
+GCP_SERVICE_ACCOUNT_JSON="..."
 ```
 
-v6 parser-core 타입 체크:
+Google Calendar를 켜려면:
 
-```bash
-cd parser-core
-npm run check
+```env
+GOOGLE_CALENDAR_SYNC_ENABLED="true"
+GOOGLE_CALENDAR_ID="primary"
+GDRIVE_CLIENT_ID="..."
+GDRIVE_CLIENT_SECRET="..."
+GDRIVE_REDIRECT_URI="http://맥미니IP:8080/api/auth/gdrive/callback"
 ```
 
-주의:
+오프라인 운영에서는 Calendar 동기화를 켜지 않는 것을 권장합니다.
 
-- 현재 로컬 머신의 Node가 `v16`이면 `parser-core` 작업 전에 Node 20 계열로 맞추는 편이 안전합니다.
-- `tests/python`은 `google-cloud-storage`, `cryptography` 같은 런타임 의존성이 설치되어 있어야 수집 단계부터 정상 동작합니다.
+## 운영 원칙
 
-## 배포
-
-[cloudbuild.yaml](/Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/cloudbuild.yaml) 기준 배포 흐름:
-
-1. Docker 이미지 빌드
-2. Artifact Registry 푸시
-3. Cloud Run 서비스 업데이트
-
-현재 Cloud Run 설정 핵심값:
-
-- 서비스: `jisong-cloud-tokyo`
-- 리전: `asia-northeast1`
-- 버킷: `jisong-cloud-storage`
-- Gemini API key: Secret Manager `gemini-api-key`
-- Access 강제 여부: `REQUIRE_CLOUDFLARE_ACCESS`
-- 계정 ID fallback 허용 여부: `ALLOW_ACCOUNT_ID_FALLBACK`
-
-## 관련 문서
-
-- [docs/local-dev.md](/Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/docs/local-dev.md)
-- [DESIGN.md](/Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/DESIGN.md)
-- [docs/gcp-security-plan.md](/Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/docs/gcp-security-plan.md)
-- [docs/v6-parser-core-plan.md](/Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/docs/v6-parser-core-plan.md)
-- [docs/mac-folder-sync-csv-plan.md](/Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/docs/mac-folder-sync-csv-plan.md)
-- [frontend/README.md](/Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud/frontend/README.md)
+- 실제 환자 이름은 가능하면 앱 내부 저장에만 두고 외부 캘린더에는 넣지 않습니다.
+- 공개 회원가입은 기본 비활성화합니다.
+- `.env`, `.local_data/`, `.streamlit/`은 git에 올리지 않습니다.
+- 백업은 `.local_data/storage/` 기준으로 주기적으로 보관합니다.
+- 기능 추가 전에는 `tasks/todo.md`, 반복 실수는 `tasks/lessons.md`에 기록합니다.

@@ -1,107 +1,128 @@
-# Jisong Cloud Workspace Context Analysis
+# Qplus Surgery Workspace Context
 
-This document provides a comprehensive overview of the **Jisong Cloud** codebase, architecture, configuration, and current status.
+Qplus Surgery는 수술 일정 운영을 위한 내부망 대시보드입니다. 현재 우선순위는 오프라인 안정 운영이며, 클라우드 기능은 선택 경로입니다.
 
----
+## 현재 운영 기준
 
-## 🗺️ Project Architecture Overview
-
-Jisong Cloud is a private personal cloud application designed around the combination of a **FastAPI/Starlette API backend**, a **static frontend featuring Apple-style aesthetics**, **Google Cloud Storage (GCS)**, and **Gemini AI integration**.
-
-```mermaid
-graph TD
-    Client[Web Browser / Client] <-->|HTTP / WebAuthn| API[api_server.py / Starlette]
-    API <-->|Local Dev / Static Files| Frontend[frontend/ index.html, app.js]
-    API <-->|Authentication & Storage| GCS[Google Cloud Storage]
-    API <-->|AI Analysis| Gemini[Google Gemini API]
-    API <-->|Node EMR Parser| Parser[parser-core / Node.js Bridge]
+```text
+Browser
+└── FastAPI api_server.py
+    ├── Static frontend
+    ├── Auth/session/passkey
+    ├── Surgery API
+    └── Storage backend
+        ├── local file storage 기본
+        └── GCS 선택
 ```
 
-### 1. Backend (`api_server.py` & `app/`)
-The backend is built with FastAPI/Starlette, exposing routes under `/api/*` and serving static frontend assets.
-*   **[api_server.py](file:///Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud-main/api_server.py)**: Entry point, lifespan management (starts folder/drive sync), API routing, static file hosting, and request logging.
-*   **[app/routers/](file:///Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud-main/app/routers)**: Contains sub-routers:
-    *   `auth.py`: WebAuthn passkey registration/login and password fallback.
-    *   `files.py`: File listing, upload, download, deletion, and batch ZIP compression.
-    *   `memos.py`: Memo CRUD (stored as `.txt` files in GCS).
-    *   `tools.py`: Helper endpoints (Markdown to PDF, text cleaning, settlements).
-    *   `v6.py`: Node parser bridge endpoints.
-    *   `settings.py`: Configuration details.
-*   **Core Services (`app/`)**:
-    *   `storage.py`: Interaction with files.
-    *   `memo.py`: Memo storage and formatting.
-    *   `ai.py`: Gemini API integrations, token calculations, and usage log handling.
-    *   `security.py` & `passkeys.py`: Authentication, PBKDF2 hashing, and WebAuthn.
-    *   `folder_sync.py` & `drive_sync.py`: Sync utilities.
-    *   `v6_bridge.py`: Local bridge to the TypeScript EMR parser.
+## 핵심 파일
 
-### 2. Frontend (`frontend/`)
-The frontend is a single-page application (SPA) serving static HTML and vanilla JS, following high-fidelity Apple web design guidelines.
-*   **[frontend/index.html](file:///Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud-main/frontend/index.html)**: Main structure using template placeholders.
-*   **[frontend/app.js](file:///Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud-main/frontend/app.js)**: State management, routing, API calls, and event bindings.
-*   **[frontend/styles.css](file:///Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud-main/frontend/styles.css)**: Comprehensive stylesheet implementing CSS custom properties for color palettes, spacing, and typography.
-*   **[frontend/partials/](file:///Users/jsbang/Developer/00_Jisong_Cloud/01_jisong_cloud-main/frontend/partials)**: HTML fragments (`home.html`, `files.html`, `memos.html`, `ai.html`, `tools.html`, `settings.html`, `login.html`) dynamically loaded into the main page.
+- `api_server.py`: FastAPI 앱 생성, 라우터 연결, 정적 프론트엔드 제공
+- `app/routers/auth.py`: 계정 로그인, 공개 회원가입 차단, passkey, Google OAuth 선택 경로
+- `app/routers/surgery.py`: 수술 케이스 CRUD, 요약, 알림, CSV import/export, Calendar 상태 API
+- `app/surgery_store.py`: 케이스 저장/조회/삭제, audit log, Calendar 동기화 호출
+- `app/surgery_status.py`: 준비 상태 자동 계산
+- `app/surgery_schema.py`: 수술 케이스 Pydantic schema
+- `app/gcs_helper.py`: GCS와 로컬 파일 저장소를 같은 bucket/blob 인터페이스로 제공
+- `app/config.py`: 환경변수, `.env`, `.streamlit/secrets.toml` 설정 로딩
+- `frontend/app.js`: SPA 상태 관리, API 호출, 모달/테이블 렌더링
+- `frontend/partials/surgery.html`: 수술 대시보드 화면
 
-### 3. Parser Core (`parser-core/`)
-A Node.js/TypeScript-based parser specialized in EMR (Electronic Medical Record) ingestion, splitting, and normalization (e.g., dividing labs, medications, imaging, pathology, and notes).
-*   Built with TypeScript and compiled to standard JS.
-*   Interfaced from the Python server via `app/v6_bridge.py` using CLI calls.
+## 저장소 백엔드
 
----
+기본:
 
-## 🎨 Design System & Styling Rules (`DESIGN.md`)
+```env
+STORAGE_BACKEND="local"
+OFFLINE_MODE="true"
+LOCAL_STORAGE_ROOT=".local_data/storage"
+```
 
-The UI is optimized for a premium, clean aesthetic resembling Apple's official web pages:
-*   **Typography**: SF Pro / Inter font family. Display titles use a tight tracking (`letter-spacing: -0.01em` to `-0.02em` or negative pixel values). Body text defaults to `17px` instead of `16px`.
-*   **Colors**:
-    *   Primary: Action Blue (`#0066cc`) for all interactive buttons/links on light pages.
-    *   Dark backgrounds: Near-Black surfaces (`#272729`, `#2a2a2c`) and pure black for the global navigation.
-    *   Parchment canvas: Off-white (`#f5f5f7`) for footers and page structure alternating cards.
-*   **Elevations**: UI features zero gradients and exactly **one** drop-shadow (`rgba(0, 0, 0, 0.22) 3px 5px 30px`) reserved strictly for floating/resting product rendering. Everything else is flat or uses soft hairlines (`1px rgba(0, 0, 0, 0.08)` border).
-*   **Radii**: Simple, specific values:
-    *   Pill (`9999px`): primary blue CTAs, search inputs.
-    *   Large (`18px`): utility/accessories grid cards.
-    *   Small (`8px`): buttons, card inner image radius.
+로컬 백엔드는 GCS 객체 경로를 파일 경로로 그대로 매핑합니다.
 
----
+```text
+surgery_ops/cases/case_1.json
+-> .local_data/storage/surgery_ops/cases/case_1.json
+```
 
-## 🚦 Verification & Local Development
+GCS 전환:
 
-### Python Environment
-*   Virtual environment: `.venv`
-*   Run Unit Tests (49 tests):
-    ```bash
-    .venv/bin/python -m unittest discover -s tests/python
-    ```
-*   Run API Server Locally:
-    ```bash
-    .venv/bin/uvicorn api_server:app --host 127.0.0.1 --port 8080 --reload
-    ```
-*   Syntax Compilation Check:
-    ```bash
-    python3 -m py_compile api_server.py app/*.py
-    ```
+```env
+STORAGE_BACKEND="gcs"
+OFFLINE_MODE="false"
+GCS_BUCKET_NAME="lgbtqplus-surgery"
+```
 
-### Node Environment
-*   Location: `parser-core/`
-*   Type Check:
-    ```bash
-    cd parser-core && npm run check
-    ```
-*   JS Syntax Check:
-    ```bash
-    node --check frontend/app.js
-    ```
+## 인증 모델
 
----
+권장 오프라인 운영:
 
-## 🛠️ Security & Storage Structures
+- Cloudflare Access 비활성화
+- 계정 ID/password fallback 활성화
+- 공개 회원가입 비활성화
+- passkey는 내부망 주소 기준으로 선택 사용
 
-*   **Bucket Layout (GCS)**:
-    *   `uploads/` - Target for arbitrary files.
-    *   `memos/` - Extracted plain text documents.
-    *   `logs/` - Usage metadata (`gemini_usage.json`) and system logging (`access_log.json`).
-    *   `auth/` - PBKDF2 hashed password (`account_password.txt`), sessions (`account_sessions.json`), and passkeys (`passkeys.json`).
-*   **Access Rules**:
-    *   Cloudflare Access controls the outermost perimeter (targeting `jsbang01357@gmail.com`).
-    *   Fallback fallback authorization mechanisms include passkey verification (`/api/auth/passkey/*`) and Owner login password ID fallback.
+관련 설정:
+
+```env
+REQUIRE_CLOUDFLARE_ACCESS="false"
+ALLOW_ACCOUNT_ID_FALLBACK="true"
+ALLOW_PUBLIC_REGISTRATION="false"
+PASSKEY_RP_ID="맥미니IP"
+PASSKEY_ORIGIN="http://맥미니IP:8080"
+```
+
+역할:
+
+- `admin`: 전체 관리
+- `staff`: 케이스 생성/수정/삭제
+- `viewer`: 조회 중심
+
+## 상태 계산
+
+`compute_case_status()`가 다음 값을 계산합니다.
+
+- `status`
+- `status_auto`
+- `missing_items`
+- `days_until_surgery`
+- `is_lab_valid`
+
+주요 기준:
+
+- 취소 케이스는 `취소`
+- 오늘 수술은 `진행중`
+- 검사일 누락 또는 8주 초과는 즉시 `확인필요`
+- 수술 14일 이내 프리메드/협진/입원안내/서류확인 미완료는 `확인필요`
+- 그 외는 `준비완료`
+
+## Calendar 정책
+
+오프라인 기본:
+
+```env
+GOOGLE_CALENDAR_SYNC_ENABLED="false"
+```
+
+이 경우:
+
+- Calendar service를 만들지 않습니다.
+- 저장 시 네트워크 호출이 없습니다.
+- 프론트엔드에는 오프라인 상태가 표시됩니다.
+
+Calendar를 켜더라도 외부 캘린더에는 환자명, 선호이름, 진단명, 상세 비고 같은 민감 정보를 넣지 않는 정책을 유지합니다.
+
+## 검증 명령
+
+```bash
+.venv/bin/python -m unittest tests/python/test_config.py tests/python/test_gcs.py tests/python/test_surgery_status.py
+node --check frontend/app.js
+.venv/bin/python -m py_compile api_server.py app/*.py app/routers/*.py
+```
+
+## 현재 주의점
+
+- parser-core는 현재 수술 대시보드 필수 경로가 아닙니다.
+- 전체 테스트는 외부 서비스 초기화 때문에 느릴 수 있어 빠른 검증 세트를 우선 사용합니다.
+- `.local_data/`와 `.env`는 git에 올리지 않습니다.
+- 운영 데이터 백업 기준은 `.local_data/storage/`입니다.

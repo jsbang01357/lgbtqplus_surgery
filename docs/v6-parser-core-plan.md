@@ -1,60 +1,43 @@
-# JisongCloud v6 Parser Core Plan
+# parser-core 보류 메모
 
-## 목적
+`parser-core/`는 이전 EMR normalization 실험에서 넘어온 TypeScript 모듈입니다. 현재 Qplus Surgery 오프라인 수술 일정 대시보드의 필수 실행 경로는 아닙니다.
 
-JisongCloud v6의 핵심은 웹 AI surface가 아니라 EMR normalization engine이다.  
-따라서 parser는 UI 컴포넌트가 아니라 독립 TypeScript 코어로 유지한다.
+## 현재 상태
 
-## Clean_Text inventory
+- 위치: `parser-core/`
+- 언어: TypeScript
+- package name: `@qplus-surgery/parser-core`
+- 현재 FastAPI 라우터에는 parser-core endpoint가 연결되어 있지 않습니다.
+- Dockerfile은 아직 parser-core install/build를 수행합니다.
 
-참조 레포: `https://github.com/jsbang01357/Clean_Text`
+## 현재 운영 판단
 
-재사용 우선순위:
+오프라인 수술 일정 운영에는 아래 기능이 우선입니다.
 
-1. `emr_tools/frontend/src/core/labParser.ts`
-2. `emr_tools/frontend/src/core/textCleaner.ts`
-3. `emr_tools/frontend/src/core/excelExporter.ts`
-4. `emr_tools/frontend/src/TableConverterApp.tsx`
+- 수술 케이스 CRUD
+- 상태 자동 계산
+- CSV import/export
+- 로컬 파일 저장소
+- 계정/권한/백업
 
-정리 기준:
+따라서 parser-core는 지금 당장 개선 대상이 아닙니다.
 
-- `core/*.ts`: parser-core 후보
-- `*.tsx`: review UI 후보
-- Excel exporter: v6에서는 CSV writer 우선, Excel은 후순위
+## 다시 활성화할 조건
 
-## v6 parser-core 범위
+아래 요구가 명확해지면 별도 작업으로 재검토합니다.
 
-현재 추가된 모듈:
+- EMR 텍스트를 수술 일정/프리메드 항목으로 자동 분해해야 한다.
+- 검사/협진/처방/영상/병리 기록을 구조화해야 한다.
+- AI 또는 rule-based parser 결과를 UI에서 검수해야 한다.
 
-- `schemas/`: modality별 typed schema
-- `core/textNormalizer.ts`: Clean_Text의 EMR cleaning heuristic 일부 이식
-- `splitters/emrChunkSplitter.ts`: large blob chunk 분리
-- `classifiers/modalityClassifier.ts`: modality 판정
-- `parsers/`: lab/medication/imaging/pathology/note parser entry
-- `writers/`: markdown/csv/frontmatter renderer
-- `pipeline/runNormalizationPipeline.ts`: end-to-end orchestration
+## 재개 시 정리할 것
 
-## 다음 단계
+- package name을 Qplus Surgery 기준으로 변경
+- FastAPI bridge 필요 여부 결정
+- Dockerfile에서 parser-core build가 필수인지 분리
+- TypeScript 의존성 설치와 `npm run check` 검증 복구
+- parser output schema를 수술 케이스 schema와 분리
 
-1. `Clean_Text`의 `labParser.ts` 세부 케이스를 v6 `parseLabChunk.ts`로 더 이식
-2. medication parser에 날짜/route/frequency/status 변경 추적 강화
-3. imaging/pathology/note parser에 section boundary heuristic 보강
-4. artifact path builder와 `SyncManifestEntry` writer 추가
-5. Starlette `/api/v6/health`, `/api/v6/parse` 브리지 추가
-6. review UI는 별도 TSX surface로 분리
-7. chunk precision과 mixed-document separation heuristic 보강
+## 지금의 권장 조치
 
-## 설계 원칙
-
-- parser output은 사람이 읽을 수 있는 `csv` / `md`
-- local workspace가 canonical source
-- cloud는 staging + normalization + manifest publish까지만 담당
-- AI fallback은 low-confidence chunk에만 제한적으로 사용
-
-## 현재 연결 상태
-
-- `app/v6_bridge.py`: Python -> Node CLI bridge
-- `api_server.py`: `/api/v6/health`, `/api/v6/parse`
-- `Dockerfile`: Node runtime 설치 + `parser-core` build 수행
-
-현재는 API bridge까지 연결됐고, parser 품질 고도화와 review UI가 다음 우선순위다.
+운영 배포가 parser-core 때문에 느려지거나 실패하면 Dockerfile에서 parser-core build를 선택 단계로 분리합니다. 다만 현재 변경은 오프라인 저장소 전환과 문서 정리에 집중하므로 Docker 구조 개편은 별도 작업으로 둡니다.
