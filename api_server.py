@@ -12,7 +12,7 @@ from app.folder_sync import start_folder_sync_service, stop_folder_sync_service
 from app.drive_sync import start_gdrive_sync_service
 from app.request_utils import get_client_ip
 
-from app.routers import auth, files, memos, tools, v6, settings
+from app.routers import auth, files, memos, tools, v6, settings, surgery
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +34,7 @@ app.include_router(memos.router)
 app.include_router(tools.router)
 app.include_router(v6.router)
 app.include_router(settings.router)
+app.include_router(surgery.router)
 
 @app.get("/api/health")
 async def health(_request: Request):

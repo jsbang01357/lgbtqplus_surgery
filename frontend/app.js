@@ -25,6 +25,8 @@ const state = {
   currentStorage: "uploads", // Add current storage type
   currentPath: "", // Add current selected path
   lastAiSources: null, // Track sources used for the last AI analysis
+  surgeries: [],
+  surgeryFilter: "all",
 };
 
 const DEFAULT_GEMINI_COST_MULTIPLIER = "1.0";
@@ -67,7 +69,7 @@ const aiMemoSources = document.querySelector("#ai-memo-sources");
 const aiFileStatus = document.querySelector("#ai-file-status");
 const aiMemoStatus = document.querySelector("#ai-memo-status");
 
-const pageIds = ["login", "home", "files", "memos", "ai", "tools", "settings"];
+const pageIds = ["login", "home", "files", "memos", "ai", "tools", "settings", "surgery"];
 const defaultPage = "home";
 
 function updateClock() {
@@ -193,6 +195,9 @@ function setActivePage(page = pageFromLocation(), options = {}) {
   }
   if (nextPage === "settings") {
     loadSettings();
+  }
+  if (nextPage === "surgery") {
+    loadSurgeries();
   }
 }
 
@@ -1378,8 +1383,254 @@ function updateAiSourceStatus() {
   if (aiMemoStatus) aiMemoStatus.textContent = mCount ? `${mCount}개 선택` : "선택 없음";
 }
 
+async function loadSurgeries() {
+  try {
+    const data = await apiJson("/api/surgery/cases");
+    state.surgeries = data.cases || [];
+  } catch (err) {
+    state.surgeries = [];
+  }
+  
+  try {
+    const summary = await apiJson("/api/surgery/summary");
+    const totalEl = document.querySelector("#stat-count-total");
+    if (totalEl) totalEl.textContent = summary.total;
+    const readyEl = document.querySelector("#stat-count-ready");
+    if (readyEl) readyEl.textContent = summary.ready;
+    const warningEl = document.querySelector("#stat-count-warning");
+    if (warningEl) warningEl.textContent = summary.warning;
+    const ongoingEl = document.querySelector("#stat-count-ongoing");
+    if (ongoingEl) ongoingEl.textContent = summary.ongoing;
+    const cancelledEl = document.querySelector("#stat-count-cancelled");
+    if (cancelledEl) cancelledEl.textContent = summary.cancelled;
+  } catch (err) {
+    console.error("Failed to load surgery summary", err);
+  }
+  
+  try {
+    const alertsData = await apiJson("/api/surgery/alerts");
+    const alertBanner = document.querySelector("#surgery-alert-banner");
+    const alertList = document.querySelector("#surgery-alert-list");
+    
+    if (alertBanner && alertList) {
+      if (alertsData.alerts && alertsData.alerts.length > 0) {
+        alertBanner.style.display = "flex";
+        alertList.innerHTML = alertsData.alerts.map(c => {
+          const missingStr = c.missing_items && c.missing_items.length > 0
+            ? c.missing_items.join(", ")
+            : "확인 필요";
+          return `
+            <div class="surgery-alert-item">
+              <strong>[${escapeHtml(c.surgery_date)}] ${escapeHtml(c.patient_code)} (${escapeHtml(c.patient_name || 'N/A')})</strong>: 
+              <span style="color:#fa5252; font-weight:600;">${escapeHtml(missingStr)}</span> 
+              (집도의: ${escapeHtml(c.surgeon)} / ${escapeHtml(c.surgery_name)})
+            </div>
+          `;
+        }).join("");
+      } else {
+        alertBanner.style.display = "none";
+        alertList.innerHTML = "";
+      }
+    }
+  } catch (err) {
+    console.error("Failed to load surgery alerts", err);
+  }
+
+  try {
+    const surgeonsData = await apiJson("/api/surgery/surgeons/summary");
+    const list = document.querySelector("#surgeon-summary-list");
+    
+    if (list) {
+      if (surgeonsData.summary && surgeonsData.summary.length > 0) {
+        list.innerHTML = surgeonsData.summary.map(s => `
+          <div class="surgeon-row">
+            <strong>${escapeHtml(s.surgeon)}</strong>
+            <div class="surgeon-metrics">
+              <span class="s-metric s-total" title="전체 수술">${s.total}</span>
+              <span class="s-metric s-ready" title="준비완료">${s.ready}</span>
+              <span class="s-metric s-warning" title="확인필요">${s.warning}</span>
+            </div>
+          </div>
+        `).join("");
+      } else {
+        list.innerHTML = `<p class="source-empty" style="padding:10px 0; text-align:center;">집도의 현황 없음</p>`;
+      }
+    }
+  } catch (err) {
+    console.error("Failed to load surgeons summary", err);
+  }
+  
+  renderSurgeries();
+}
+
+function renderSurgeries() {
+  const tbody = document.querySelector("#surgery-table-body");
+  if (!tbody) return;
+  
+  const filtered = state.surgeries.filter(c => {
+    if (state.surgeryFilter === "all") return true;
+    return c.status === state.surgeryFilter;
+  });
+  
+  if (filtered.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="10" style="text-align:center; padding: 40px; color: var(--color-muted);">
+          표시할 수술 일정이 없습니다.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+  
+  tbody.innerHTML = filtered.map(c => {
+    const isCancelled = c.is_cancelled;
+    const badgeClass = `status-${c.status}`;
+    const missingStr = c.missing_items && c.missing_items.length > 0
+      ? c.missing_items.join(", ")
+      : "";
+      
+    let actionsHtml = "";
+    if (isCancelled) {
+      actionsHtml = `
+        <button class="text-button" type="button" data-surgery-restore="${c.case_id}">복구</button>
+      `;
+    } else {
+      actionsHtml = `
+        <button class="text-button" type="button" data-surgery-cancel="${c.case_id}" style="color:#fa5252;">취소</button>
+      `;
+    }
+    
+    actionsHtml += `
+      <button class="text-button" type="button" data-surgery-edit="${c.case_id}">수정</button>
+      <button class="text-button" type="button" data-surgery-delete="${c.case_id}" style="color:#fa5252;">삭제</button>
+    `;
+    
+    const displayNotes = isCancelled 
+      ? `<span style="color:#fa5252; font-weight:600;">[취소사유] ${escapeHtml(c.cancellation_reason)}</span>`
+      : escapeHtml(c.notes);
+      
+    const displayPrep = c.status === "확인필요" && missingStr
+      ? `<div style="line-height:1.2;">
+          <span class="status-badge ${badgeClass}">${escapeHtml(c.status)}</span>
+          <div style="font-size:11px; color:#e64980; margin-top:4px; white-space:normal; max-width:140px;">${escapeHtml(missingStr)}</div>
+         </div>`
+      : `<span class="status-badge ${badgeClass}">${escapeHtml(c.status)}</span>`;
+
+    return `
+      <tr style="${isCancelled ? 'opacity: 0.6; background: #f8f9fa;' : ''}">
+        <td>
+          <div style="font-weight:600;">${escapeHtml(c.surgery_date)}</div>
+          <small style="color:var(--color-muted);">${escapeHtml(c.surgery_start_time)} ~ ${escapeHtml(c.surgery_end_time)}</small>
+        </td>
+        <td><code>${escapeHtml(c.patient_code)}</code></td>
+        <td>${escapeHtml(c.patient_name || '-')}</td>
+        <td>
+          <div>${escapeHtml(c.operating_room)}</div>
+          <small style="color:var(--color-muted);">${escapeHtml(c.admission_type)}</small>
+        </td>
+        <td>
+          <div style="font-weight:600; max-width: 200px; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(c.surgery_name)}">
+            ${escapeHtml(c.surgery_name)}
+          </div>
+        </td>
+        <td><strong>${escapeHtml(c.surgeon)}</strong></td>
+        <td>${escapeHtml(c.anesthesia)}</td>
+        <td>${displayPrep}</td>
+        <td style="max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:normal; font-size:12px;">
+          ${displayNotes}
+        </td>
+        <td style="text-align: center;">
+          <div style="display:flex; justify-content:center; gap:8px;">
+            ${actionsHtml}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function openCaseModal(caseData = null) {
+  const modal = document.querySelector("#surgery-case-modal-overlay");
+  const title = document.querySelector("#surgery-modal-title");
+  const form = document.querySelector("#surgery-case-form");
+  if (!modal || !title || !form) return;
+  
+  form.reset();
+  document.querySelector("#form-case-id").value = "";
+  
+  if (caseData) {
+    title.textContent = "수술 일정 수정";
+    document.querySelector("#form-case-id").value = caseData.case_id || "";
+    document.querySelector("#form-patient-code").value = caseData.patient_code || "";
+    document.querySelector("#form-patient-name").value = caseData.patient_name || "";
+    document.querySelector("#form-surgery-date").value = caseData.surgery_date || "";
+    document.querySelector("#form-start-time").value = caseData.surgery_start_time || "";
+    document.querySelector("#form-end-time").value = caseData.surgery_end_time || "";
+    document.querySelector("#form-surgery-name").value = caseData.surgery_name || "";
+    document.querySelector("#form-surgeon").value = caseData.surgeon || "";
+    document.querySelector("#form-operating-room").value = caseData.operating_room || "";
+    document.querySelector("#form-anesthesia").value = caseData.anesthesia || "General";
+    document.querySelector("#form-admission-type").value = caseData.admission_type || "입원";
+    document.querySelector("#form-lab-date").value = caseData.lab_date || "";
+    document.querySelector("#form-calendar-status").value = caseData.calendar_status || "미연동";
+    
+    document.querySelector("#form-anesthesia-eval").checked = !!caseData.anesthesia_eval;
+    document.querySelector("#form-admission-confirm").checked = !!caseData.admission_confirm;
+    document.querySelector("#form-consent").checked = !!caseData.consent;
+    document.querySelector("#form-preop-instruction").checked = !!caseData.preop_instruction;
+    document.querySelector("#form-fasting-instruction").checked = !!caseData.fasting_instruction;
+    
+    document.querySelector("#form-notes").value = caseData.notes || "";
+  } else {
+    title.textContent = "수술 일정 등록";
+    document.querySelector("#form-calendar-status").value = "미연동";
+    document.querySelector("#form-anesthesia").value = "General";
+    document.querySelector("#form-admission-type").value = "입원";
+    
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    document.querySelector("#form-surgery-date").value = tomorrowStr;
+  }
+  
+  modal.classList.add("is-visible");
+}
+
+function closeCaseModal() {
+  const modal = document.querySelector("#surgery-case-modal-overlay");
+  if (modal) modal.classList.remove("is-visible");
+}
+
+function openCancelModal(caseId) {
+  const idInput = document.querySelector("#cancel-case-id");
+  const reasonInput = document.querySelector("#form-cancel-reason");
+  const modal = document.querySelector("#surgery-cancel-modal-overlay");
+  if (idInput && reasonInput && modal) {
+    idInput.value = caseId;
+    reasonInput.value = "";
+    modal.classList.add("is-visible");
+  }
+}
+
+function closeCancelModal() {
+  const modal = document.querySelector("#surgery-cancel-modal-overlay");
+  if (modal) modal.classList.remove("is-visible");
+}
+
 async function bootstrap() {
   bindRoutes();
+  
+  // Move surgery modal overlays to body to prevent transform containing block issues
+  const caseOverlay = document.querySelector("#surgery-case-modal-overlay");
+  if (caseOverlay) {
+    document.body.appendChild(caseOverlay);
+  }
+  const cancelOverlay = document.querySelector("#surgery-cancel-modal-overlay");
+  if (cancelOverlay) {
+    document.body.appendChild(cancelOverlay);
+  }
+
   setActivePage("login", { skipHistory: true });
 
   // Login page logic
@@ -1456,11 +1707,16 @@ async function bootstrap() {
   });
 
   if (session?.authorized) {
-    await Promise.all([loadFiles(), loadMemos(), loadUsageSummary()]);
+    await Promise.all([loadFiles(), loadMemos(), loadUsageSummary(), loadSurgeries()]);
 
     // Auto polling for stale data
     setInterval(async () => {
-      await Promise.all([loadFiles(), loadMemos(), loadUsageSummary(), loadSettings()]);
+      const activePage = document.documentElement.getAttribute("data-active-page");
+      const tasks = [loadFiles(), loadMemos(), loadUsageSummary(), loadSettings()];
+      if (activePage === "surgery") {
+        tasks.push(loadSurgeries());
+      }
+      await Promise.all(tasks);
     }, 60000);
   }
 
@@ -2024,5 +2280,138 @@ async function bootstrap() {
       await Promise.all([loadUsageSummary(), loadSettings()]);
     });
   }
+
+  // Surgery Dashboard Events
+  document.querySelector("#surgery-stat-cards")?.addEventListener("click", (e) => {
+    const card = e.target.closest(".surgery-stat-card");
+    if (card) {
+      document.querySelectorAll(".surgery-stat-card").forEach(c => c.classList.remove("is-active"));
+      card.classList.add("is-active");
+      state.surgeryFilter = card.dataset.statusFilter;
+      renderSurgeries();
+    }
+  });
+
+  document.querySelector("#btn-create-surgery")?.addEventListener("click", () => {
+    openCaseModal();
+  });
+
+  document.querySelector("#btn-close-case-modal")?.addEventListener("click", closeCaseModal);
+  document.querySelector("#btn-cancel-case-modal")?.addEventListener("click", closeCaseModal);
+
+  document.querySelector("#surgery-case-form")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const caseId = document.querySelector("#form-case-id").value;
+
+    const payload = {
+      patient_code: document.querySelector("#form-patient-code").value.trim(),
+      patient_name: document.querySelector("#form-patient-name").value.trim(),
+      surgery_date: document.querySelector("#form-surgery-date").value,
+      surgery_start_time: document.querySelector("#form-start-time").value,
+      surgery_end_time: document.querySelector("#form-end-time").value,
+      surgery_name: document.querySelector("#form-surgery-name").value.trim(),
+      surgeon: document.querySelector("#form-surgeon").value.trim(),
+      operating_room: document.querySelector("#form-operating-room").value.trim(),
+      anesthesia: document.querySelector("#form-anesthesia").value,
+      admission_type: document.querySelector("#form-admission-type").value,
+      lab_date: document.querySelector("#form-lab-date").value,
+      calendar_status: document.querySelector("#form-calendar-status").value,
+      anesthesia_eval: document.querySelector("#form-anesthesia-eval").checked,
+      admission_confirm: document.querySelector("#form-admission-confirm").checked,
+      consent: document.querySelector("#form-consent").checked,
+      preop_instruction: document.querySelector("#form-preop-instruction").checked,
+      fasting_instruction: document.querySelector("#form-fasting-instruction").checked,
+      notes: document.querySelector("#form-notes").value.trim(),
+    };
+
+    const method = caseId ? "PUT" : "POST";
+    const url = caseId ? `/api/surgery/cases/${caseId}` : "/api/surgery/cases";
+
+    try {
+      await apiJson(url, {
+        method: method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      showToast(caseId ? "수술 일정이 수정되었습니다." : "새로운 수술 일정이 등록되었습니다.");
+      closeCaseModal();
+      await loadSurgeries();
+    } catch (err) {
+      showToast("저장 실패: " + err.message);
+    }
+  });
+
+  document.querySelector("#surgery-table-body")?.addEventListener("click", async (e) => {
+    const editBtn = e.target.closest("[data-surgery-edit]");
+    if (editBtn) {
+      const caseId = editBtn.dataset.surgeryEdit;
+      const caseData = state.surgeries.find(c => c.case_id === caseId);
+      if (caseData) openCaseModal(caseData);
+      return;
+    }
+
+    const deleteBtn = e.target.closest("[data-surgery-delete]");
+    if (deleteBtn) {
+      const caseId = deleteBtn.dataset.surgeryDelete;
+      const caseData = state.surgeries.find(c => c.case_id === caseId);
+      if (caseData && confirm(`'${caseData.patient_code} (${caseData.patient_name || 'N/A'})' 환자의 수술 일정을 삭제하시겠습니까?`)) {
+        try {
+          await apiJson(`/api/surgery/cases/${caseId}`, { method: "DELETE" });
+          showToast("수술 일정이 삭제되었습니다.");
+          await loadSurgeries();
+        } catch (err) {
+          showToast("삭제 실패: " + err.message);
+        }
+      }
+      return;
+    }
+
+    const cancelBtn = e.target.closest("[data-surgery-cancel]");
+    if (cancelBtn) {
+      const caseId = cancelBtn.dataset.surgeryCancel;
+      openCancelModal(caseId);
+      return;
+    }
+
+    const restoreBtn = e.target.closest("[data-surgery-restore]");
+    if (restoreBtn) {
+      const caseId = restoreBtn.dataset.surgeryRestore;
+      try {
+        await postJson(`/api/surgery/cases/${caseId}/restore`);
+        showToast("수술 일정이 복구되었습니다.");
+        await loadSurgeries();
+      } catch (err) {
+        showToast("복구 실패: " + err.message);
+      }
+      return;
+    }
+  });
+
+  document.querySelector("#btn-close-cancel-modal")?.addEventListener("click", closeCancelModal);
+  document.querySelector("#btn-abort-cancel-modal")?.addEventListener("click", closeCancelModal);
+  document.querySelector("#surgery-cancel-form")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const caseId = document.querySelector("#cancel-case-id").value;
+    const reason = document.querySelector("#form-cancel-reason").value.trim();
+
+    try {
+      await postJson(`/api/surgery/cases/${caseId}/cancel`, { cancellation_reason: reason });
+      showToast("수술 일정이 취소 처리되었습니다.");
+      closeCancelModal();
+      await loadSurgeries();
+    } catch (err) {
+      showToast("취소 실패: " + err.message);
+    }
+  });
+
+  document.querySelector("#btn-export-surgery")?.addEventListener("click", async () => {
+    try {
+      const nowStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      await downloadFromApi("/api/surgery/export.csv", `surgery_schedules_${nowStr}.csv`);
+      showToast("엑셀 파일 다운로드 시작");
+    } catch (err) {
+      showToast("엑셀 다운로드 실패: " + err.message);
+    }
+  });
 }
 bootstrap();
