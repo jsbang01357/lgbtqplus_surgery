@@ -148,9 +148,13 @@ function setActivePage(page = pageFromLocation(), options = {}) {
   const isLoginPage = nextPage === "login";
   document.documentElement.setAttribute("data-active-page", nextPage);
   document.body.setAttribute("data-router-ready", "true");
-  document.querySelectorAll(".global-nav, .sub-nav, .footer").forEach((el) => {
+  document.querySelectorAll(".sub-nav, .footer").forEach((el) => {
     el.hidden = isLoginPage;
   });
+  const globalNav = document.querySelector(".global-nav");
+  if (globalNav) {
+    globalNav.hidden = false;
+  }
 
   document.querySelectorAll("[data-page]").forEach((section) => {
     if (section.dataset.page === nextPage) {
