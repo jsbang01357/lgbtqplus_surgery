@@ -108,6 +108,8 @@ async function loadSession() {
     const session = await apiJson("/api/session");
     state.session = session;
 
+    document.body.classList.toggle("is-authorized", !!session.authorized);
+
     if (navIp) navIp.textContent = session.client_ip || "0.0.0.0";
 
     if (session.authorized) {

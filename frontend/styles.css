@@ -1454,7 +1454,6 @@ textarea {
   font-weight: 600;
 }
 
-body:not(.is-authorized) .global-nav,
 body:not(.is-authorized) .sub-nav,
 body:not(.is-authorized) .footer {
   display: none !important;

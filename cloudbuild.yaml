@@ -3,34 +3,34 @@ steps:
     args:
       - build
       - '-t'
-      - 'asia-northeast1-docker.pkg.dev/jisong-cloud-492111/cloud-run-source-deploy/jisong-cloud-tokyo:$COMMIT_SHA'
+      - 'asia-northeast1-docker.pkg.dev/lgbtqplus-surgery/cloud-run-source-deploy/lgbtqplus-surgery:$COMMIT_SHA'
       - '.'
     id: Build
 
   - name: gcr.io/cloud-builders/docker
     args:
       - push
-      - 'asia-northeast1-docker.pkg.dev/jisong-cloud-492111/cloud-run-source-deploy/jisong-cloud-tokyo:$COMMIT_SHA'
+      - 'asia-northeast1-docker.pkg.dev/lgbtqplus-surgery/cloud-run-source-deploy/lgbtqplus-surgery:$COMMIT_SHA'
     id: Push
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
     entrypoint: gcloud
     args:
       - run
-      - services
-      - update
-      - 'jisong-cloud-tokyo'
+      - deploy
+      - 'lgbtqplus-surgery'
       - '--region=asia-northeast1'
       - '--platform=managed'
-      - '--image=asia-northeast1-docker.pkg.dev/jisong-cloud-492111/cloud-run-source-deploy/jisong-cloud-tokyo:$COMMIT_SHA'
-      - '--service-account=jisong-cloud-run@jisong-cloud-492111.iam.gserviceaccount.com'
-      - '--update-env-vars=GCS_BUCKET_NAME=jisong-cloud-storage,REQUIRE_CLOUDFLARE_ACCESS=false,CLOUDFLARE_ACCESS_ALLOWED_EMAILS=jsbang01357@gmail.com,ALLOW_ACCOUNT_ID_FALLBACK=true,JISONG_ACCOUNT_LOGIN_ID=jsbang01357@gmail.com,PASSKEY_RP_ID=cloud.jisong.dev,PASSKEY_ORIGIN=https://cloud.jisong.dev,PASSKEY_RP_NAME=Jisong Cloud'
+      - '--image=asia-northeast1-docker.pkg.dev/lgbtqplus-surgery/cloud-run-source-deploy/lgbtqplus-surgery:$COMMIT_SHA'
+      - '--service-account=895903149529-compute@developer.gserviceaccount.com'
+      - '--update-env-vars=GCS_BUCKET_NAME=lgbtqplus-surgery,REQUIRE_CLOUDFLARE_ACCESS=false,CLOUDFLARE_ACCESS_ALLOWED_EMAILS=jsbang01357@gmail.com,ALLOW_ACCOUNT_ID_FALLBACK=true,JISONG_ACCOUNT_LOGIN_ID=jsbang01357@gmail.com,PASSKEY_RP_ID=lgbtqplus-surgery-895903149529.asia-northeast1.run.app,PASSKEY_ORIGIN=https://lgbtqplus-surgery-895903149529.asia-northeast1.run.app,PASSKEY_RP_NAME=Qplus surgery'
       - '--update-secrets=GEMINI_API_KEY=gemini-api-key:latest'
+      - '--allow-unauthenticated'
       - '--quiet'
     id: Deploy
 
 images:
-  - 'asia-northeast1-docker.pkg.dev/jisong-cloud-492111/cloud-run-source-deploy/jisong-cloud-tokyo:$COMMIT_SHA'
+  - 'asia-northeast1-docker.pkg.dev/lgbtqplus-surgery/cloud-run-source-deploy/lgbtqplus-surgery:$COMMIT_SHA'
 
 options:
   logging: CLOUD_LOGGING_ONLY
