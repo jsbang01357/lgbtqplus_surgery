@@ -160,11 +160,11 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 10px 12px;
+      padding: 8px 12px;
       border-radius: 10px;
       cursor: pointer;
       color: var(--color-ink);
-      font-size: 13px;
+      font-size: 12px;
       transition: all 0.2s;
     }
     .sidebar-item:hover {
@@ -177,13 +177,13 @@
     }
     .sidebar-item .badge {
       color: #fff;
-      padding: 2px 8px;
+      padding: 2px 6px;
       border-radius: 10px;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 600;
     }
 
-    /* Modals */
+    /* Modals with 800px width */
     .surgery-modal-overlay {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
@@ -204,10 +204,10 @@
     .surgery-modal {
       background: #ffffff;
       border-radius: 24px;
-      width: 680px;
-      max-width: 90%;
-      max-height: 85vh;
-      overflow-y: auto;
+      width: 820px;
+      max-width: 95%;
+      max-height: 90vh;
+      overflow: hidden;
       box-shadow: 0 20px 40px rgba(0,0,0,0.15);
       display: flex;
       flex-direction: column;
@@ -218,7 +218,7 @@
       to { transform: translateY(0); opacity: 1; }
     }
     .surgery-modal-header {
-      padding: 20px 24px;
+      padding: 20px 24px 14px;
       border-bottom: 1px solid #f1f3f5;
       display: flex;
       justify-content: space-between;
@@ -232,11 +232,49 @@
       cursor: pointer;
       color: var(--color-muted);
     }
-    .surgery-modal-body {
-      padding: 24px;
+
+    /* Modal Tabs styling */
+    .modal-tabs {
       display: flex;
+      background: #f8f9fa;
+      border-bottom: 1px solid #e9ecef;
+      padding: 0 24px;
+      gap: 16px;
+    }
+    .modal-tab-btn {
+      padding: 12px 4px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--color-muted);
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .modal-tab-btn:hover {
+      color: var(--color-ink);
+    }
+    .modal-tab-btn.is-active {
+      color: var(--color-primary);
+      border-bottom-color: var(--color-primary);
+    }
+    .modal-tab-panel {
+      display: none;
+      padding: 20px 24px;
+      max-height: 58vh;
+      overflow-y: auto;
       flex-direction: column;
       gap: 16px;
+    }
+    .modal-tab-panel.is-active {
+      display: flex;
+    }
+
+    .surgery-modal-body {
+      padding: 0; /* Handled by panels */
+      overflow: hidden;
+      flex-grow: 1;
     }
     .surgery-modal-footer {
       padding: 16px 24px;
@@ -244,6 +282,7 @@
       display: flex;
       justify-content: flex-end;
       gap: 12px;
+      background: #ffffff;
     }
     .modal-grid-2 {
       display: grid;
@@ -255,13 +294,18 @@
       grid-template-columns: repeat(3, 1fr);
       gap: 12px;
     }
+    .modal-grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
     .form-group {
       display: flex;
       flex-direction: column;
       gap: 6px;
     }
     .form-group label {
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 700;
       color: #495057;
     }
@@ -290,22 +334,42 @@
     .form-group-checkbox label {
       cursor: pointer;
       margin: 0;
+      font-size: 12px;
     }
     .form-group-checkbox input {
       width: 16px;
       height: 16px;
       cursor: pointer;
     }
+    .checkbox-group-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #f8f9fa;
+      border-radius: 10px;
+      border: 1px solid #e9ecef;
+    }
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .checkbox-item input {
+      cursor: pointer;
+    }
     .surgeon-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 12px 16px;
+      padding: 10px 14px;
       border-radius: 12px;
       background: #f8f9fa;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
       border: 1px solid #e9ecef;
-      font-size: 13px;
+      font-size: 12px;
     }
     .surgeon-row strong {
       font-weight: 600;
@@ -313,8 +377,8 @@
     }
     .surgeon-metrics {
       display: flex;
-      gap: 8px;
-      font-size: 12px;
+      gap: 6px;
+      font-size: 11px;
     }
     .s-metric {
       padding: 2px 6px;
@@ -337,6 +401,19 @@
         <button class="button button-secondary" id="btn-import-surgery" type="button">파일 가져오기</button>
         <input type="file" id="csv-import-input" accept=".csv" style="display:none;" />
         <button class="button button-secondary" id="btn-export-surgery" type="button">엑셀 다운로드</button>
+      </div>
+    </div>
+
+    <!-- Google Calendar Integration Bar -->
+    <div class="calendar-integration-bar" style="background:#ffffff; border: 1px solid rgba(0, 0, 0, 0.06); border-radius: 16px; padding: 12px 20px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.01);">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-weight: 600; color: var(--color-ink); font-size: 13px;">Google Calendar 연동 상태:</span>
+        <span id="calendar-sync-indicator" class="status-badge" style="padding: 4px 10px; border-radius: 20px; font-weight: 700; font-size: 11px;">확인 중...</span>
+        <span id="calendar-sync-text" style="color: var(--color-muted); font-size: 12px;"></span>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button class="button button-secondary" id="btn-connect-calendar" type="button" style="padding: 6px 12px; font-size: 12px; display: none;">Google 계정 연동</button>
+        <button class="button button-secondary" id="btn-disconnect-calendar" type="button" style="padding: 6px 12px; font-size: 12px; display: none; background: #fff5f5; color: #fa5252; border-color: #ffc9c9;">연동 해제</button>
       </div>
     </div>
 
@@ -385,12 +462,11 @@
             <thead>
               <tr>
                 <th>날짜 / 시간</th>
-                <th>환자코드</th>
-                <th>환자명</th>
-                <th>수술실 / 구분</th>
-                <th>수술 정보</th>
+                <th>환자정보</th>
+                <th>구분 / 수술방</th>
+                <th>진단명 / 수술명</th>
                 <th>집도의</th>
-                <th>마취</th>
+                <th>마취종류</th>
                 <th>준비상태</th>
                 <th>비고</th>
                 <th style="text-align: center;">작업</th>
@@ -398,7 +474,7 @@
             </thead>
             <tbody id="surgery-table-body">
               <tr>
-                <td colspan="10" class="loading-state">데이터를 불러오는 중...</td>
+                <td colspan="9" class="loading-state">데이터를 불러오는 중...</td>
               </tr>
             </tbody>
           </table>
@@ -407,47 +483,59 @@
 
       <!-- Sidebar Navigation & Statistics -->
       <div class="surgery-sidebar-col">
-        <!-- 8 Quick Views -->
-        <div class="utility-card" style="padding:20px; border-radius:16px; display:flex; flex-direction:column; gap:8px;">
-          <h3 style="margin: 0 0 8px; font-size:15px; font-weight:700;">수술 스케줄 보기</h3>
+        <!-- 11 Quick Views -->
+        <div class="utility-card" style="padding:20px; border-radius:16px; display:flex; flex-direction:column; gap:6px;">
+          <h3 style="margin: 0 0 6px; font-size:14px; font-weight:700;">수술 스케줄 보기</h3>
           
           <div class="sidebar-item is-active" data-sidebar-filter="all">
-            <span>1. 이번 주 전체</span>
+            <span>1. 이번 주 수술</span>
             <span class="badge" id="badge-all" style="background:var(--color-primary);">0</span>
           </div>
-          <div class="sidebar-item" data-sidebar-filter="확인필요">
-            <span>2. 확인 필요</span>
-            <span class="badge" id="badge-warning" style="background:#fa5252;">0</span>
-          </div>
-          <div class="sidebar-item" data-sidebar-filter="준비완료">
-            <span>3. 준비 완료</span>
-            <span class="badge" id="badge-ready" style="background:#12b886;">0</span>
-          </div>
-          <div class="sidebar-item" data-sidebar-filter="calendar_todo">
-            <span>4. 캘린더 미연동</span>
-            <span class="badge" id="badge-calendar-todo" style="background:#f59f00;">0</span>
+          <div class="sidebar-item" data-sidebar-filter="weeks_2">
+            <span>2. 2주 이내 수술</span>
+            <span class="badge" id="badge-weeks-2" style="background:#228be6;">0</span>
           </div>
           <div class="sidebar-item" data-sidebar-filter="lab_todo">
-            <span>5. 검사 확인 필요</span>
+            <span>3. 검사일 미정/초과</span>
             <span class="badge" id="badge-lab-todo" style="background:#be4bdb;">0</span>
           </div>
-          <div class="sidebar-item" data-sidebar-filter="anesthesia_todo">
-            <span>6. 마취평가 미완료</span>
-            <span class="badge" id="badge-anesthesia-todo" style="background:#4c6ef5;">0</span>
+          <div class="sidebar-item" data-sidebar-filter="premed_todo">
+            <span>4. 프리메드 미완료</span>
+            <span class="badge" id="badge-premed-todo" style="background:#f59f00;">0</span>
           </div>
-          <div class="sidebar-item" data-sidebar-filter="admission_todo">
-            <span>7. 입원 미정</span>
-            <span class="badge" id="badge-admission-todo" style="background:#15aabf;">0</span>
+          <div class="sidebar-item" data-sidebar-filter="coop_todo">
+            <span>5. 협진 진행 중</span>
+            <span class="badge" id="badge-coop-todo" style="background:#15aabf;">0</span>
           </div>
-          <div class="sidebar-item" data-sidebar-filter="취소">
-            <span>8. 취소/변경 이력</span>
-            <span class="badge" id="badge-cancelled" style="background:#868e96;">0</span>
+          <div class="sidebar-item" data-sidebar-filter="pending_status">
+            <span>6. 가예약 수술</span>
+            <span class="badge" id="badge-pending-status" style="background:#4c6ef5;">0</span>
+          </div>
+          <div class="sidebar-item" data-sidebar-filter="room_1person_todo">
+            <span>7. 1인실 예약 필요</span>
+            <span class="badge" id="badge-room-1person-todo" style="background:#12b886;">0</span>
+          </div>
+          <div class="sidebar-item" data-sidebar-filter="room_neutral_todo">
+            <span>8. 성중립병실 확인 필요</span>
+            <span class="badge" id="badge-room-neutral-todo" style="background:#1098ad;">0</span>
+          </div>
+          <div class="sidebar-item" data-sidebar-filter="an_call_todo">
+            <span>9. 2주전 AN 전화 필요</span>
+            <span class="badge" id="badge-an-call-todo" style="background:#e64980;">0</span>
+          </div>
+          <div class="sidebar-item" data-sidebar-filter="coop_expected">
+            <span>10. Co-op 예정 수술</span>
+            <span class="badge" id="badge-coop-expected" style="background:#7048e8;">0</span>
+          </div>
+          <div class="sidebar-item" data-sidebar-filter="cancelled_history">
+            <span>11. 취소 환자 보기</span>
+            <span class="badge" id="badge-cancelled-history" style="background:#868e96;">0</span>
           </div>
         </div>
 
         <!-- Surgeon summary list -->
         <div class="utility-card" style="padding:20px; border-radius:16px;">
-          <h3 style="margin: 0 0 14px; font-size:15px; font-weight:700;">집도의별 수술 현황</h3>
+          <h3 style="margin: 0 0 14px; font-size:14px; font-weight:700;">집도의별 수술 현황</h3>
           <div id="surgeon-summary-list">
             <p class="source-empty" style="padding:10px 0; text-align:center;">집도의 현황 없음</p>
           </div>
@@ -456,128 +544,522 @@
     </div>
   </div>
 
-  <!-- Create/Edit Case Modal -->
+  <!-- Create/Edit Case Modal (4 Tabs) -->
   <div class="surgery-modal-overlay" id="surgery-case-modal-overlay">
     <div class="surgery-modal">
       <div class="surgery-modal-header">
         <h3 id="surgery-modal-title">수술 일정 등록</h3>
         <button class="close-btn" id="btn-close-case-modal" type="button">&times;</button>
       </div>
+      
+      <!-- Tabs Navigation -->
+      <div class="modal-tabs">
+        <button type="button" class="modal-tab-btn is-active" data-modal-tab="basic">수술 기본 정보</button>
+        <button type="button" class="modal-tab-btn" data-modal-tab="prep_room">수술전 준비 및 병실</button>
+        <button type="button" class="modal-tab-btn" data-modal-tab="premed_detail">프리메드 상세</button>
+        <button type="button" class="modal-tab-btn" data-modal-tab="pending_calendar">가예약 및 캘린더</button>
+      </div>
+
       <form id="surgery-case-form">
         <input type="hidden" id="form-case-id" />
+        <input type="hidden" id="form-calendar-event-id" />
+        
         <div class="surgery-modal-body">
-          <div class="modal-grid-2">
-            <div class="form-group">
-              <label for="form-patient-code">환자 등록번호 *</label>
-              <input type="text" id="form-patient-code" required placeholder="예: PT12345" />
-            </div>
-            <div class="form-group">
-              <label for="form-patient-name">환자명 (선택)</label>
-              <input type="text" id="form-patient-name" placeholder="예: 홍길동" />
-            </div>
-          </div>
-
-          <div class="modal-grid-3">
-            <div class="form-group">
-              <label for="form-surgery-date">수술일자 *</label>
-              <input type="date" id="form-surgery-date" required />
-            </div>
-            <div class="form-group">
-              <label for="form-start-time">시작시간 *</label>
-              <input type="time" id="form-start-time" required />
-            </div>
-            <div class="form-group">
-              <label for="form-end-time">종료시간 *</label>
-              <input type="time" id="form-end-time" required />
-            </div>
-          </div>
-
-          <div class="modal-grid-2">
-            <div class="form-group">
-              <label for="form-surgery-name">수술명 *</label>
-              <input type="text" id="form-surgery-name" required placeholder="예: Laparoscopic Cholecystectomy" />
-            </div>
-            <div class="form-group">
-              <label for="form-surgeon">집도의 *</label>
-              <input type="text" id="form-surgeon" required placeholder="예: 김외과" />
-            </div>
-          </div>
-
-          <div class="modal-grid-3">
-            <div class="form-group">
-              <label for="form-operating-room">수술실 *</label>
-              <input type="text" id="form-operating-room" required placeholder="예: OR 1" />
-            </div>
-            <div class="form-group">
-              <label for="form-anesthesia">마취방법 *</label>
-              <select id="form-anesthesia" required>
-                <option value="General">전신마취 (General)</option>
-                <option value="Spinal">척추마취 (Spinal)</option>
-                <option value="Epidural">경막외마취 (Epidural)</option>
-                <option value="Brachial Plexus Block">부위마취 (BPB)</option>
-                <option value="MAC">감시하 마취관리 (MAC)</option>
-                <option value="Local">국소마취 (Local)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="form-admission-type">입원구분 *</label>
-              <select id="form-admission-type" required>
-                <option value="입원">일반입원</option>
-                <option value="당일수술">당일수술 (원데이)</option>
-                <option value="외래">외래수술</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="modal-grid-2">
-            <div class="form-group">
-              <label for="form-lab-date">검사 일자</label>
-              <input type="date" id="form-lab-date" />
-            </div>
-            <div class="form-group">
-              <label for="form-calendar-status">캘린더 연동 상태</label>
-              <select id="form-calendar-status">
-                <option value="미연동">미연동</option>
-                <option value="연동완료">연동완료</option>
-                <option value="오류">오류</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- Preoperative preparation checklist -->
-          <div>
-            <label style="display:block; font-size:12px; font-weight:700; color:#495057; margin-bottom:8px;">수술전 준비 현황 (체크시 완료)</label>
+          
+          <!-- TAB 1: Basic Info -->
+          <div class="modal-tab-panel is-active" id="panel-basic">
             <div class="modal-grid-3">
-              <div class="form-group-checkbox">
-                <input type="checkbox" id="form-anesthesia-eval" />
-                <label for="form-anesthesia-eval">마취 평가 완료</label>
+              <div class="form-group">
+                <label for="form-patient-code">등록번호 *</label>
+                <input type="text" id="form-patient-code" required placeholder="예: 12345678" />
               </div>
-              <div class="form-group-checkbox">
-                <input type="checkbox" id="form-admission-confirm" />
-                <label for="form-admission-confirm">입원 확인 완료</label>
+              <div class="form-group">
+                <label for="form-patient-name">환자명</label>
+                <input type="text" id="form-patient-name" placeholder="법적 본명" />
               </div>
-              <div class="form-group-checkbox">
-                <input type="checkbox" id="form-consent" />
-                <label for="form-consent">수술 동의서 완료</label>
+              <div class="form-group">
+                <label for="form-patient-preferred-name">선호하는 이름 (preferred)</label>
+                <input type="text" id="form-patient-preferred-name" placeholder="호칭용 선호명" />
               </div>
             </div>
-            <div class="modal-grid-2" style="margin-top:10px;">
-              <div class="form-group-checkbox">
-                <input type="checkbox" id="form-preop-instruction" />
-                <label for="form-preop-instruction">수술 전 주의사항 안내 완료</label>
+
+            <div class="modal-grid-4">
+              <div class="form-group">
+                <label for="form-surgery-date">수술일자 *</label>
+                <input type="date" id="form-surgery-date" required />
               </div>
-              <div class="form-group-checkbox">
-                <input type="checkbox" id="form-fasting-instruction" />
-                <label for="form-fasting-instruction">금식 안내 완료</label>
+              <div class="form-group">
+                <label for="form-start-time">시작시간 *</label>
+                <input type="time" id="form-start-time" required />
+              </div>
+              <div class="form-group">
+                <label for="form-end-time">종료시간 *</label>
+                <input type="time" id="form-end-time" required />
+              </div>
+              <div class="form-group">
+                <label for="form-surgery-duration">수술시간 (분)</label>
+                <input type="number" id="form-surgery-duration" placeholder="예: 90" />
+              </div>
+            </div>
+
+            <div class="modal-grid-2">
+              <div class="form-group">
+                <label for="form-diagnosis">진단명</label>
+                <input type="text" id="form-diagnosis" placeholder="진단 코드 혹은 진단명" />
+              </div>
+              <div class="form-group">
+                <label for="form-surgery-name">수술명 *</label>
+                <input type="text" id="form-surgery-name" required placeholder="수술명 입력" />
+              </div>
+            </div>
+
+            <div class="modal-grid-3">
+              <div class="form-group">
+                <label for="form-surgeon">집도의 *</label>
+                <select id="form-surgeon" required>
+                  <option value="">집도의 선택</option>
+                  <option value="김결희">김결희</option>
+                  <option value="황나현">황나현</option>
+                  <option value="장용준">장용준</option>
+                  <option value="정철훈">정철훈</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="form-anesthesia">마취종류 *</label>
+                <select id="form-anesthesia" required>
+                  <option value="G/A">전신마취 (G/A)</option>
+                  <option value="L/A">국소마취 (L/A)</option>
+                  <option value="MAC">감시하마취 (MAC)</option>
+                  <option value="Spinal">척추마취 (Spinal)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="form-admission-type">입원 여부 *</label>
+                <select id="form-admission-type" required>
+                  <option value="외래">외래</option>
+                  <option value="입원">입원</option>
+                  <option value="당일입원">당일입원</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>보험 여부 (중복 선택 가능)</label>
+              <div class="checkbox-group-container" id="form-insurance-container">
+                <label class="checkbox-item"><input type="checkbox" value="건보" /> 건보</label>
+                <label class="checkbox-item"><input type="checkbox" value="자보" /> 자보</label>
+                <label class="checkbox-item"><input type="checkbox" value="보호" /> 보호</label>
+                <label class="checkbox-item"><input type="checkbox" value="일반" /> 일반</label>
+                <label class="checkbox-item"><input type="checkbox" value="미용" /> 미용</label>
+                <label class="checkbox-item"><input type="checkbox" value="국제" /> 국제</label>
+              </div>
+            </div>
+
+            <div class="modal-grid-3">
+              <div class="form-group">
+                <label for="form-surgery-fee">수술비</label>
+                <input type="text" id="form-surgery-fee" placeholder="수술비 금액 및 설명" />
+              </div>
+              <div class="form-group">
+                <label for="form-operating-room">수술방</label>
+                <input type="number" id="form-operating-room" placeholder="예: 2" />
+              </div>
+              <div class="form-group">
+                <label for="form-room-type">병실 종류</label>
+                <select id="form-room-type">
+                  <option value="다인실">다인실</option>
+                  <option value="1인실">1인실</option>
+                  <option value="성중립병실">성중립병실</option>
+                  <option value="기타">기타 (비고란 기재)</option>
+                </select>
               </div>
             </div>
           </div>
 
-          <div class="form-group">
-            <label for="form-notes">비고 (Notes)</label>
-            <textarea id="form-notes" rows="3" placeholder="추가 전달사항이나 캘린더 오류 정보 등을 입력하세요."></textarea>
+          <!-- TAB 2: Prep and Room Reservation -->
+          <div class="modal-tab-panel" id="panel-prep_room">
+            <h4 style="margin: 0; font-size:13px; font-weight:700; color:var(--color-primary);">1. 수술 전 검사 및 준비 현황</h4>
+            <div class="modal-grid-3">
+              <div class="form-group">
+                <label for="form-lab-scheduled-date">검사 예정일</label>
+                <input type="date" id="form-lab-scheduled-date" />
+              </div>
+              <div class="form-group">
+                <label for="form-lab-completed-date">검사 완료일</label>
+                <input type="date" id="form-lab-completed-date" />
+              </div>
+              <div class="form-group">
+                <label for="form-lab-status">검사 상태</label>
+                <input type="text" id="form-lab-status" placeholder="예: 완료, 대기중, 특이사항" />
+              </div>
+            </div>
+
+            <div class="modal-grid-2">
+              <div class="form-group">
+                <label for="form-premed-status">프리메드 상태</label>
+                <select id="form-premed-status">
+                  <option value="미완료">미완료</option>
+                  <option value="완료">완료</option>
+                  <option value="불필요">불필요</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="form-cooperation-status">협진 상태</label>
+                <select id="form-cooperation-status">
+                  <option value="불필요">불필요</option>
+                  <option value="예정">예정</option>
+                  <option value="진행중">진행중</option>
+                  <option value="완료">완료</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="modal-grid-2">
+              <div class="form-group-checkbox">
+                <input type="checkbox" id="form-admission-guidance-done" />
+                <label for="form-admission-guidance-done">입원 안내 완료</label>
+              </div>
+              <div class="form-group-checkbox">
+                <input type="checkbox" id="form-documents-checked" />
+                <label for="form-documents-checked">서류 확인 완료</label>
+              </div>
+            </div>
+
+            <h4 style="margin: 10px 0 0; font-size:13px; font-weight:700; color:var(--color-primary);">2. 2주 전 AN 확인 전화</h4>
+            <div class="modal-grid-2">
+              <div class="form-group-checkbox">
+                <input type="checkbox" id="form-an-call-required" />
+                <label for="form-an-call-required">2주 전 확인 전화 대상 여부</label>
+              </div>
+              <div class="form-group-checkbox">
+                <input type="checkbox" id="form-an-call-followup-needed" />
+                <label for="form-an-call-followup-needed">후속 조치 필요 여부</label>
+              </div>
+            </div>
+            <div class="modal-grid-3">
+              <div class="form-group">
+                <label for="form-an-call-scheduled-date">확인 전화 예정일</label>
+                <input type="date" id="form-an-call-scheduled-date" />
+              </div>
+              <div class="form-group">
+                <label for="form-an-call-completed-date">확인 전화 완료일</label>
+                <input type="date" id="form-an-call-completed-date" />
+              </div>
+              <div class="form-group">
+                <label for="form-an-call-checker">확인 담당자</label>
+                <input type="text" id="form-an-call-checker" placeholder="AN 담당 간호사" />
+              </div>
+            </div>
+            <div class="modal-grid-2">
+              <div class="form-group">
+                <label for="form-an-call-patient-intent">환자 수술 진행 의사</label>
+                <select id="form-an-call-patient-intent">
+                  <option value="미정">미정</option>
+                  <option value="진행">진행</option>
+                  <option value="보류">보류</option>
+                  <option value="취소 의사 있음">취소 의사 있음</option>
+                  <option value="연락 안 됨">연락 안 됨</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="form-an-call-notes">전화 확인 특이사항</label>
+                <input type="text" id="form-an-call-notes" placeholder="전화 기록 및 특이사항" />
+              </div>
+            </div>
+
+            <h4 style="margin: 10px 0 0; font-size:13px; font-weight:700; color:var(--color-primary);">3. 병실 예약 관리</h4>
+            <div class="modal-grid-2">
+              <div class="form-group-checkbox">
+                <input type="checkbox" id="form-room-1person-required" />
+                <label for="form-room-1person-required">1인실 필요 여부</label>
+              </div>
+              <div class="form-group">
+                <label for="form-room-1person-status">1인실 예약 상태</label>
+                <select id="form-room-1person-status">
+                  <option value="미정">미정</option>
+                  <option value="필요">필요</option>
+                  <option value="예약 완료">예약 완료</option>
+                  <option value="확인 중">확인 중</option>
+                  <option value="불필요">불필요</option>
+                </select>
+              </div>
+            </div>
+            <div class="modal-grid-2">
+              <div class="form-group-checkbox">
+                <input type="checkbox" id="form-room-gender-neutral-required" />
+                <label for="form-room-gender-neutral-required">성중립병실 필요 여부</label>
+              </div>
+              <div class="form-group-checkbox">
+                <input type="checkbox" id="form-room-gender-neutral-consent" />
+                <label for="form-room-gender-neutral-consent">성중립병실 동의서 작성 여부</label>
+              </div>
+            </div>
+            <div class="modal-grid-3">
+              <div class="form-group">
+                <label for="form-room-gender-neutral-status">성중립병실 확인 상태</label>
+                <select id="form-room-gender-neutral-status">
+                  <option value="불필요">불필요</option>
+                  <option value="필요">필요</option>
+                  <option value="가능">가능</option>
+                  <option value="불가">불가</option>
+                  <option value="확인 중">확인 중</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="form-room-gender-neutral-checker">확인 담당자</label>
+                <input type="text" id="form-room-gender-neutral-checker" />
+              </div>
+              <div class="form-group">
+                <label for="form-room-gender-neutral-checked-date">확인일</label>
+                <input type="date" id="form-room-gender-neutral-checked-date" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="form-room-memo">병실 관련 메모</label>
+              <input type="text" id="form-room-memo" placeholder="병실 관련 조율 메모" />
+            </div>
+
+            <div class="modal-grid-2">
+              <div class="form-group">
+                <label for="form-last-checker">마지막 확인 담당자</label>
+                <input type="text" id="form-last-checker" placeholder="예: 홍길동 간호사" />
+              </div>
+              <div class="form-group">
+                <label for="form-last-checked-date">마지막 확인일</label>
+                <input type="date" id="form-last-checked-date" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="form-prep-memo">준비 현황 메모</label>
+              <input type="text" id="form-prep-memo" placeholder="준비 과정에서 발생한 메모 입력" />
+            </div>
           </div>
+
+          <!-- TAB 3: Premed details & Consult template -->
+          <div class="modal-tab-panel" id="panel-premed_detail">
+            <h4 style="margin: 0; font-size:13px; font-weight:700; color:var(--color-primary);">1. 기본 확인</h4>
+            <div class="modal-grid-4">
+              <div class="form-group">
+                <label for="form-premed-writer">작성자</label>
+                <input type="text" id="form-premed-writer" />
+              </div>
+              <div class="form-group">
+                <label for="form-premed-lab-checker">Lab 확인자</label>
+                <input type="text" id="form-premed-lab-checker" />
+              </div>
+              <div class="form-group">
+                <label for="form-premed-coop-checker">협진 확인자</label>
+                <input type="text" id="form-premed-coop-checker" />
+              </div>
+              <div class="form-group">
+                <label for="form-premed-amount">금액</label>
+                <input type="text" id="form-premed-amount" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label>동의서 작성 현황</label>
+              <div class="checkbox-group-container">
+                <label class="checkbox-item"><input type="checkbox" id="form-premed-consent-admission" /> 입원 동의서</label>
+                <label class="checkbox-item"><input type="checkbox" id="form-premed-consent-surgery" /> 수술 동의서</label>
+                <label class="checkbox-item"><input type="checkbox" id="form-premed-consent-discharge" /> 퇴원 동의서</label>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="form-premed-notes">프리메드 특이사항</label>
+              <input type="text" id="form-premed-notes" placeholder="기타 프리메드 특이사항 기재" />
+            </div>
+
+            <h4 style="margin: 10px 0 0; font-size:13px; font-weight:700; color:var(--color-primary);">2. 과거력 및 복용약 확인</h4>
+            <div class="modal-grid-2">
+              <div class="form-group">
+                <label for="form-history-disease">진단받은 질환</label>
+                <input type="text" id="form-history-disease" placeholder="질환 기저력" />
+              </div>
+              <div class="form-group">
+                <label for="form-history-disease-year">진단받은 년도</label>
+                <input type="text" id="form-history-disease-year" placeholder="예: 2018년" />
+              </div>
+            </div>
+            <div class="modal-grid-4">
+              <div class="form-group">
+                <label for="form-history-med-name">복용 중인 약 이름</label>
+                <input type="text" id="form-history-med-name" />
+              </div>
+              <div class="form-group">
+                <label for="form-history-med-dose">용량</label>
+                <input type="text" id="form-history-med-dose" placeholder="예: 5mg" />
+              </div>
+              <div class="form-group">
+                <label for="form-history-med-frequency">횟수</label>
+                <input type="text" id="form-history-med-frequency" placeholder="예: 하루 1회" />
+              </div>
+              <div class="form-group">
+                <label for="form-history-med-stop-date">중단 일시</label>
+                <input type="text" id="form-history-med-stop-date" placeholder="예: 수술 5일전" />
+              </div>
+            </div>
+            <div class="modal-grid-3">
+              <div class="form-group">
+                <label for="form-history-hormone-med">호르몬 치료 약제</label>
+                <input type="text" id="form-history-hormone-med" placeholder="데포, 예나스테론 등" />
+              </div>
+              <div class="form-group">
+                <label for="form-history-hormone-dose">호르몬 용량</label>
+                <input type="text" id="form-history-hormone-dose" />
+              </div>
+              <div class="form-group">
+                <label for="form-history-hormone-period">호르몬 투약 주기</label>
+                <input type="text" id="form-history-hormone-period" />
+              </div>
+            </div>
+            <div class="modal-grid-3">
+              <div class="form-group">
+                <label for="form-history-surgery-history">수술력</label>
+                <input type="text" id="form-history-surgery-history" />
+              </div>
+              <div class="form-group">
+                <label for="form-history-surgery-year">수술받은 년도</label>
+                <input type="text" id="form-history-surgery-year" />
+              </div>
+              <div class="form-group">
+                <label for="form-history-surgery-hospital">병원 이름</label>
+                <input type="text" id="form-history-surgery-hospital" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="form-history-allergy">알러지 유무 및 내용</label>
+              <input type="text" id="form-history-allergy" placeholder="예: 페니실린 알러지" />
+            </div>
+
+            <h4 style="margin: 10px 0 0; font-size:13px; font-weight:700; color:var(--color-primary);">3. 수술 전 검사 확인</h4>
+            <div class="modal-grid-2">
+              <div class="form-group">
+                <label for="form-exam-ekg">EKG 결과</label>
+                <input type="text" id="form-exam-ekg" placeholder="EKG 특이사항" />
+              </div>
+              <div class="form-group">
+                <label for="form-exam-chest">Chest 결과</label>
+                <input type="text" id="form-exam-chest" placeholder="X-Ray 특이사항" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="form-exam-lab-notes">Lab 특이사항</label>
+              <input type="text" id="form-exam-lab-notes" placeholder="피검사 수치 이상 결과 등" />
+            </div>
+
+            <h4 style="margin: 10px 0 0; font-size:13px; font-weight:700; color:var(--color-primary);">4. 협진 의뢰문 템플릿</h4>
+            <div class="form-group">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <label>생성된 협진 의뢰문 (자동 완성)</label>
+                <button type="button" class="button" id="btn-copy-coop-template" style="padding:4px 8px; font-size:11px;">의뢰문 복사</button>
+              </div>
+              <textarea id="form-coop-template-preview" rows="8" readonly style="background:#f8f9fa; font-family:monospace; font-size:12px; line-height:1.4; color:#495057;"></textarea>
+            </div>
+          </div>
+
+          <!-- TAB 4: Pending / Cancel & Calendar -->
+          <div class="modal-tab-panel" id="panel-pending_calendar">
+            <h4 style="margin: 0; font-size:13px; font-weight:700; color:var(--color-primary);">1. 수술 상태 제어</h4>
+            <div class="modal-grid-2">
+              <div class="form-group">
+                <label for="form-surgery-status">수술 상태 *</label>
+                <select id="form-surgery-status" required>
+                  <option value="가예약">가예약</option>
+                  <option value="예정">예정</option>
+                  <option value="확정">확정</option>
+                  <option value="준비 완료">준비 완료</option>
+                  <option value="확인 필요">확인 필요</option>
+                  <option value="완료">완료</option>
+                  <option value="취소">취소</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="form-calendar-status">캘린더 연동 상태</label>
+                <select id="form-calendar-status" disabled>
+                  <option value="미연동">미연동</option>
+                  <option value="연동완료">연동완료</option>
+                  <option value="오류">오류</option>
+                </select>
+              </div>
+            </div>
+
+            <h4 style="margin: 10px 0 0; font-size:13px; font-weight:700; color:var(--color-primary);">2. 가예약 / Pending 관리</h4>
+            <div class="modal-grid-2">
+              <div class="form-group">
+                <label for="form-pending-requester">가예약 요청자</label>
+                <select id="form-pending-requester">
+                  <option value="">선택 안함</option>
+                  <option value="BeYou">BeYou (에이전시)</option>
+                  <option value="의료진">의료진</option>
+                  <option value="코디네이터">코디네이터</option>
+                  <option value="기타">기타</option>
+                </select>
+              </div>
+              <div class="form-group-checkbox" style="margin-top:16px;">
+                <input type="checkbox" id="form-is-confirmed" />
+                <label for="form-is-confirmed">확정 여부</label>
+              </div>
+            </div>
+            <div class="modal-grid-2">
+              <div class="form-group">
+                <label for="form-pending-registered-date">가예약 등록일</label>
+                <input type="date" id="form-pending-registered-date" />
+              </div>
+              <div class="form-group">
+                <label for="form-pending-deadline">확정 필요일</label>
+                <input type="date" id="form-pending-deadline" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="form-pending-memo">가예약 관련 메모</label>
+              <input type="text" id="form-pending-memo" />
+            </div>
+
+            <h4 style="margin: 10px 0 0; font-size:13px; font-weight:700; color:var(--color-primary);">3. Co-op (협진) 수술 관리</h4>
+            <div class="modal-grid-2">
+              <div class="form-group">
+                <label for="form-coop-status">Co-op 상태</label>
+                <select id="form-coop-status">
+                  <option value="불필요">불필요</option>
+                  <option value="예정">예정</option>
+                  <option value="확정">확정</option>
+                  <option value="미정">미정</option>
+                  <option value="완료">완료</option>
+                </select>
+              </div>
+              <div class="form-group-checkbox" style="margin-top:16px;">
+                <input type="checkbox" id="form-coop-confirmed" />
+                <label for="form-coop-confirmed">Co-op 최종 확정 여부</label>
+              </div>
+            </div>
+            <div class="modal-grid-2">
+              <div class="form-group">
+                <label for="form-coop-dept">Co-op 협진과</label>
+                <input type="text" id="form-coop-dept" placeholder="예: 성형외과, 이비인후과" />
+              </div>
+              <div class="form-group">
+                <label for="form-coop-doctor">Co-op 의료진</label>
+                <input type="text" id="form-coop-doctor" placeholder="협진 교수명" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="form-coop-notes">Co-op 진료 내용</label>
+              <input type="text" id="form-coop-notes" placeholder="수술 협력 내용 상세" />
+            </div>
+            <div class="form-group">
+              <label for="form-coop-memo">Co-op 관련 메모</label>
+              <input type="text" id="form-coop-memo" />
+            </div>
+
+            <h4 style="margin: 10px 0 0; font-size:13px; font-weight:700; color:var(--color-primary);">4. 기타 특이사항</h4>
+            <div class="form-group">
+              <label for="form-notes">비고 (Notes)</label>
+              <textarea id="form-notes" rows="2" placeholder="일정 취소 사유나 특이사항 기록"></textarea>
+            </div>
+          </div>
+
         </div>
+        
         <div class="surgery-modal-footer">
           <button class="button button-secondary" id="btn-cancel-case-modal" type="button">취소</button>
           <button class="button button-primary" type="submit">저장</button>
@@ -595,7 +1077,7 @@
       </div>
       <form id="surgery-cancel-form">
         <input type="hidden" id="cancel-case-id" />
-        <div class="surgery-modal-body">
+        <div class="surgery-modal-body" style="padding:20px;">
           <div class="form-group">
             <label for="form-cancel-reason">취소 사유 *</label>
             <textarea id="form-cancel-reason" rows="3" required placeholder="수술이 취소된 사유를 입력하세요 (예: 환자 발열, 스케줄 조정 등)."></textarea>

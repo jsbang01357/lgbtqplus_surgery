@@ -81,11 +81,45 @@ def save_case(case_data: Dict[str, Any]) -> Dict[str, Any]:
     # Ensure required default fields are present
     defaults = {
         "patient_name": "",
+        "patient_preferred_name": "",
         "notes": "",
         "calendar_status": "미연동",
         "calendar_event_id": "",
         "is_cancelled": False,
         "cancellation_reason": "",
+        "diagnosis": "",
+        "coop_detail": "",
+        "insurance_types": [],
+        "surgery_fee": "",
+        "surgery_duration": 0,
+        "room_type": "",
+        "surgery_status": "예정",
+        "pending_requester": "",
+        "pending_registered_date": "",
+        "pending_deadline": "",
+        "is_confirmed": False,
+        "pending_memo": "",
+        "an_call_required": False,
+        "an_call_scheduled_date": "",
+        "an_call_completed_date": "",
+        "an_call_checker": "",
+        "an_call_patient_intent": "미정",
+        "an_call_notes": "",
+        "an_call_followup_needed": False,
+        "room_1person_required": False,
+        "room_1person_status": "미정",
+        "room_memo": "",
+        "room_gender_neutral_required": False,
+        "room_gender_neutral_consent": False,
+        "room_gender_neutral_status": "불필요",
+        "room_gender_neutral_checker": "",
+        "room_gender_neutral_checked_date": "",
+        "coop_status": "불필요",
+        "coop_dept": "",
+        "coop_doctor": "",
+        "coop_notes": "",
+        "coop_confirmed": False,
+        "coop_memo": "",
     }
     for k, v in defaults.items():
         if k not in case_data:
@@ -96,15 +130,65 @@ def save_case(case_data: Dict[str, Any]) -> Dict[str, Any]:
         
     prep_defaults = {
         "lab_date": "",
+        "lab_scheduled_date": "",
+        "lab_completed_date": "",
+        "lab_status": "",
         "anesthesia_eval_done": False,
         "admission_confirmed": False,
         "consent_done": False,
         "preop_instruction_done": False,
         "fasting_instruction_done": False,
+        "premed_status": "미완료",
+        "cooperation_status": "불필요",
+        "admission_guidance_done": False,
+        "documents_checked": False,
+        "last_checker": "",
+        "last_checked_date": "",
+        "prep_memo": "",
     }
     for k, v in prep_defaults.items():
         if k not in case_data["prep"]:
             case_data["prep"][k] = v
+
+    if "premed_detail" not in case_data["prep"] or not isinstance(case_data["prep"]["premed_detail"], dict):
+        case_data["prep"]["premed_detail"] = {}
+
+    premed_detail_defaults = {
+        "writer": "",
+        "lab_checker": "",
+        "coop_checker": "",
+        "amount": "",
+        "consent_admission": False,
+        "consent_surgery": False,
+        "consent_discharge": False,
+        "premed_notes": "",
+        "history_disease": "",
+        "history_disease_year": "",
+        "history_med_name": "",
+        "history_med_dose": "",
+        "history_med_frequency": "",
+        "history_med_stop_date": "",
+        "history_hormone_med": "",
+        "history_hormone_dose": "",
+        "history_hormone_period": "",
+        "history_surgery_history": "",
+        "history_surgery_year": "",
+        "history_surgery_hospital": "",
+        "history_allergy": "",
+        "exam_ekg": "",
+        "exam_chest": "",
+        "exam_lab_notes": "",
+    }
+    for k, v in premed_detail_defaults.items():
+        if k not in case_data["prep"]["premed_detail"]:
+            case_data["prep"]["premed_detail"][k] = v
+
+    # Sync to Google Calendar before uploading to GCS
+    try:
+        from app.calendar_helper import sync_case_to_calendar
+        case_data = sync_case_to_calendar(case_data)
+    except Exception as e:
+        logger.error(f"Failed to sync case to Google Calendar: {e}")
 
     bucket = get_bucket()
     blob = bucket.blob(f"{CASES_PREFIX}/{case_id}.json")
@@ -138,6 +222,16 @@ def delete_case(case_id: str) -> bool:
     bucket = get_bucket()
     blob = bucket.blob(f"{CASES_PREFIX}/{case_id}.json")
     if blob.exists():
+        try:
+            content = blob.download_as_text(encoding="utf-8")
+            case_data = json.loads(content)
+            event_id = case_data.get("calendar_event_id")
+            if event_id:
+                from app.calendar_helper import delete_calendar_event_safe
+                delete_calendar_event_safe(event_id)
+        except Exception as e:
+            logger.error(f"Failed to delete Google Calendar event for case {case_id}: {e}")
+
         blob.delete()
         clear_surgery_cache()
         write_audit_log(action="delete", case_id=case_id, detail="Deleted case")

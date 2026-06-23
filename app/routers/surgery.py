@@ -369,3 +369,31 @@ async def import_surgery_cases_csv(
     except Exception as e:
         logger.error(f"Failed to import CSV: {e}")
         return _error(f"CSV 가져오기 실패: {str(e)}", status_code=500)
+
+
+@router.get("/calendar/status")
+async def get_calendar_status(request: Request, _: bool = Depends(get_current_user)):
+    from app.calendar_helper import get_calendar_service
+    try:
+        service = get_calendar_service()
+        connected = service is not None
+        return _json({"connected": connected})
+    except Exception as e:
+        logger.error(f"Failed to get calendar status: {e}")
+        return _json({"connected": False, "error": str(e)})
+
+
+@router.post("/calendar/disconnect")
+async def disconnect_calendar(request: Request, _: bool = Depends(get_current_user)):
+    from app.gcs_helper import get_bucket
+    from app.calendar_helper import GDRIVE_TOKEN_BLOB
+    try:
+        bucket = get_bucket()
+        blob = bucket.blob(GDRIVE_TOKEN_BLOB)
+        if blob.exists():
+            blob.delete()
+            return _json({"ok": True})
+        return _json({"ok": True, "message": "이미 연동 해제되어 있습니다."})
+    except Exception as e:
+        logger.error(f"Failed to disconnect Google Calendar: {e}")
+        return _error(f"구글 캘린더 연동 해제 실패: {str(e)}", status_code=500)

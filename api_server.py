@@ -8,32 +8,20 @@ from starlette.background import BackgroundTasks
 from app.access_logger import log_access_request
 
 from app.api_deps import _render_frontend_html, _request_client_host, FRONTEND_DIR, _cleanup_expired_sessions, _json
-from app.folder_sync import start_folder_sync_service, stop_folder_sync_service
-from app.drive_sync import start_gdrive_sync_service
 from app.request_utils import get_client_ip
 
-from app.routers import auth, files, memos, tools, v6, settings, surgery
+from app.routers import auth, surgery
 
 logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(_app):
-    start_folder_sync_service()
-    start_gdrive_sync_service()
     _cleanup_expired_sessions()
-    try:
-        yield
-    finally:
-        stop_folder_sync_service()
+    yield
 
-app = FastAPI(title='Jisong Cloud API', lifespan=lifespan)
+app = FastAPI(title='Qplus Surgery API', lifespan=lifespan)
 
 app.include_router(auth.router)
-app.include_router(files.router)
-app.include_router(memos.router)
-app.include_router(tools.router)
-app.include_router(v6.router)
-app.include_router(settings.router)
 app.include_router(surgery.router)
 
 @app.get("/api/health")

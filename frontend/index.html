@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>jCloud</title>
+    <title>Qplus surgery</title>
     <link rel="stylesheet" href="./styles.css?v=260518-2" />
   </head>
   <body data-router-ready="false">
@@ -16,13 +16,7 @@
       </div>
 
       <div class="nav-center">
-        <div class="global-search">
-          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-            <circle cx="11" cy="11" r="6.2"></circle>
-            <path d="m16 16 4 4"></path>
-          </svg>
-          <input type="text" id="global-search-input" placeholder="Search jCloud..." aria-label="Search">
-        </div>
+        <!-- Center panel blank -->
       </div>
 
       <div class="nav-right">
@@ -30,7 +24,6 @@
           <span class="status-indicator" id="nav-status-indicator"></span>
           <span id="nav-status-text">인증 대기</span>
         </div>
-        <button class="nav-button nav-button-primary" id="nav-passkey-register" type="button" hidden>패스키 등록</button>
         <button class="nav-button nav-button-secondary" id="nav-login-button" type="button">로그인</button>
         <button class="nav-button nav-button-danger" id="nav-logout-button" type="button" hidden>로그아웃</button>
       </div>
@@ -38,7 +31,7 @@
 
     <div class="sub-nav">
       <div class="sub-left">
-        <a class="brand-mark" href="/home" data-route="home" aria-label="jCloud home">
+        <a class="brand-mark" href="/surgery" data-route="surgery" aria-label="Qplus surgery home">
           <svg class="cloud-icon" viewBox="0 0 100 100" width="28" height="28" xmlns="http://www.w3.org/2000/svg">
             <defs>
               <linearGradient id="nav-cloud-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -49,39 +42,24 @@
             <path fill="url(#nav-cloud-gradient)" d="M72,80H28c-12.15,0-22-9.85-22-22c0-11.82,9.33-21.46,21.05-21.96C29.62,21.13,42.45,10,58,10
             c15.93,0,29.07,11.51,31.62,26.79C95.53,38.31,100,43.76,100,50C100,66.57,88.57,80,72,80z" />
           </svg>
-          <span class="sub-title">jCloud</span>
+          <span class="sub-title">Qplus surgery</span>
         </a>
         <nav class="sub-links" aria-label="Workspace">
-          <a href="/files" data-route="files">웹하드</a>
-          <a href="/memos" data-route="memos">메모장</a>
-          <a href="/ai" data-route="ai">Intake</a>
-          <a href="/surgery" data-route="surgery">수술일정</a>
-          <a href="/tools" data-route="tools">도구모음</a>
+          <a href="/surgery" data-route="surgery">수술일정 대시보드</a>
         </nav>
       </div>
       <div class="sub-right">
-        <a class="icon-link" href="/settings" title="설정" data-route="settings">
-          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-          </svg>
-        </a>
+        <!-- Sub right blank -->
       </div>
     </div>
 
     <main>
       <!-- include:partials/login.html -->
-      <!-- include:partials/home.html -->
-      <!-- include:partials/files.html -->
-      <!-- include:partials/memos.html -->
-      <!-- include:partials/ai.html -->
       <!-- include:partials/surgery.html -->
-      <!-- include:partials/tools.html -->
-      <!-- include:partials/settings.html -->
     </main>
 
     <footer class="footer">
-      <p>jCloud · V 6.0 / 260518</p>
+      <p>Qplus surgery · V 1.0</p>
     </footer>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>

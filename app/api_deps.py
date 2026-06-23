@@ -3,6 +3,7 @@ import io
 import re
 import secrets
 import logging
+from typing import Any
 import threading
 import time
 from pathlib import Path
@@ -50,7 +51,11 @@ if os.getenv("GDRIVE_REDIRECT_URI", "").startswith("http://localhost"):
     os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
 GDRIVE_TOKEN_BLOB = "auth/gdrive_token.json"
-GDRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
+GDRIVE_SCOPES = [
+    "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/calendar",
+    "https://www.googleapis.com/auth/calendar.events"
+]
 
 FRONTEND_DIR = (Path(__file__).resolve().parent.parent / "frontend").resolve()
 MENU_JSON_PATH = Path(__file__).resolve().parent / "data" / "menu_list.json"
@@ -63,7 +68,7 @@ _SESSIONS_CACHE = None
 _SESSIONS_CACHE_EXPIRY = 0
 _SESSIONS_LOCK = threading.Lock()
 
-def _load_account_sessions() -> dict[str, str]:
+def _load_account_sessions() -> dict[str, Any]:
     global _SESSIONS_CACHE, _SESSIONS_CACHE_EXPIRY
     if _SESSIONS_CACHE is not None and time.time() < _SESSIONS_CACHE_EXPIRY:
         return _SESSIONS_CACHE
@@ -85,7 +90,7 @@ def _load_account_sessions() -> dict[str, str]:
         return _SESSIONS_CACHE
 
 
-def _save_account_sessions(sessions: dict[str, str]):
+def _save_account_sessions(sessions: dict[str, Any]):
     try:
         bucket = get_bucket()
         blob = bucket.blob(ACCOUNT_SESSIONS_BLOB)
@@ -170,26 +175,26 @@ def _account_token(request: Request) -> str:
     return request.cookies.get(ACCOUNT_SESSION_COOKIE, "")
 
 
-def _verify_account_session(request: Request, email: str) -> bool:
+def _verify_account_session(request: Request) -> str | None:
     token = _account_token(request)
     if not token:
-        return False
+        return None
     sessions = _load_account_sessions()
     session_data = sessions.get(token)
     if not session_data:
-        return False
+        return None
     
     # Handle legacy string format {"token": "email"}
     if isinstance(session_data, str):
-        return session_data == email
+        return session_data
         
     # Handle new dict format {"token": {"email": "...", "expires_at": ...}}
     if isinstance(session_data, dict):
         if session_data.get("expires_at", 0) < time.time():
-            return False
-        return session_data.get("email") == email
+            return None
+        return session_data.get("email")
         
-    return False
+    return None
 
 
 def _create_account_session(email: str) -> str:
@@ -238,11 +243,16 @@ def _access_context_allowed(request: Request) -> tuple[bool, str]:
 
 def _auth_state(request: Request) -> dict:
     access_context = get_access_context(request.headers)
-    email = _request_email(request)
+    
+    session_email = None
+    account_id_ok = False
+    if allow_account_id_fallback():
+        session_email = _verify_account_session(request)
+        if session_email:
+            account_id_ok = True
+            
+    email = session_email or get_access_context(request.headers).email or owner_email()
     passkey_ok = passkeys.verify_session(_passkey_token(request), email=email)
-    account_id_ok = allow_account_id_fallback() and _verify_account_session(
-        request, email
-    )
     access_ok = access_context.allowed or not require_cloudflare_access()
     google_fallback_ok = allow_google_auth_fallback() and access_context.allowed
     authorized = access_ok and (passkey_ok or account_id_ok or google_fallback_ok)

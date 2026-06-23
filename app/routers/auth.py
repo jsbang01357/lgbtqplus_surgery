@@ -4,6 +4,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 import json
 import time
+from pydantic import BaseModel
 
 from app.models import AccountLoginRequest
 from app.api_deps import _json, ACCOUNT_SESSION_TTL_SECONDS, ACCOUNT_SESSION_COOKIE, _load_account_sessions, _save_account_sessions, _is_authorized, GDRIVE_SCOPES, GDRIVE_TOKEN_BLOB, _error, _request_email, _request_client_host, _account_token, _create_account_session, _should_secure_cookie, _access_context_allowed, _auth_state
@@ -14,6 +15,24 @@ from app.request_utils import get_client_ip
 from google_auth_oauthlib.flow import Flow
 
 router = APIRouter()
+
+class AccountRegisterRequest(BaseModel):
+    account_id: str
+    password: str
+
+def verify_registered_user(login_id: str, password: str) -> bool:
+    from app.security import _verify_hash
+    try:
+        bucket = get_bucket()
+        blob = bucket.blob(f"auth/users/{login_id}.json")
+        if blob.exists():
+            data = json.loads(blob.download_as_text(encoding="utf-8"))
+            hashed = data.get("password_hash")
+            if hashed:
+                return _verify_hash(password, hashed)
+    except Exception as e:
+        logger.error(f"Failed to verify registered user {login_id}: {e}")
+    return False
 
 @router.get('/api/session')
 async def session(request: Request):
@@ -63,7 +82,13 @@ async def account_login(request: Request, payload: AccountLoginRequest):
     password = payload.password
 
     try:
-        if login_id != account_login_id() or not verify_account_password(password):
+        login_success = False
+        if verify_registered_user(login_id, password):
+            login_success = True
+        elif login_id == account_login_id() and verify_account_password(password):
+            login_success = True
+            
+        if not login_success:
             attempts.append(now)
             login_attempts[client_ip] = attempts
             return _json(
@@ -76,15 +101,14 @@ async def account_login(request: Request, payload: AccountLoginRequest):
     # Success, clear attempts
     if client_ip in login_attempts:
         del login_attempts[client_ip]
-    email = owner_email()
     try:
-        token = _create_account_session(email)
+        token = _create_account_session(login_id)
     except Exception:
         logger.exception("Failed to create session")
         return _json({"error": "세션 생성에 실패했습니다."}, status_code=500)
 
     response = _json(
-        {"ok": True, "email": email, "expires_in": ACCOUNT_SESSION_TTL_SECONDS}
+        {"ok": True, "email": login_id, "expires_in": ACCOUNT_SESSION_TTL_SECONDS}
     )
     response.set_cookie(
         ACCOUNT_SESSION_COOKIE,
@@ -95,6 +119,42 @@ async def account_login(request: Request, payload: AccountLoginRequest):
         samesite="lax",
     )
     return response
+
+@router.post('/api/auth/account/register')
+async def account_register(payload: AccountRegisterRequest):
+    login_id = payload.account_id.strip().lower()
+    password = payload.password
+    
+    if not login_id or not password:
+        return _json({"error": "이메일과 비밀번호를 입력해주세요."}, status_code=400)
+        
+    if "@" not in login_id:
+        return _json({"error": "올바른 이메일 형식이 아닙니다."}, status_code=400)
+        
+    if len(password) < 6:
+        return _json({"error": "비밀번호는 최소 6자리 이상이어야 합니다."}, status_code=400)
+        
+    try:
+        bucket = get_bucket()
+        blob = bucket.blob(f"auth/users/{login_id}.json")
+        if blob.exists() or login_id == account_login_id():
+            return _json({"error": "이미 가입된 이메일입니다."}, status_code=400)
+            
+        from app.security import hash_password
+        hashed = hash_password(password)
+        user_data = {
+            "login_id": login_id,
+            "password_hash": hashed,
+            "created_at": time.strftime("%Y-%m-%dT%H:%M:%S")
+        }
+        blob.upload_from_string(
+            json.dumps(user_data, ensure_ascii=False, indent=2),
+            content_type="application/json; charset=utf-8"
+        )
+        return _json({"ok": True})
+    except Exception as e:
+        logger.exception("Registration failed")
+        return _json({"error": f"회원가입 처리 중 오류가 발생했습니다: {str(e)}"}, status_code=500)
 
 @router.post('/api/auth/passkey/register/options')
 async def passkey_register_options(request: Request):
